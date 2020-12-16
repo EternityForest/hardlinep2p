@@ -82,7 +82,7 @@ class LPDPeer():
         self.msock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.msock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         # Bind to the server address
-        self.msock.bind(("239.192.152.143", 6771))
+        self.msock.bind(("0.0.0.0", 6771))
         self.msock.settimeout(1)
 
         group = socket.inet_aton("239.192.152.143")
