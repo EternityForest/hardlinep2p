@@ -2,10 +2,15 @@
 Application-level P2P VPN for securely accessing personal servers without a VPN
 
 
+## requirements
+
+OpenSSL, libnacl
+
 ## What it does
 
 Takes a service on computer A, and makes it available on computer B at KEYHASH.localhost:7009.  It does this with a daemon on both computers
 and a tunnel between them, encrypted with SSL.
+
 
 
 

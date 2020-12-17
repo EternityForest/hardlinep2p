@@ -7,8 +7,6 @@ from OpenSSL import crypto, SSL
 
 services = weakref.WeakValueDictionary()
 
-import btdht
-
 #TODO LPD bootstrap attempt
 # dht = btdht.DHT()
 
