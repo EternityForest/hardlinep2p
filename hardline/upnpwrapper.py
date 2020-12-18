@@ -156,21 +156,21 @@ def addMapping(port,proto, desc="Description here", deviceURL=0, register=True, 
                                 cleanups.append(clean)
             closure()
         
-        if register:
-            def renew():
-                #No recursive adding things to renew
-                addMapping(port,proto, desc, register=False)
-            
-            def cleanAll():
-                for i in cleanups:
-                    i()
+    if register:
+        def renew():
+            #No recursive adding things to renew
+            addMapping(port,proto, desc, register=False)
+        
+        def cleanAll():
+            for i in cleanups:
+                i()
 
-            with listlock:
-                renewlist.append(renew)
-                cleanuplist.append(cleanAll)
-                m = Mapping(cleanAll,renew)
+        with listlock:
+            renewlist.append(renew)
+            cleanuplist.append(cleanAll)
+            m = Mapping(cleanAll,renew)
 
-    return m
+        return m
 
 
 cachedMappings =None

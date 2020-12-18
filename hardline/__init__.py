@@ -138,7 +138,7 @@ def writeWanInfoToDatabase(infohash, hosts):
             if d:
                 #No change has been made
                 try:
-                    d=json.loads(d[1])['WANHosts']
+                    d=json.loads(d[0])['WANHosts']
                     if d==hosts:
                         return
                 except:

@@ -50,7 +50,8 @@ class LPDPeer():
                 if not msg.get('cookie', '') == self.cookie:
                     with self.lock:
                         if msg['Infohash'] in self.activeHashes:
-                            self.advertise(msg['Infohash'],self.activeHashes[msg['Infohash']][0],self.activeHashes[msg['Infohash']][1])
+                            #Mcast works better on localhost to localhost in the same process it seems
+                            self.advertise(msg['Infohash'],self.activeHashes[msg['Infohash']][0],self.activeHashes[msg['Infohash']][1], ("239.192.152.143", 6771) if addr[0].startswith('127.') else addr)
                             print("responding to lpd")
                             
             if 'announce' in t:
