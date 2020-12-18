@@ -1,7 +1,7 @@
 
-import libnacl,select,threading,re, weakref,os,socket,libnacl,time,ssl,collections,binascii,traceback
+import libnacl,select,threading,re, weakref,os,socket,libnacl,time,ssl,collections,binascii,traceback,random, sqlite3,json
 
-from . import util
+from . import util, upnpwrapper
 
 from OpenSSL import crypto, SSL
 
@@ -17,6 +17,41 @@ services = weakref.WeakValueDictionary()
 P2P_PORT=7009
 
 # dhtlock=threading.RLock()
+
+
+#Mutable containers we can pass to services
+WANPortContainer = [0]
+ExternalAddrs=['']
+
+try:
+    os.makedirs(os.path.expanduser("~/.hardlinep2p/"))
+except:
+    pass
+
+DB_PATH = os.path.expanduser("~/.hardlinep2p/peers.db")
+
+discoveryDB  = sqlite3.connect(DB_PATH)
+c=discoveryDB.cursor()
+
+# Create table which we will use to store our peers.
+c.execute('''CREATE TABLE IF NOT EXISTS peers
+             (serviceID text, info text)''')
+
+
+
+dbLock = threading.RLock()
+
+
+
+dbLocal =threading.local()
+
+def getDB():
+    try:
+        return dbLocal.db
+    except:
+        dbLocal.db = sqlite3.connect(DB_PATH)
+        return dbLocal.db
+
 
 class DiscoveryCache(util.LPDPeer):
     def __init__(self,hash):
@@ -34,24 +69,43 @@ class DiscoveryCache(util.LPDPeer):
 
         # with dhtlock:
         #     dht.get_peers(binascii.a2b_hex(self.infohash), block=False, callback=cb, limit=1)
-        #Assume a reasonably low latency local net, and a need to retry if the connection doesn't work the first time.
-        time.sleep(0.35)
+       
 
     def onDiscovery(self,hash, host,port):
         #Local discovery has priority zero
         self.cacheRecord = ((host,port),time.time(),0)
 
+     
+
+
     def get(self,invalidate=False):
-        if not invalidate:
-            x = self.cacheRecord
-        
+
+      
+        #Try a local serach
+        for i in range(0,3):
+          
+            #Look in the cache first
+            x = self.cacheRecord    
             if x[1]> (time.time()- 60):
                 return x[0]
 
-        self.doLookup()
+            self.doLookup()
+            #Wait a bit for replies, waiting a little longer every time
+            time.sleep(i*0.07 + 0.025)
+    
+        #Local search failed, we haven't seen a packet from them, so we are probably not on their network.
+        # lets try a stored WAN address search, maybe we have a record we can use?
+        with dbLock:
+            discoveryDB  = getDB()
+            c=discoveryDB.cursor()
+            c = discoveryDB.cursor()
+            d = c.execute("select info from peers where serviceID=?",(self.infohash,)).fetchone()
+            if d:
+                p = json.loads(d[0])['WANHosts'].split(":")
+                return (p[0],int(p[1]))
+                
 
-        x = self.cacheRecord
-        return x[0]
+
 
 discoveries = collections.OrderedDict()
 
@@ -71,6 +125,30 @@ def discover(key,refresh=False):
 
 
 
+
+def writeWanInfoToDatabase(infohash, hosts):
+    #The device can tell us how to later find it even when we leave the WAN
+    #TODO: People can give us fake values, which we will then save. Solution: digitally sign.
+    if hosts:
+        with dbLock:
+            #Todo don't just reopen a new connection like this
+            discoveryDB  = getDB()
+            cur = discoveryDB.cursor()
+            d = cur.execute("select info from peers where serviceid=?",(infohash,)).fetchone()
+            if d:
+                #No change has been made
+                try:
+                    d=json.loads(d[1])['WANHosts']
+                    if d==hosts:
+                        return
+                except:
+                    print(traceback.format_exc())
+                cur.execute("update peers set info=? where serviceid=?",(json.dumps({"WANHosts": hosts}),infohash))
+            else:
+                cur.execute("insert into peers values (?,?)",(infohash, json.dumps({"WANHosts": hosts})))
+            discoveryDB.commit()
+
+
 class Service():
     def __init__(self,cert, destination,port=80):
         global P2P_PORT
@@ -86,18 +164,18 @@ class Service():
         else:
             self.cert_gen(cert)
 
+    
+
         services[self.keyhash.hex()]=self
         
         self.lpd = util.LPDPeer("HARDLINE-SERVICE","HARDLINE-SEARCH")
 
         self.lpd.advertise(self.keyhash.hex(),destination,P2P_PORT)
+
+       
         # self.dhtPush()
 
                 
-
-
-        
-        
     def dhtPush(self):
         with dhtlock:
             def f(peers):
@@ -112,7 +190,6 @@ class Service():
     def handleConnection(self,sock):
         "Handle incoming encrypted connection from another hardline instance.  The root server code has alreadt recieved the SNI and has dispatched it to us"
         #Swap out the contetx,  now that we know the service they want, we need to serve the right certificate
-        print("cb")
         p2p_server_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         if not os.path.exists(self.certfile):
             raise RuntimeError("No cert")
@@ -120,9 +197,11 @@ class Service():
             raise RuntimeError("No key")
         p2p_server_context.load_cert_chain(certfile=self.certfile, keyfile=self.certfile+".private")
         sock.context =p2p_server_context
-        print("cb2")
+
+    
+
+    def handleConnectionReady(self,sock):
         def f():
-            time.sleep(1)
             conn = socket.socket(socket.AF_INET)
             h,p =self.dest.split(":")
             conn.connect((h,int(p)))
@@ -132,6 +211,41 @@ class Service():
                 r,w,x = select.select([],[sock],[],0.1)
                 if w:
                     break
+
+
+
+            sendOOB =  {
+               
+            }
+
+            #Using a list as an easy mutable global.
+            #Should there be an external addr we can tell them about, we stuff it in our header so they can memorize it.
+            #Note that this is secured via the same SSH tunnel, only the real server can send this.
+            if ExternalAddrs[0]:
+                 sendOOB['WANHosts']= (ExternalAddrs[0]+":"+str(WANPortContainer[0]))
+
+            #Send our oob data header
+            sock.send(json.dumps(sendOOB, separators=(',', ':')).encode()+b"\n")
+
+
+
+            oob= b''
+
+            #The first part of the data is reserved for an OOB header
+            while(1):
+                r,w,x = select.select([sock,],[],[],1)
+                if r:
+                    oob += sock.recv(4096)
+                    if b"\n" in oob:
+                        break
+
+            oob, overflow = oob.split(b"\n")
+
+            #Send any data that was after the newline
+            conn.send(overflow)
+
+
+
 
             while(1):
                 r,w,x = select.select([sock,conn],[],[],1)
@@ -154,7 +268,6 @@ class Service():
                         sock.close()
                         conn.close()
                         return
-                    
                 except:
                     pass
                             
@@ -280,6 +393,42 @@ def server_thread(sock):
             if w:
                 break
 
+        sendOOB = {}
+        #Send our oob data header to the other end of things.
+        conn.send(json.dumps(sendOOB, separators=(',', ':')).encode()+b"\n")
+
+
+        oob= b''
+
+        #The first part of the data is reserved for an OOB header
+        for i in range(0,100):
+            r,w,x = select.select([conn,],[],[],1)
+            if r:
+                oob += conn.recv(4096)
+                if b"\n" in oob:
+                    break
+            time.sleep(0.01)
+        
+
+        oob, overflow = oob.split(b"\n")
+
+        #Send any data that was after the newline, back up to the localhost client
+        sock.send(overflow)
+
+
+        oob = json.loads(oob)
+
+        #The remote server is telling us how we can contact it in the future via WAN, should local discovery
+        #fail.  We record this, indexed by the key hash.  Note that we do this inside the SSL channel
+        #because we don't want anyone to make us write fake crap to our database
+        if 'WANHosts' in oob:
+            writeWanInfoToDatabase(service.decode(), oob['WANHosts'])
+
+        
+
+
+
+
         while(1):
             r,w,x = select.select([sock,conn],[sock,conn] if rb else [],[],1)
             try:
@@ -323,23 +472,53 @@ def handleClient( sock):
 def handleP2PClient(sock):
     def f():
         p2p_server_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        p2p_server_context.sni_callback = handleP2PClientHello
+
+        #Use this list to get the name
+        l=[]
+        p2p_server_context.sni_callback = makeHelloHandler(l)
         conn = p2p_server_context.wrap_socket(sock,server_side=True)
-        time.sleep(3)
+
+        #handleP2PClientHello put the name in the list
+        services[l[0]].handleConnectionReady(conn)
+        
 
     threading.Thread(target=f,daemon=True).start()
 
-def handleP2PClientHello(sock,name,ctd):
-    if name in services:
-        services[name].handleConnection(sock)
-            
 
+def makeHelloHandler(l):
+    def handleP2PClientHello(sock,name,ctd):
+        if name in services:
+            services[name].handleConnection(sock)
+            l.append(name)
+    return handleP2PClientHello
+
+
+
+
+#This loop just refreshes the WAN addresses every five minutes.
+#We need this so we can send them for clients to store, to later connect to us.
+def upnploop():
+    while 1:
+        try:
+            a=upnpwrapper.getWANAddresses()
+            if a:
+                ExternalAddrs[0]=a[0]
+            else:
+                ExternalAddrs[0]=''
+        except:
+            print(traceback.format_exc())
+
+        time.sleep(5*60)
+
+portMapping = None
 
 def start(localport):
-    global P2P_PORT
+    global P2P_PORT,WANPort,portMapping
     
     #This is the server context we use for localhost coms
 
+
+    
     bindsocket = socket.socket()
     bindsocket.bind(('localhost', localport))
     bindsocket.listen()
@@ -352,8 +531,27 @@ def start(localport):
         p2p_bindsocket.bind(('0.0.0.0',P2P_PORT))
         p2p_bindsocket.listen() 
 
-    lastDHT = time.time()+ 25
+        #Only daemons exposing a service need a WAN mapping
+        t = threading.Thread(target=upnploop, daemon=True)
+        t.start()
+        #We don't actually know what an unbusy port really is. Try a bunch till we find one.
+        #Note that there is a slight bit of unreliableness here.  The router could get rebooted, and lose
+        #our mapping, and someone else could have taken it when we retry.  But that is rather unlikely.
+        #Default to the p2p port
+        WANPortContainer[0]=P2P_PORT
 
+        for i in range(0,25):
+            try:
+                portMapping = upnpwrapper.addMapping(P2P_PORT,"TCP", WANPort= WANPortContainer[0])
+                break
+            except:
+                WANPortContainer[0] += 1
+                print(traceback.format_exc())
+                print("Failed to register port mapping, retrying")
+        else:
+            #Default to the p2p port
+            print("Failed to register port mapping, you will need to manually configure.")
+            WANPortContainer[0]=P2P_PORT
 
     while(1):
 
@@ -366,7 +564,7 @@ def start(localport):
         #         print(traceback.format_exc())
 
 
-        r,w,x = select.select([bindsocket,p2p_bindsocket],[],[],1)
+        r,w,x = select.select([bindsocket,p2p_bindsocket] if services else [bindsocket],[],[],1)
         try:
             
             #Whichever one has data, shove it down the other one
@@ -374,7 +572,8 @@ def start(localport):
                 if i==bindsocket:
                     handleClient(i.accept()[0])
                 else:
-                    handleP2PClient(i.accept()[0])
+                    if services:
+                        handleP2PClient(i.accept()[0])
         except:
             pass
 

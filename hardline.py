@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import hardline 
 
+
 if __name__=="__main__":
     import argparse
 
@@ -10,7 +11,7 @@ if __name__=="__main__":
     parser.add_argument('--localport', help='Pages will be proxied to <KEYID>.localhost:<PORT>',default="7009")
     parser.add_argument('--p2pport', help='Port used for secure P2P',default="7008")
 
-    parser.add_argument('--service', help='hostname of a service you want to make available. Requires --certfile',default="")
+    parser.add_argument('--service', help='hostname of a service you want to make available. Requires --certfile',default="localhost")
     parser.add_argument('--serviceport', help='port of a service you want to make available.',default="80")
     parser.add_argument('--certfile', help='Certificate file for publishing a service. Created if nonexistant.',default="foo.cert")
 

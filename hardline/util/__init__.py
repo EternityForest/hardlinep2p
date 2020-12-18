@@ -32,8 +32,10 @@ class LPDPeer():
 
     def makeLPD(self, m,h):
         return (h+" * HTTP/1.1\r\nHost:{Host}\r\nPort: {Port}\r\nInfohash: {Infohash}\r\ncookie: {cookie}\r\n\r\n\r\n").format(**m).encode('utf8')
+
     def makeLPDSearch(self, m,h):
         return (h+" * HTTP/1.1\r\nInfohash: {Infohash}\r\ncookie: {cookie}\r\n\r\n\r\n").format(**m).encode('utf8')
+    
     def poll(self):
         try:
             d, addr = self.msock.recvfrom(4096)
@@ -48,7 +50,7 @@ class LPDPeer():
                 if not msg.get('cookie', '') == self.cookie:
                     with self.lock:
                         if msg['Infohash'] in self.activeHashes:
-                            self.advertise(msg['Infohash'],self.activeHashes[msg['Infohash']][0],self.activeHashes[msg['Infohash']][1],addr)
+                            self.advertise(msg['Infohash'],self.activeHashes[msg['Infohash']][0],self.activeHashes[msg['Infohash']][1])
                             print("responding to lpd")
                             
             if 'announce' in t:
@@ -62,6 +64,8 @@ class LPDPeer():
             return
         self.lastAdvertised[hash] = time.time()
         self.activeHashes[hash] = (host,port)
+       
+    
         self.msock.sendto(self.makeLPD({'Infohash': hash, 'Port': port, 'cookie': self.cookie, 'Host': host},self.announceTopic), addr)
 
     def search(self, hash):
