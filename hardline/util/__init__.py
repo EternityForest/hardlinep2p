@@ -51,7 +51,7 @@ class LPDPeer():
                     with self.lock:
                         if msg['Infohash'] in self.activeHashes:
                             #Mcast works better on localhost to localhost in the same process it seems
-                            self.advertise(msg['Infohash'],self.activeHashes[msg['Infohash']], ("239.192.152.143", 6771) if addr[0].startswith('127.') else addr)
+                            self.advertise(msg['Infohash'],self.activeHashes[msg['Infohash']], ("239.192.152.143", 6771))
                             print("responding to lpd")
                             
             if 'announce' in t:

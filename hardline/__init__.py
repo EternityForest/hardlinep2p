@@ -1,5 +1,8 @@
 
-import libnacl,select,threading,re, weakref,os,socket,libnacl,time,ssl,collections,binascii,traceback,random, sqlite3,json
+import select,threading,re, weakref,os,socket,time,ssl,collections,binascii,traceback,random, sqlite3,json
+from nacl.hash import blake2b
+import nacl
+import netifaces
 
 from . import util, upnpwrapper
 
@@ -23,11 +26,18 @@ WANPortContainer = [0]
 ExternalAddrs=['']
 
 try:
-    os.makedirs(os.path.expanduser("~/.hardlinep2p/"))
+    from android.storage import app_storage_path
+    settings_path = app_storage_path()
+except:
+    settings_path = '~/.hardlinep2p/'
+
+
+try:
+    os.makedirs(os.path.expanduser(settings_path))
 except:
     pass
 
-DB_PATH = os.path.expanduser("~/.hardlinep2p/peers.db")
+DB_PATH = os.path.join(os.path.expanduser(settings_path),"peers.db")
 
 discoveryDB  = sqlite3.connect(DB_PATH)
 c=discoveryDB.cursor()
@@ -46,12 +56,37 @@ dbLock = threading.RLock()
 dbLocal =threading.local()
 
 
+from ipaddress import ip_network, ip_address
+
 def getWanHostsString():
-    #String describing how a node might access us from the public internet
+    #String describing how a node might access us from the public internet, as a prioritized comma separated list.
+
+    
+    meshAddress = ''
+    l=[]
+    x = netifaces.interfaces()
+    for i in x:
+        
+        y = netifaces.ifaddresses(i)
+        
+        if netifaces.AF_INET6 in y:
+            y2 =y[netifaces.AF_INET6]
+            for j in y2:
+                l.append(j['addr'].split("%")[0])
+
+    for i in l:
+        if ip_address(i) in  ip_network("200::/7"):
+            meshAddress = i+":"+str(P2P_ADDR)
+    return meshAddress
+    
+            
+    s =[]
     if ExternalAddrs[0]:
-        return (ExternalAddrs[0]+":"+str(WANPortContainer[0]))
-    else:
-        return ''
+        s.append(ExternalAddrs[0]+":"+str(WANPortContainer[0]))
+    if meshAddress:
+        s.append(meshAddress)
+
+    return ",".join(s)
 
 def getDB():
     try:
@@ -61,7 +96,20 @@ def getDB():
         return dbLocal.db
 
 
-
+def parseHostsList(p):
+    "Parse a comma separated list of hosts which may include bot ipv4 and ipv6, into a list of host port tuples "
+    p=p.replace("[",'').replace("]","")
+    d = p.split(",")
+    l=[]
+    for i in d:
+        i=i.strip()
+        #This could be IPv6 or IPv4, and if it's 4, we will need to take the last : separated part
+        #as the port, and reassemble the rest.
+        i = i.split(":")
+        p=int(i[-1])
+        h=":".join(i[:-1])
+        l.append((h,p))
+    return l
 
 class DiscoveryCache(util.LPDPeer):
     def __init__(self,hash):
@@ -105,18 +153,10 @@ class DiscoveryCache(util.LPDPeer):
 
         if r.text:
             d = json.dumps(r.text.split("\n")[0].strip())
-            d = d['data']
-            #Get the original data string which should be IP port pairs
-            d = base64.b64decode(d).decode()
-
-            d = d.split(",")
-            l=[]
-            for i in d:
-                h,p = i.split(":")
-                l.append((h,p))
+           
             
             #Return a list of candidates to try
-            return l
+            return parseHostsList(d)
 
     def doLookup(self):
         self.search(self.infohash)
@@ -158,15 +198,8 @@ class DiscoveryCache(util.LPDPeer):
             d = c.execute("select info from peers where serviceID=?",(self.infohash,)).fetchone()
             if d:
                 p = json.loads(d[0])['WANHosts']
-
-                d = p.split(",")
-                l=[]
-                for i in d:
-                    h,p = i.split(":")
-                    l.append((h,p))
-                
                 #Return a list of candidates to try
-                return l
+                return parseHostsList(p)
         return []
                 
 
@@ -384,8 +417,8 @@ class Service():
             f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, k).decode("utf-8"))
         
         with open(CERT_FILE+'.hash', "wt") as f:
-            f.write(libnacl.crypto_generichash(crypto.dump_certificate(crypto.FILETYPE_ASN1, cert))[:20].hex())
-            self.keyhash = libnacl.crypto_generichash(crypto.dump_certificate(crypto.FILETYPE_ASN1, cert))[:20]
+            f.write(blake2b(crypto.dump_certificate(crypto.FILETYPE_ASN1, cert), encoder=nacl.encoding.RawEncoder())[:20].hex())
+            self.keyhash = blake2b(crypto.dump_certificate(crypto.FILETYPE_ASN1, cert),encoder=nacl.encoding.RawEncoder())[:20]
 
 def server_thread(sock):
     "Spawns a thread for the server that is meant to be accessed via localhost, and create the backend P2P"
@@ -439,7 +472,7 @@ def server_thread(sock):
         conn = sk.wrap_socket(sock2, server_hostname=service)
 
         #Try our discovered hosts
-        for i in hosts:
+        for host in hosts:
             try:
                 conn.connect(host)
                 break
@@ -460,7 +493,7 @@ def server_thread(sock):
         else:
             raise RuntimeError("Could not get peer cert")
         
-        hashkey = libnacl.crypto_generichash(c)[:20].hex()
+        hashkey = blake2b(c,encoder=nacl.encoding.RawEncoder())[:20].hex()
         if not hashkey==x[0].decode():
             raise ValueError("Server certificate does not match key in URL")
 

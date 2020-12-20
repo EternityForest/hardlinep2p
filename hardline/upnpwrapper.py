@@ -25,7 +25,7 @@ from urllib.parse import urlparse
 import logging
 
 logger=logging.getLogger("upnp")
-import upnpclient
+from . import upnpclient
 listlock = threading.RLock()
 
 cleanuplist = []
