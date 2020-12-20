@@ -36,7 +36,7 @@ version = 0.1
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivym,pyjnius,pynacl,select,threading,re, weakref,os,socket,time,ssl,collections,binascii,traceback,random, sqlite3,json,pyopenssl,logging,decimal,functools,re,datetime,six,lxml,uuid,datetime,dateutil
+requirements = python3,kivy,pyjnius,pynacl,six,lxml,dateutil
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
@@ -55,7 +55,7 @@ requirements = python3,kivym,pyjnius,pynacl,select,threading,re, weakref,os,sock
 orientation = portrait
 
 # (list) List of service to declare
-services = HardlineService:./hardline_android_service.py
+services = hardline:./hardline_android_service.py
 
 #
 # OSX Specific
@@ -85,7 +85,7 @@ fullscreen = 0
 #android.presplash_color = #FFFFFF
 
 # (list) Permissions
-android.permissions = INTERNET
+android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE
 
 # (int) Target Android API, should be as high as possible.
 #android.api = 27

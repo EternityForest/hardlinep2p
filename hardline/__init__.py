@@ -2,14 +2,51 @@
 import select,threading,re, weakref,os,socket,time,ssl,collections,binascii,traceback,random, sqlite3,json
 from nacl.hash import blake2b
 import nacl
-import netifaces
 
-from . import util, upnpwrapper
+from . import util
 
-from OpenSSL import crypto, SSL
 
 services = weakref.WeakValueDictionary()
 
+
+#Todo fix this
+
+# def createWifiChecker():
+
+#     """Detects if we are on something like WiFi.  But if we aren't on android at all, assume that we are always connected to a LAN, even htough there are 4g laptops.
+#        don't use for anything critical because of that.
+
+#     """
+#     def alwaysTrue():
+#         return True
+#     try:
+#         from kivy.utils import platform
+#         from jnius import autoclass
+#     except:
+#         return alwaysTrue
+
+#     if platform != 'android':
+#             return alwaysTrue
+
+
+#     def check_connectivity():
+        
+
+#         Activity = autoclass('android.app.Activity')
+#         PythonActivity = autoclass('org.kivy.android.PythonActivity')
+#         activity = PythonActivity.mActivity
+#         ConnectivityManager = autoclass('android.net.ConnectivityManager')
+
+#         con_mgr = activity.getSystemService(Activity.CONNECTIVITY_SERVICE)
+
+#         conn = con_mgr.getNetworkInfo(ConnectivityManager.TYPE_WIFI).isConnectedOrConnecting()
+#         if conn:
+#             return True
+    
+#     return check_connectivity()
+
+# isOnLan= createWifiChecker()
+isOnLan = lambda:True
 
 
 P2P_PORT=7009
@@ -58,26 +95,33 @@ dbLocal =threading.local()
 
 from ipaddress import ip_network, ip_address
 
+try:
+    import netifaces
+except:
+    netifaces = None
+    print("Did not find netifaces, mesh-awareness disabled")
+
 def getWanHostsString():
     #String describing how a node might access us from the public internet, as a prioritized comma separated list.
 
     
     meshAddress = ''
     l=[]
-    x = netifaces.interfaces()
-    for i in x:
-        
-        y = netifaces.ifaddresses(i)
-        
-        if netifaces.AF_INET6 in y:
-            y2 =y[netifaces.AF_INET6]
-            for j in y2:
-                l.append(j['addr'].split("%")[0])
+    if netifaces:
+        x = netifaces.interfaces()
+        for i in x:
+            
+            y = netifaces.ifaddresses(i)
+            
+            if netifaces.AF_INET6 in y:
+                y2 =y[netifaces.AF_INET6]
+                for j in y2:
+                    l.append(j['addr'].split("%")[0])
 
-    for i in l:
-        if ip_address(i) in  ip_network("200::/7"):
-            meshAddress = i+":"+str(P2P_ADDR)
-    return meshAddress
+        for i in l:
+            #Specifically look for the addresses the Yggdrasil mesh uses
+            if ip_address(i) in  ip_network("200::/7"):
+                meshAddress = i+":"+str(P2P_ADDR)
     
             
     s =[]
@@ -176,18 +220,19 @@ class DiscoveryCache(util.LPDPeer):
 
     def get(self,invalidate=False):
 
-      
-        #Try a local serach
-        for i in range(0,3):
-          
-            #Look in the cache first
-            x = self.LPDcacheRecord    
-            if x[1]> (time.time()- 60):
-                return [x[0]]
+        #Not on WiFi, refrain from trying and failing to do multicast discovery.
+        if isOnLan():
+            #Try a local serach
+            for i in range(0,3):
+            
+                #Look in the cache first
+                x = self.LPDcacheRecord    
+                if x[1]> (time.time()- 60):
+                    return [x[0]]
 
-            self.doLookup()
-            #Wait a bit for replies, waiting a little longer every time
-            time.sleep(i*0.07 + 0.025)
+                self.doLookup()
+                #Wait a bit for replies, waiting a little longer every time
+                time.sleep(i*0.07 + 0.025)
     
         #Local search failed, we haven't seen a packet from them, so we are probably not on their network.
         # lets try a stored WAN address search, maybe we have a record we can use?
@@ -302,6 +347,11 @@ class Service():
     def handleConnectionReady(self,sock):
         def f():
             conn = socket.socket(socket.AF_INET)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 5)
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 15)
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+           
             h,p =self.dest.split(":")
             conn.connect((h,int(p)))
         
@@ -348,27 +398,36 @@ class Service():
 
             while(1):
                 r,w,x = select.select([sock,conn],[],[],1)
-                try:
-                   
-                    #Whichever one has data, shove it down the other one
-                    for i in r:
-                        try:
-                            if i==sock:
-                                conn.send(i.recv(4096))
+
+                #Whichever one has data, shove it down the other one
+                for i in r:
+                    try:
+                        if i==sock:
+                            d= i.recv(4096)
+                            if d:
+                                conn.send(d)
                             else:
-                                sock.send(i.recv(4096))
-                        except:
-                            print(traceback.format_exc())
-                            x=True
+                                raise ValueError("Zero length read, probably closed")
+                        else:
+                            d = i.recv(4096)
+                            if d:
+                                sock.send(d)
+                            else:
+                                raise ValueError("Zero length read, probably closed")
+                    except:
+                        print(traceback.format_exc())
 
-                    if x:
                         print("socket closing")
-
-                        sock.close()
-                        conn.close()
+                        try:
+                            sock.close()
+                        except:
+                            pass
+                        try:
+                            conn.close()
+                        except:
+                            pass
                         return
-                except:
-                    pass
+
                             
         t=threading.Thread(target=f, daemon=True)
         t.start()
@@ -377,6 +436,8 @@ class Service():
     def cert_gen(self,fn):
         #None of these parameters matter.  We will be using the hash directly, comparing
         #exact certificate identity
+        from OpenSSL import crypto, SSL
+
         emailAddress="emailAddress"
         commonName="commonName"
         countryName="NT"
@@ -424,8 +485,12 @@ def server_thread(sock):
     "Spawns a thread for the server that is meant to be accessed via localhost, and create the backend P2P"
     #In a thread, we are going to 
     def f():
-        rb = b''
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 5)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 15)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
 
+        rb = b''
         t=time.time()
         #Sniff for an HTTP host so we know who to connect to.
         #Normally we would use the SSL SNI, but the localhost conection doesn't have that.
@@ -474,6 +539,7 @@ def server_thread(sock):
         #Try our discovered hosts
         for host in hosts:
             try:
+                connectingTo = host
                 conn.connect(host)
                 break
             except:
@@ -483,15 +549,8 @@ def server_thread(sock):
             
 
   
-        for i in range(100):
-            time.sleep(0.03)
-            try:
-                c = conn.getpeercert(True)
-                break
-            except ValueError:
-                pass
-        else:
-            raise RuntimeError("Could not get peer cert")
+        c = conn.getpeercert(True)
+   
         
         hashkey = blake2b(c,encoder=nacl.encoding.RawEncoder())[:20].hex()
         if not hashkey==x[0].decode():
@@ -541,33 +600,42 @@ def server_thread(sock):
 
         while(1):
             r,w,x = select.select([sock,conn],[sock,conn] if rb else [],[],1)
-            try:
-                #Send the traffic we had to buffer in order to sniff for the destination
-                if rb:
-                    if w:
-                        conn.send(rb)
-                        rb=b''
-                
-                
-                #Whichever one has data, shove it down the other one
-                for i in r:
-                    try:
-                        if i==sock:
-                            conn.send(i.recv(4096))
+            #Send the traffic we had to buffer in order to sniff for the destination
+            if rb:
+                if w:
+                    conn.send(rb)
+                    rb=b''
+            
+            
+            #Whichever one has data, shove it down the other one
+            for i in r:
+                try:
+                    if i==sock:
+                        d = i.recv(4096)
+                        if d:
+                            conn.send(d)
                         else:
-                            sock.send(i.recv(4096))
+                            raise ValueError("Zero length read, probably closed")
+                    else:
+                        d= i.recv(4096)
+                        if d:
+                            sock.send(d)
+                        else:
+                            raise ValueError("Zero length read, probably closed")
+                except:
+                    print(traceback.format_exc())
+  
+                    try:
+                        sock.close()
                     except:
-                        print(traceback.format_exc())
-                        x=True
-                
-                if x:
-                    print("socket closing")
-                    sock.close()
-                    conn.close()
+                        pass
+                    try:
+                        conn.close()
+                    except:
+                        pass
             
                     return
-            except:
-                pass
+
     t=threading.Thread(target=f, daemon=True)
     t.start()
     
@@ -581,6 +649,11 @@ def handleClient( sock):
 
 def handleP2PClient(sock):
     def f():
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 5)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 15)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+
         p2p_server_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
 
         #Use this list to get the name
@@ -610,6 +683,7 @@ dhtContainer = [0]
 
 #It also refreshes any OpenDHT keys that clients might have
 def taskloop():
+    from . import upnpwrapper
     while 1:
         try:
             a=upnpwrapper.getWANAddresses()
@@ -651,6 +725,7 @@ def start(localport):
     p2p_bindsocket = socket.socket()
     if services:
         
+        from . import upnpwrapper
 
         #Start the DHT.   Node that we would really like to avoid actually having to use this,
         #So although we publish to it, we try local discovery and the local cache first.
