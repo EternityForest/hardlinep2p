@@ -1,5 +1,5 @@
 # hardlinep2p
-Application-level P2P VPN for securely accessing personal servers without a VPN
+Application-level P2P tunnelling for securely accessing personal servers without a VPN
 
 
 ## requirements
@@ -23,7 +23,22 @@ Now look at foo.cert.hash that will be created.  This is your key hash.  Absolut
 On computer B, launch `python3 hardline.py` and visit e868423731872b8235a0adc9102bb45bb9e8321e.localhost:7009.  You may have to retry a few times, but you should see the service.
 
 
+## Security Considerations
 
+This is using SSL, and I've tried to keep things standard and avoid having too many places to mess up.  It provides an encrypted channel to a server, and does not allow
+people to make malicious servers with the same hex identifier.
+
+It does NOT provide any protection other than what you get with standard HTTPS. People can sniff what domain you are visiting, and ANYONE can connect to a site that
+is made public with this tool.
+
+Many applications already provide some basic username/password auth, and as such should be safe with this tool.
+
+You, or the app you are using, have to provide your own login mechanism.  If you go to a site and don't see a password prompt, nobody else will either!
+
+
+Another thing to keep in mind is that long strings of random chars all look the same. Don't open links from random places just because they look similar to the one you
+want.
+ 
 ## Protocol
 
 Bytes are tunneled 1-for-1 over an SSL connnection, except each side sends a JSON object followed by \\n before any payload data.
@@ -41,7 +56,6 @@ cookie: {cookie}
 To announce, use:
 
 HARDLINE-SERVICE * HTTP/1.1
-Host:{Host}
 Port: {Port}
 Infohash: {Infohash}
 cookie: {cookie}
@@ -49,8 +63,7 @@ cookie: {cookie}
 
 Cookie is to tell your messages apart from others.
 Infohash is the 20 byte hex hash.
-Host is currently ignored, we assume the host being announced is the one sending the message.
-Port is the SSL server used to access the service.
+Port is the SSL server used to access the service, on the node sending the message
 
 ### WAN Access
 

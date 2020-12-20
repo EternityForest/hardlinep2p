@@ -31,7 +31,7 @@ class LPDPeer():
         pass
 
     def makeLPD(self, m,h):
-        return (h+" * HTTP/1.1\r\nHost:{Host}\r\nPort: {Port}\r\nInfohash: {Infohash}\r\ncookie: {cookie}\r\n\r\n\r\n").format(**m).encode('utf8')
+        return (h+" * HTTP/1.1\r\nPort: {Port}\r\nInfohash: {Infohash}\r\ncookie: {cookie}\r\n\r\n\r\n").format(**m).encode('utf8')
 
     def makeLPDSearch(self, m,h):
         return (h+" * HTTP/1.1\r\nInfohash: {Infohash}\r\ncookie: {cookie}\r\n\r\n\r\n").format(**m).encode('utf8')
@@ -51,7 +51,7 @@ class LPDPeer():
                     with self.lock:
                         if msg['Infohash'] in self.activeHashes:
                             #Mcast works better on localhost to localhost in the same process it seems
-                            self.advertise(msg['Infohash'],self.activeHashes[msg['Infohash']][0],self.activeHashes[msg['Infohash']][1], ("239.192.152.143", 6771) if addr[0].startswith('127.') else addr)
+                            self.advertise(msg['Infohash'],self.activeHashes[msg['Infohash']], ("239.192.152.143", 6771) if addr[0].startswith('127.') else addr)
                             print("responding to lpd")
                             
             if 'announce' in t:
@@ -60,14 +60,14 @@ class LPDPeer():
                         self.onDiscovery(msg.get("Infohash"),addr[0],int(msg.get("Port")))
                     
 
-    def advertise(self, hash, host, port, addr= ("239.192.152.143", 6771)):
+    def advertise(self, hash, port, addr= ("239.192.152.143", 6771)):
         if self.lastAdvertised.get(hash, 0) > time.time()+10:
             return
         self.lastAdvertised[hash] = time.time()
-        self.activeHashes[hash] = (host,port)
+        self.activeHashes[hash] = port
        
     
-        self.msock.sendto(self.makeLPD({'Infohash': hash, 'Port': port, 'cookie': self.cookie, 'Host': host},self.announceTopic), addr)
+        self.msock.sendto(self.makeLPD({'Infohash': hash, 'Port': port, 'cookie': self.cookie},self.announceTopic), addr)
 
     def search(self, hash):
         #Not BT LPD compatible!! Use advertise for both searching and announcing
@@ -99,7 +99,7 @@ class LPDPeer():
 
         self.lastAdvertised = {}
 
-        # hash:(host,port) mapping
+        # hash:port mapping
         self.activeHashes = {}
 
         self.lock = threading.Lock()

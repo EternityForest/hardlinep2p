@@ -7,16 +7,15 @@ from OpenSSL import crypto, SSL
 
 services = weakref.WeakValueDictionary()
 
-#TODO LPD bootstrap attempt
-# dht = btdht.DHT()
 
-
-# dht.start()
-# time.sleep(15)
 
 P2P_PORT=7009
 
-# dhtlock=threading.RLock()
+dhtlock=threading.RLock()
+
+DHT_PROXIES = [
+    "http://dhtproxy.jami.net/"
+]
 
 
 #Mutable containers we can pass to services
@@ -43,7 +42,16 @@ dbLock = threading.RLock()
 
 
 
+#LThread local storage to store DB connections, we can only  use each from one thread.
 dbLocal =threading.local()
+
+
+def getWanHostsString():
+    #String describing how a node might access us from the public internet
+    if ExternalAddrs[0]:
+        return (ExternalAddrs[0]+":"+str(WANPortContainer[0]))
+    else:
+        return ''
 
 def getDB():
     try:
@@ -53,27 +61,75 @@ def getDB():
         return dbLocal.db
 
 
+
+
 class DiscoveryCache(util.LPDPeer):
     def __init__(self,hash):
         util.LPDPeer.__init__(self,"HARDLINE-SERVICE","HARDLINE-SEARCH")
         self.infohash = hash
-        self.cacheRecord=(None,0,10)
+
+        #We treat local discovery differently and cache in RAM, because it can change ofen
+        #As we roam off the wifi, and it is not secure.
+        self.LPDcacheRecord=(None,0,10)
+
+        #Don't cache DHT all all, if gives the same info we will get and cache over SSL
+        #But DO rate limit it.
+        self.lastTriedDHT = time.time()
+
+
+
+    def doDHTLookup(self):
+        """Perform a DHT lookup using the public OpenDHT proxy service.  We don't cache the result of this, we just rate limit.
+           and let the connection thread cache the same data that it will get via the server.
+        """
+        if self.lastTriedDHT > (time.time()-60):
+            #Rate limit queries to the public DHT proxy to one per minute
+            return []
+
+        self.lastTriedDHT = time.time()
+        
+
+        import opendht as dht
+
+        k = dht.InfoHash.get(self.infohash).toString.decode()
+
+
+        #Prioritized DHT proxies list
+        for i in DHT_PROXIES:
+            try:
+                r = requests.get(i+k)
+                r.raise_for_status()
+                break
+            except:
+                print("DHT Proxy request to: "+i+" failed")
+
+        if r.text:
+            d = json.dumps(r.text.split("\n")[0].strip())
+            d = d['data']
+            #Get the original data string which should be IP port pairs
+            d = base64.b64decode(d).decode()
+
+            d = d.split(",")
+            l=[]
+            for i in d:
+                h,p = i.split(":")
+                l.append((h,p))
+            
+            #Return a list of candidates to try
+            return l
 
     def doLookup(self):
         self.search(self.infohash)
         def cb(l):
             for i in l:
                 #Priority
-                if self.cacheRecord[2]>=1:
-                    self.cacheRecord= (i,time.time(),1)
+                if self.LPDcacheRecord[2]>=1:
+                    self.LPDcacheRecord= (i,time.time(),1)
 
-        # with dhtlock:
-        #     dht.get_peers(binascii.a2b_hex(self.infohash), block=False, callback=cb, limit=1)
-       
-
+  
     def onDiscovery(self,hash, host,port):
         #Local discovery has priority zero
-        self.cacheRecord = ((host,port),time.time(),0)
+        self.LPDcacheRecord = ((host,port),time.time(),0)
 
      
 
@@ -85,9 +141,9 @@ class DiscoveryCache(util.LPDPeer):
         for i in range(0,3):
           
             #Look in the cache first
-            x = self.cacheRecord    
+            x = self.LPDcacheRecord    
             if x[1]> (time.time()- 60):
-                return x[0]
+                return [x[0]]
 
             self.doLookup()
             #Wait a bit for replies, waiting a little longer every time
@@ -101,8 +157,17 @@ class DiscoveryCache(util.LPDPeer):
             c = discoveryDB.cursor()
             d = c.execute("select info from peers where serviceID=?",(self.infohash,)).fetchone()
             if d:
-                p = json.loads(d[0])['WANHosts'].split(":")
-                return (p[0],int(p[1]))
+                p = json.loads(d[0])['WANHosts']
+
+                d = p.split(",")
+                l=[]
+                for i in d:
+                    h,p = i.split(":")
+                    l.append((h,p))
+                
+                #Return a list of candidates to try
+                return l
+        return []
                 
 
 
@@ -170,21 +235,22 @@ class Service():
         
         self.lpd = util.LPDPeer("HARDLINE-SERVICE","HARDLINE-SEARCH")
 
-        self.lpd.advertise(self.keyhash.hex(),destination,P2P_PORT)
+        self.lpd.advertise(self.keyhash.hex(),P2P_PORT)
 
        
-        # self.dhtPush()
-
                 
-    def dhtPush(self):
+    def dhtPublish(self,node):
+        #Publish this service to the DHT for WAN discovery.
+
+        #We never actually know if this will be available on the platform or not
+        try:
+            import opendht as dht
+        except:
+            return
+
+
         with dhtlock:
-            def f(peers):
-                global P2P_PORT
-
-                with dhtlock:
-                    dht.announce_peer(self.keyhash,P2P_PORT, delay=0, block=False)
-
-            dht.get_peers(self.keyhash, limit=5,callback=f,block=False)
+           node.put(dht.InfoHash.get(self.keyhash.hex()), dht.Value(getWanHostsString().encode()))
 
 
     def handleConnection(self,sock):
@@ -222,7 +288,7 @@ class Service():
             #Should there be an external addr we can tell them about, we stuff it in our header so they can memorize it.
             #Note that this is secured via the same SSH tunnel, only the real server can send this.
             if ExternalAddrs[0]:
-                 sendOOB['WANHosts']= (ExternalAddrs[0]+":"+str(WANPortContainer[0]))
+                 sendOOB['WANHosts']= getWanHostsString()
 
             #Send our oob data header
             sock.send(json.dumps(sendOOB, separators=(',', ':')).encode()+b"\n")
@@ -350,7 +416,7 @@ def server_thread(sock):
 
         #This is the location at which we actually find it.
         #We need to pack an entire hostname which could actually be an IP address, into a single subdomain level component
-        host = discover(service.decode())
+        hosts = discover(service.decode())
         
         #We do our own verification
         sk = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -372,7 +438,16 @@ def server_thread(sock):
         sock2.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
         conn = sk.wrap_socket(sock2, server_hostname=service)
 
-        conn.connect(host)
+        #Try our discovered hosts
+        for i in hosts:
+            try:
+                conn.connect(host)
+                break
+            except:
+                print(traceback.format_exc())
+       # else:
+            #We have failed, now we have to use DHT lookup
+            
 
   
         for i in range(100):
@@ -382,6 +457,8 @@ def server_thread(sock):
                 break
             except ValueError:
                 pass
+        else:
+            raise RuntimeError("Could not get peer cert")
         
         hashkey = libnacl.crypto_generichash(c)[:20].hex()
         if not hashkey==x[0].decode():
@@ -493,11 +570,13 @@ def makeHelloHandler(l):
     return handleP2PClientHello
 
 
+dhtContainer = [0]
 
-
-#This loop just refreshes the WAN addresses every five minutes.
+#This loop just refreshes the WAN addresses every 8 minutes.
 #We need this so we can send them for clients to store, to later connect to us.
-def upnploop():
+
+#It also refreshes any OpenDHT keys that clients might have
+def taskloop():
     while 1:
         try:
             a=upnpwrapper.getWANAddresses()
@@ -508,9 +587,19 @@ def upnploop():
         except:
             print(traceback.format_exc())
 
-        time.sleep(5*60)
+
+
+        if dhtContainer[0]:
+            try:
+               for i in services:
+                   services[i].dhtPublish(dhtContainer[0])
+            except:
+                print(traceback.format_exc())
+
+        time.sleep(8*60)
 
 portMapping = None
+
 
 def start(localport):
     global P2P_PORT,WANPort,portMapping
@@ -528,11 +617,31 @@ def start(localport):
 
     p2p_bindsocket = socket.socket()
     if services:
+        
+
+        #Start the DHT.   Node that we would really like to avoid actually having to use this,
+        #So although we publish to it, we try local discovery and the local cache first.
+        try:
+            import opendht as dht
+        except:
+            dht=None
+            print("Unable to import openDHT.  If you would like to use this feature, install dhtnode if you are on debian.")
+
+        if dht:
+            node = dht.DhtRunner()
+            node.run()
+
+            # Join the network through any running node,
+            # here using a known bootstrap node.
+            node.bootstrap("bootstrap.jami.net", "4222")
+            dhtContainer[0]=node
+
+
         p2p_bindsocket.bind(('0.0.0.0',P2P_PORT))
         p2p_bindsocket.listen() 
 
         #Only daemons exposing a service need a WAN mapping
-        t = threading.Thread(target=upnploop, daemon=True)
+        t = threading.Thread(target=taskloop, daemon=True)
         t.start()
         #We don't actually know what an unbusy port really is. Try a bunch till we find one.
         #Note that there is a slight bit of unreliableness here.  The router could get rebooted, and lose
@@ -554,16 +663,6 @@ def start(localport):
             WANPortContainer[0]=P2P_PORT
 
     while(1):
-
-
-        # if time.time()-lastDHT > 60*12:
-        #     try:
-        #         for i in services:
-        #             services[i].dhtPush()
-        #     except:
-        #         print(traceback.format_exc())
-
-
         r,w,x = select.select([bindsocket,p2p_bindsocket] if services else [bindsocket],[],[],1)
         try:
             
