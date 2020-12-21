@@ -266,6 +266,17 @@ def discover(key,refresh=False):
     return discoveries[key].get(refresh)
 
 
+def dhtDiscover(key,refresh=False):
+    if len(discoveries)> 32:
+        discoveries.popitem(True)
+        discoveries.popitem(True)
+        discoveries.popitem(True)
+        discoveries.popitem(True)
+
+    if not key in discoveries:
+        discoveries[key]= DiscoveryCache(key)
+
+    return discoveries[key].doDHTLookup()
 
 
 
@@ -544,6 +555,17 @@ def server_thread(sock):
                 break
             except:
                 print(traceback.format_exc())
+        else:
+            for host in discover(service.decode()):
+                try:
+                    connectingTo = host
+                    conn.connect(host)
+                    break
+                except:
+                    print(traceback.format_exc())
+            else:
+                raise RuntimeError("All saved host options and dht options failed:"+str(hosts))
+
        # else:
             #We have failed, now we have to use DHT lookup
             

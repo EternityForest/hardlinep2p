@@ -33,7 +33,8 @@ Now look at foo.cert.hash that will be created.  This is your key hash.  Absolut
 On computer B, launch `python3 hardline.py` and visit e868423731872b8235a0adc9102bb45bb9e8321e.localhost:7009.  You may have to retry a few times, but you should see the service.
 
 ## Android Support
-There is an Android app that 
+There is an Android app that only supports client mode, but allows you to access the services on port 7009.  As it does not use any kind of DHT, data usage should be extremely low.
+I don't have any new devices to test with, but it works fine on older android.  This is my very first android app ever, so expect bugs!
 
 ## Security Considerations
 

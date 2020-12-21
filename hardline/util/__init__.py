@@ -52,6 +52,9 @@ class LPDPeer():
                         if msg['Infohash'] in self.activeHashes:
                             #Mcast works better on localhost to localhost in the same process it seems
                             self.advertise(msg['Infohash'],self.activeHashes[msg['Infohash']], ("239.192.152.143", 6771))
+
+                            #Unicast needed for android without needed the extra multicast permission
+                            self.advertise(msg['Infohash'],self.activeHashes[msg['Infohash']], addr)
                             print("responding to lpd")
                             
             if 'announce' in t:
@@ -60,12 +63,14 @@ class LPDPeer():
                         self.onDiscovery(msg.get("Infohash"),addr[0],int(msg.get("Port")))
                     
 
-    def advertise(self, hash, port, addr= ("239.192.152.143", 6771)):
-        if self.lastAdvertised.get(hash, 0) > time.time()+10:
-            return
-        self.lastAdvertised[hash] = time.time()
+    def advertise(self, hash, port, addr= None):
+        #Unicast replies no reatelimit
+        if addr:
+            if self.lastAdvertised.get(hash, 0) > time.time()+10:
+                return
+            self.lastAdvertised[hash] = time.time()
         self.activeHashes[hash] = port
-       
+        addr = addr or ("239.192.152.143", 6771)       
     
         self.msock.sendto(self.makeLPD({'Infohash': hash, 'Port': port, 'cookie': self.cookie},self.announceTopic), addr)
 
