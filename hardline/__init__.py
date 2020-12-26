@@ -8,6 +8,7 @@ from . import util
 
 services = weakref.WeakValueDictionary()
 
+socket.setdefaulttimeout(5)
 
 #Todo fix this
 
@@ -174,33 +175,40 @@ class DiscoveryCache(util.LPDPeer):
         """Perform a DHT lookup using the public OpenDHT proxy service.  We don't cache the result of this, we just rate limit.
            and let the connection thread cache the same data that it will get via the server.
         """
-        if self.lastTriedDHT > (time.time()-60):
-            #Rate limit queries to the public DHT proxy to one per minute
-            return []
+        #Lock is needed mostly to avoid confusion in ratelimit logic when debugging
 
-        self.lastTriedDHT = time.time()
-        
+        with dhtlock:
+            import requests
+            if self.lastTriedDHT > (time.time()-60):
+                #Rate limit queries to the public DHT proxy to one per minute
+                return []
 
-        import opendht as dht
-
-        k = dht.InfoHash.get(self.infohash).toString.decode()
-
-
-        #Prioritized DHT proxies list
-        for i in DHT_PROXIES:
-            try:
-                r = requests.get(i+k)
-                r.raise_for_status()
-                break
-            except:
-                print("DHT Proxy request to: "+i+" failed")
-
-        if r.text:
-            d = json.dumps(r.text.split("\n")[0].strip())
-           
+            self.lastTriedDHT = time.time()
             
-            #Return a list of candidates to try
-            return parseHostsList(d)
+
+            import opendht as dht
+
+            k = dht.InfoHash.get(self.infohash).toString().decode()
+
+
+            #Prioritized DHT proxies list
+            for i in DHT_PROXIES:
+                try:
+                    r = requests.get(i+k)
+                    r.raise_for_status()
+                    break
+                except:
+                    print("DHT Proxy request to: "+i+" failed")
+
+            if r.text:
+                #This only tries the first item, which is a little too easy to DoS, but that's also part of the inherent problem with DHTs.
+                d = base64.b64decode(json.loads(r.text.split("\n")[0].strip())['data'])
+            
+                
+                #Return a list of candidates to try
+                return parseHostsList(d)
+                
+            return []
 
     def doLookup(self):
         self.search(self.infohash)
@@ -564,8 +572,15 @@ def server_thread(sock):
                 except:
                     print(traceback.format_exc())
             else:
-                raise RuntimeError("All saved host options and dht options failed:"+str(hosts))
-
+                for host in dhtDiscover(service.decode()):
+                    try:
+                        connectingTo = host
+                        conn.connect(host)
+                        break
+                    except:
+                        print(traceback.format_exc())
+                else:
+                    raise RuntimeError("All saved host options and dht options failed:"+str(hosts))
        # else:
             #We have failed, now we have to use DHT lookup
             
