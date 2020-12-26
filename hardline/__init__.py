@@ -354,6 +354,9 @@ class Service():
         "Handle incoming encrypted connection from another hardline instance.  The root server code has alreadt recieved the SNI and has dispatched it to us"
         #Swap out the contetx,  now that we know the service they want, we need to serve the right certificate
         p2p_server_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        p2p_server_context.options |= ssl.OP_NO_TLSv1
+        p2p_server_context.options |= ssl.OP_NO_TLSv1_1
+
         if not os.path.exists(self.certfile):
             raise RuntimeError("No cert")
         if not os.path.exists(self.certfile+".private"):
@@ -536,7 +539,11 @@ def server_thread(sock):
         hosts = discover(service.decode())
         
         #We do our own verification
-        sk = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        sk = ssl.create_default_context()
+        
+        sk.options |= ssl.OP_NO_TLSv1
+        sk.options |= ssl.OP_NO_TLSv1_1
+
         sk.check_hostname = False
         sk.verify_mode = ssl.CERT_NONE
         sock2 = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -692,7 +699,9 @@ def handleP2PClient(sock):
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
 
         p2p_server_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-
+        p2p_server_context.options |= ssl.OP_NO_TLSv1
+        p2p_server_context.options |= ssl.OP_NO_TLSv1_1
+        
         #Use this list to get the name
         l=[]
         p2p_server_context.sni_callback = makeHelloHandler(l)
