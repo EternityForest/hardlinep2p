@@ -27,11 +27,11 @@ class LPDPeer():
             
         return (t,d)
     
-    def onDiscovery(self,hash,host,port):
+    def onDiscovery(self,hash,host,port,title):
         pass
 
     def makeLPD(self, m,h):
-        return (h+" * HTTP/1.1\r\nPort: {Port}\r\nInfohash: {Infohash}\r\ncookie: {cookie}\r\n\r\n\r\n").format(**m).encode('utf8')
+        return (h+" * HTTP/1.1\r\nPort: {Port}\r\nInfohash: {Infohash}\r\ncookie: {cookie}\r\ntitle: {title}\r\n\r\n\r\n").format(**m).encode('utf8')
 
     def makeLPDSearch(self, m,h):
         return (h+" * HTTP/1.1\r\nInfohash: {Infohash}\r\ncookie: {cookie}\r\n\r\n\r\n").format(**m).encode('utf8')
@@ -51,28 +51,41 @@ class LPDPeer():
                     with self.lock:
                         if msg['Infohash'] in self.activeHashes:
                             #Mcast works better on localhost to localhost in the same process it seems
-                            self.advertise(msg['Infohash'],self.activeHashes[msg['Infohash']], ("239.192.152.143", 6771))
+                            self.advertise(msg['Infohash'],self.activeHashes[msg['Infohash']][0],self.activeHashes[msg['Infohash']][1], addr=("239.192.152.143", 6771))
 
                             #Unicast needed for android without needed the extra multicast permission
-                            self.advertise(msg['Infohash'],self.activeHashes[msg['Infohash']], addr)
+                            self.advertise(msg['Infohash'],self.activeHashes[msg['Infohash']][0],self.activeHashes[msg['Infohash']][1], addr=addr)
                             print("responding to lpd")
+                        
+                        #Empty infohash scans everyone.
+                        if not msg['Infohash']:
+                            for i in self.activeHashes:
+                                #Mcast works better on localhost to localhost in the same process it seems
+                                self.advertise(i,self.activeHashes[i][0], self.activeHashes[i][1],addr=("239.192.152.143", 6771))
+
+                                #Unicast needed for android without needed the extra multicast permission
+                                self.advertise(i,self.activeHashes[i][0], self.activeHashes[i][1], addr=addr)
+                            print("responding to lpd general scan")
                             
             if 'announce' in t:
                 if not msg.get('cookie', '') == self.cookie:
                     if msg.get("Infohash"):
-                        self.onDiscovery(msg.get("Infohash"),addr[0],int(msg.get("Port")))
+                        self.onDiscovery(msg.get("Infohash"),addr[0],int(msg.get("Port")), msg.get("title",''))
                     
 
-    def advertise(self, hash, port, addr= None):
+    def advertise(self, hash, port,info, addr=None):
         #Unicast replies no reatelimit
+
+        title = info.get('title','')
+
         if addr:
             if self.lastAdvertised.get(hash, 0) > time.time()+10:
                 return
             self.lastAdvertised[hash] = time.time()
-        self.activeHashes[hash] = port
+        self.activeHashes[hash] = (port,info)
         addr = addr or ("239.192.152.143", 6771)       
     
-        self.msock.sendto(self.makeLPD({'Infohash': hash, 'Port': port, 'cookie': self.cookie},self.announceTopic), addr)
+        self.msock.sendto(self.makeLPD({'Infohash': hash, 'Port': port, 'cookie': self.cookie, 'title': title},self.announceTopic), addr)
 
     def search(self, hash):
         #Not BT LPD compatible!! Use advertise for both searching and announcing
@@ -104,7 +117,7 @@ class LPDPeer():
 
         self.lastAdvertised = {}
 
-        # hash:port mapping
+        # hash to (port,info) mapping
         self.activeHashes = {}
 
         self.lock = threading.Lock()

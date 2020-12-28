@@ -156,14 +156,32 @@ def parseHostsList(p):
         l.append((h,p))
     return l
 
-class DiscoveryCache(util.LPDPeer):
-    def __init__(self,hash):
+
+
+
+class DiscoveryPeer(util.LPDPeer):
+    def __init__(self):
         util.LPDPeer.__init__(self,"HARDLINE-SERVICE","HARDLINE-SEARCH")
+
+    def onDiscovery(self,hash, host,port,title):
+        #Local discovery has priority zero
+        cleanDiscoveries()
+       
+        #Assign the discovery data to the cache object
+        getDiscoveryCacheFor(hash).LPDcacheRecord = ((host,port),time.time(),0,title)
+
+
+discoveryPeer = DiscoveryPeer()
+
+
+class DiscoveryCache():
+    "Manage discovery for one remote peer, including requesting updated data as needed."
+    def __init__(self,hash):
         self.infohash = hash
 
         #We treat local discovery differently and cache in RAM, because it can change ofen
         #As we roam off the wifi, and it is not secure.
-        self.LPDcacheRecord=(None,0,10)
+        self.LPDcacheRecord=(None,0,10,'')
 
         #Don't cache DHT all all, if gives the same info we will get and cache over SSL
         #But DO rate limit it.
@@ -174,6 +192,8 @@ class DiscoveryCache(util.LPDPeer):
     def doDHTLookup(self):
         """Perform a DHT lookup using the public OpenDHT proxy service.  We don't cache the result of this, we just rate limit.
            and let the connection thread cache the same data that it will get via the server.
+
+           This is pretty separate from the normal caching.
         """
         #Lock is needed mostly to avoid confusion in ratelimit logic when debugging
 
@@ -211,20 +231,7 @@ class DiscoveryCache(util.LPDPeer):
             return []
 
     def doLookup(self):
-        self.search(self.infohash)
-        def cb(l):
-            for i in l:
-                #Priority
-                if self.LPDcacheRecord[2]>=1:
-                    self.LPDcacheRecord= (i,time.time(),1)
-
-  
-    def onDiscovery(self,hash, host,port):
-        #Local discovery has priority zero
-        self.LPDcacheRecord = ((host,port),time.time(),0)
-
-     
-
+        discoveryPeer.search(self.infohash)
 
     def get(self,invalidate=False):
 
@@ -259,32 +266,49 @@ class DiscoveryCache(util.LPDPeer):
 
 
 discoveries = collections.OrderedDict()
+discoveriesLock = threading.RLock()
+
+def cleanDiscoveries():
+  if len(discoveries)> 128:
+    with discoveriesLock:
+        if len(discoveries)> 128:
+            for i in range(16):
+                discoveries.popitem(True)
+
+
+def getDiscoveryCacheFor(key):
+    "this function is not perfectlu threadsafe and may very rarely fail, that's fine for now, it's still way more reliable than the network itself."
+    if not key in discoveries:
+        with discoveriesLock:
+            discoveries[key]= DiscoveryCache(key)
+
+    return discoveries[key]
+
+
+
+def getAllDiscoveries():
+    "Part of public API.  Return a list of discoveries."
+    l = []
+    with discoveriesLock:
+        for i in discoveries:
+            x = discoveries[i]
+
+            if x.LPDcacheRecord[1]> (time.time()-10*60):
+                l.append({
+                    'title':  x.LPDcacheRecord[3],
+                    'hash':  i
+                })
+    return l
 
 #Not threadsafe, but we rely on the application anyway, to handle the unreliable network
 def discover(key,refresh=False):
-    if len(discoveries)> 32:
-        discoveries.popitem(True)
-        discoveries.popitem(True)
-        discoveries.popitem(True)
-        discoveries.popitem(True)
-
-    if not key in discoveries:
-        discoveries[key]= DiscoveryCache(key)
-
-    return discoveries[key].get(refresh)
+    cleanDiscoveries()
+    return getDiscoveryCacheFor(key).get(refresh)
 
 
 def dhtDiscover(key,refresh=False):
-    if len(discoveries)> 32:
-        discoveries.popitem(True)
-        discoveries.popitem(True)
-        discoveries.popitem(True)
-        discoveries.popitem(True)
-
-    if not key in discoveries:
-        discoveries[key]= DiscoveryCache(key)
-
-    return discoveries[key].doDHTLookup()
+    cleanDiscoveries()
+    return getDiscoveryCacheFor(key).doDHTLookup()
 
 
 
@@ -312,7 +336,7 @@ def writeWanInfoToDatabase(infohash, hosts):
 
 
 class Service():
-    def __init__(self,cert, destination,port=80):
+    def __init__(self,cert, destination,port,info={'title':''}):
         global P2P_PORT
 
         self.certfile = cert
@@ -332,7 +356,7 @@ class Service():
         
         self.lpd = util.LPDPeer("HARDLINE-SERVICE","HARDLINE-SEARCH")
 
-        self.lpd.advertise(self.keyhash.hex(),P2P_PORT)
+        self.lpd.advertise(self.keyhash.hex(),P2P_PORT, info)
 
        
                 
@@ -753,17 +777,25 @@ def taskloop():
 
 portMapping = None
 
+running=True
+
+def stop():
+    #Will not instant;y stop active connections
+    global running
+    running=False
 
 def start(localport):
-    global P2P_PORT,WANPort,portMapping
+    global P2P_PORT,WANPort,portMapping,running
     
+    running=True
     #This is the server context we use for localhost coms
 
 
     
     bindsocket = socket.socket()
-    bindsocket.bind(('localhost', localport))
-    bindsocket.listen()
+    if localport:
+        bindsocket.bind(('localhost', localport))
+        bindsocket.listen()
 
     #This is the server context we use for the remote coms, accepting incoming ssl connections from other instances and proxying them into
     #local services
@@ -816,7 +848,7 @@ def start(localport):
             print("Failed to register port mapping, you will need to manually configure.")
             WANPortContainer[0]=P2P_PORT
 
-    while(1):
+    while(running):
         r,w,x = select.select([bindsocket,p2p_bindsocket] if services else [bindsocket],[],[],1)
         try:
             
@@ -830,3 +862,5 @@ def start(localport):
         except:
             pass
 
+    bindsocket.close()
+    p2p_bindsocket.close()

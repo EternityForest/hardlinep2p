@@ -60,23 +60,26 @@ Discovery Message format(windoes style lien endinnggs)
 
 ### LAN Discovery
 
-To look for something, multicast on ddr= ("239.192.152.143", 6771)
+To look for something, multicast on addr= ("239.192.152.143", 6771).  An empty infohash indicates a general service discovery.
 
 HARDLINE-SEARCH * HTTP/1.1
 Infohash: {Infohash}
 cookie: {cookie}
 
-To announce, use:
+To announce, use this packet, on multicast, or as a unicast response:
 
 HARDLINE-SERVICE * HTTP/1.1
 Port: {Port}
 Infohash: {Infohash}
 cookie: {cookie}
+title: {title}
 
 
 Cookie is to tell your messages apart from others.
 Infohash is the 20 byte hex hash.
 Port is the SSL server used to access the service, on the node sending the message
+
+Title is free-text.
 
 ### WAN Access
 
