@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 buildAndroidPlayStore.sh
+.buildozer/**
 __pycache__/
 *.py[cod]
 *$py.class

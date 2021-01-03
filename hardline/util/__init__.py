@@ -118,8 +118,15 @@ class LPDPeer():
 
     def search(self, hash):
         # Not BT LPD compatible!! Use advertise for both searching and announcing
-        self.msock.sendto(self.makeLPDSearch(
-            {'Infohash': hash, 'cookie': self.cookie}, self.searchTopic), ("239.192.152.143", 6771))
+        if not self.msock:
+            self.connect()
+        
+        try:
+            self.msock.sendto(self.makeLPDSearch(
+                {'Infohash': hash, 'cookie': self.cookie}, self.searchTopic), ("239.192.152.143", 6771))
+        except Exception:
+            self.msock=None
+            raise
 
     def connect(self):
 
