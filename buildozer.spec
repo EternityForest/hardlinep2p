@@ -36,7 +36,7 @@ version = 0.11
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy,pyjnius,pynacl,six,lxml,dateutil,requests
+requirements = python3,kivy,pyjnius,pynacl,six,lxml,dateutil,requests,urllib3
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
@@ -89,7 +89,7 @@ fullscreen = 0
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE
 
 # (int) Target Android API, should be as high as possible.
-#android.api = 27
+android.api = 30
 
 # (int) Minimum API your APK will support.
 #android.minapi = 21

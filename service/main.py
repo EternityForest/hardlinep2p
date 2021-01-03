@@ -1,6 +1,5 @@
 #!/usr/bin/python3
-import hardline 
+import hardline
 
-#This is the android service
+# This is the android service
 hardline.start(7009)
-

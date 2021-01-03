@@ -11,6 +11,7 @@ import threading
 from kivy.uix.screenmanager import ScreenManager, Screen
 
 import time
+import traceback
 
 class ServiceApp(App):
 
@@ -111,13 +112,16 @@ class ServiceApp(App):
     def goToDiscovery(self, *a):
             "Go to the local network discovery page"
             self.discoveryListbox.clear_widgets()
-            import hardline
-            hardline.discoveryPeer.search('')
-            time.sleep(0.5)
+          
 
-            for i in hardline.getAllDiscoveries():
-                
-                self.discoveryListbox.add_widget(self.makeButtonForPeer(i))
+            try:
+                import hardline
+                hardline.discoveryPeer.search('')
+                time.sleep(0.5)
+                for i in hardline.getAllDiscoveries():  
+                    self.discoveryListbox.add_widget(self.makeButtonForPeer(i))
+            except Exception:
+                print(traceback.format_exc())
 
             self.screenManager.current = "Discovery"
 
@@ -137,9 +141,9 @@ class ServiceApp(App):
     def openInBrowser(self,link):
         "Opens a link in the browser"
         if platform == 'android':
-            from jnius import autoclass
+            from jnius import autoclass,cast
             # import the needed Java class
-            PythonActivity = autoclass('org.renpy.android.PythonActivity')
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
             Intent = autoclass('android.content.Intent')
             Uri = autoclass('android.net.Uri')
 

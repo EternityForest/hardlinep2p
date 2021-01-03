@@ -54,8 +54,11 @@ P2P_PORT=7009
 
 dhtlock=threading.RLock()
 
+#Both of these are hosted in the cloud.  The second one is Yggdrasil mesh version, in case you should find yourself without internet but having mesh
 DHT_PROXIES = [
-    "http://dhtproxy.jami.net/"
+    "http://185.198.26.230:4223/",
+    "[200:6a4e:d4a9:d773:388:b367:481:5382]:4223"
+    #"http://dhtproxy.jami.net/"
 ]
 
 
@@ -122,7 +125,7 @@ def getWanHostsString():
         for i in l:
             #Specifically look for the addresses the Yggdrasil mesh uses
             if ip_address(i) in  ip_network("200::/7"):
-                meshAddress = i+":"+str(P2P_ADDR)
+                meshAddress = '['+i+"]:"+str(WANPortContainer[0])
     
             
     s =[]

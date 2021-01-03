@@ -31,14 +31,17 @@ That bookmark will then work from anywhere in the world!
 
 
 ## How it works.
-Computer B can discover the address of computer A if it is on the same network, otherwise it will fall back to using a public OpenDHT proxy(Still waiting to hear about
-the official ToS for this proxy).  If computer B has ever successfully connected to that service before, it will remember the addresses and try those, even if ther DHT proxy
+Computer B can discover the address of computer A if it is on the same network, otherwise it will fall back to using a public OpenDHT proxy that I am hosting(If you run one, let me know, I'd love to add some redundancy!)
+
+If computer B has ever successfully connected to that service before, it will remember the addresses and try those, even if ther DHT proxy
 is down.  Even if the initial connection was via LAN, computer A will tell B where to find it on the WAN later.
 
 Computer A can provide multiple prioritized WAN addresses.  If it is conected to the Yggdrasil mesh, it will provide that address in the list, after the normal WAN address,
 so you should be able to connect even without the internet on isolated meshnets.
 
 Computer A uses the native DHT, and does not rely on a proxy.
+
+
 
 ### Using It
 
@@ -49,6 +52,9 @@ You must have UPnP on your router, or manually open a port to the P2P port if yo
 Now look at foo.cert.hash that will be created.  This is your key hash.  Absolutely do not use the included certificates for anything real, generate your own, they are only there for consistent testing.
 
 On computer B, launch `python3 hardline.py` and visit e868423731872b8235a0adc9102bb45bb9e8321e.localhost:7009.  You may have to retry a few times, but you should see the service.
+
+
+If you have Kivy installed, you can also run the GUI version.
 
 ## Android Support
 There is an Android app that only supports client mode, but allows you to access the services on port 7009.  As it does not use any kind of DHT, data usage should be extremely low.
@@ -73,12 +79,16 @@ want.
 ## Protocol
 
 Bytes are tunneled 1-for-1 over an SSL connnection, except each side sends a JSON object followed by \\n before any payload data.
-Discovery Message format(windoes style lien endinnggs)
 
 
 ### LAN Discovery
 
 To look for something, multicast on addr= ("239.192.152.143", 6771).  An empty infohash indicates a general service discovery.
+
+The multicast group and general format is the same as BitTorrent's LPD, but we do not use any of the BT protocol.
+
+Discovery Message format(windoes style lien endinnggs)
+
 
 HARDLINE-SEARCH * HTTP/1.1
 Infohash: {Infohash}
