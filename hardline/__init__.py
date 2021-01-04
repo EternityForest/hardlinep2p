@@ -105,10 +105,12 @@ except:
     netifaces = None
     print("Did not find netifaces, mesh-awareness disabled")
 
+
+
+
 def getWanHostsString():
     #String describing how a node might access us from the public internet, as a prioritized comma separated list.
 
-    
     meshAddress = ''
     l=[]
     if netifaces:
@@ -751,22 +753,43 @@ def makeHelloHandler(l):
 
 dhtContainer = [0]
 
+
+lastUsedIPAPI = 0
+
+
 #This loop just refreshes the WAN addresses every 8 minutes.
 #We need this so we can send them for clients to store, to later connect to us.
 
 #It also refreshes any OpenDHT keys that clients might have
 def taskloop():
+    global lastUsedIPAPI
+
     from . import upnpwrapper
     while 1:
+        success = False
         try:
             a=upnpwrapper.getWANAddresses()
             if a:
                 ExternalAddrs[0]=a[0]
-            else:
-                ExternalAddrs[0]=''
+                success=True
         except:
             print(traceback.format_exc())
 
+        #If we can't get a UPNP listing we have to rely on a manual port mapping.
+        if not success:
+            if time.time()> lastUsedIPAPI-30*40:
+                lastUsedIPAPI = time.time()
+                try:
+                    import requests
+                    r = requests.get("https://api.ipify.org/",timeout=5)
+                    r.raise_for_status()
+                    ExternalAddrs[0]=r.text
+                    success = True
+                except:
+                    print(traceback.format_exc())
+
+        if not success:
+            ExternalAddrs[0]=''
 
 
         if dhtContainer[0]:
