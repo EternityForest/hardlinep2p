@@ -58,6 +58,12 @@ class LPDPeer():
                 self.msock = None
                 raise
 
+            #Ignore not-LAN clients.
+            isLan = (addr[0].split(".")[0] in ('127','192','10','172','169'))
+            if not isLan:
+                return
+
+
         else:
             # Retry connect
             time.sleep(30)
@@ -65,6 +71,7 @@ class LPDPeer():
                 self.connect()
             except OSError:
                 return
+
 
         t, msg = self.parseLPD(d.decode('utf-8', errors='ignore'))
 

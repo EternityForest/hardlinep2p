@@ -1,5 +1,5 @@
 
-import select,threading,re, weakref,os,socket,time,ssl,collections,binascii,traceback,random, sqlite3,json
+import select,threading,re, weakref,os,socket,time,ssl,collections,binascii,traceback,random, sqlite3,json,random,uuid
 from nacl.hash import blake2b
 import nacl
 
@@ -72,10 +72,20 @@ try:
 except:
     settings_path = '~/.hardlinep2p/'
 
+# clientidkeyfile = os.path.join(os.path.expanduser(settings_path), "clientid.txt")
+
+# #This client ID is only ever sent in hashed form to remote sites.  It cannot be used to track you unless they know the raw unhashed key
+# if not os.path.exists(clientidkeyfile):
+#     with os.path.open(clientidkeyfile, "w") as f:
+#         f.write(str(uuid.uuid4()))
+
+# with os.path.open(clientidkeyfile) as f:
+#     clientUUID = f.read()
+
 
 try:
     os.makedirs(os.path.expanduser(settings_path))
-except:
+except Exception:
     pass
 
 DB_PATH = os.path.join(os.path.expanduser(settings_path),"peers.db")
@@ -226,8 +236,9 @@ class DiscoveryCache():
                     print("DHT Proxy request to: "+i+" failed")
 
             if r.text:
-                #This only tries the first item, which is a little too easy to DoS, but that's also part of the inherent problem with DHTs.
-                d = base64.b64decode(json.loads(r.text.split("\n")[0].strip())['data'])
+                #This only tries one item, which is a little too easy to DoS, but that's also part of the inherent problem with DHTs.
+                #By randomizing, we allow for some very basic load balancing, although nodes will stay pinned to their chosen node until failure.
+                d = base64.b64decode(json.loads(random.choice(r.text.split("\n")).strip())['data'])
             
                 
                 #Return a list of candidates to try
@@ -341,11 +352,26 @@ def writeWanInfoToDatabase(infohash, hosts):
 
 
 class Service():
-    def __init__(self,cert, destination,port,info={'title':''}):
+    def __init__(self,cert, destination,port,info={'title':''},):
         global P2P_PORT
 
         self.certfile = cert
         self.dest = destination+":"+str(port)
+
+
+        # #Used for tracking who we have directly connected to on the lan.
+        # #For GDPR reasons, we do not store data besides the anonymous ID and the fact that they connected at some point.
+        # self.lanClientsFile = self.certfile+".lanclients"
+        # self.lanClientsLock = threading.Lock()
+
+        # if os.path.exists(self.lanClientsFile):
+        #     with open(self.lanClientsFile) as f:
+        #         self.lanClients= {i.strip():None for i in f.read.replace("\r","").split("\n") if i.strip}
+        # self.la
+        
+        # #Forbids connection by anyone who has not connected via our LAN directly before.  Weak security,
+        # #But better than nothing.
+        # self.noStrangers = nostrangers
 
      
         
@@ -357,8 +383,9 @@ class Service():
 
     
 
+
         services[self.keyhash.hex()]=self
-        
+
         self.lpd = util.LPDPeer("HARDLINE-SERVICE","HARDLINE-SEARCH")
 
         self.lpd.advertise(self.keyhash.hex(),P2P_PORT, info)
@@ -412,7 +439,7 @@ class Service():
                 if w:
                     break
 
-
+          
 
             sendOOB =  {
                
@@ -426,6 +453,8 @@ class Service():
 
             #Send our oob data header
             sock.send(json.dumps(sendOOB, separators=(',', ':')).encode()+b"\n")
+            
+          
 
 
 
@@ -440,6 +469,8 @@ class Service():
                         break
 
             oob, overflow = oob.split(b"\n")
+
+         
 
             #Send any data that was after the newline
             conn.send(overflow)
@@ -483,7 +514,15 @@ class Service():
         t=threading.Thread(target=f, daemon=True)
         t.start()
             
-            
+    
+    # def addKnownLANClient(self,l):
+    #     with lanClientsLock:
+    #         self.lanClients[l].append(l)
+    #         #Put line endings befio
+    #         with open(self.lanClientsFile,"a+") as f:
+    #             f.write("\r\n"+l)
+
+
     def cert_gen(self,fn):
         #None of these parameters matter.  We will be using the hash directly, comparing
         #exact certificate identity
@@ -560,8 +599,9 @@ def server_thread(sock):
 
         x = destination.split(b".")
         
-        #This is the service we want, identified by hex key hash
-        service =x[0]
+        #This is the service we want, identified by hex key hash.  SERVICE.localhost
+        service =x[-2]
+
 
         #This is the location at which we actually find it.
         #We need to pack an entire hostname which could actually be an IP address, into a single subdomain level component
@@ -579,6 +619,9 @@ def server_thread(sock):
 
   
         
+        # clientID = blake2b(clientUUID.encode()+service ,encoder=nacl.encoding.RawEncoder())[:20]
+
+        
     
         
 
@@ -589,6 +632,7 @@ def server_thread(sock):
         sock2.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 5)
         sock2.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 15)
         sock2.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+
         conn = sk.wrap_socket(sock2, server_hostname=service)
 
         #Try our discovered hosts
@@ -621,7 +665,7 @@ def server_thread(sock):
             #We have failed, now we have to use DHT lookup
             
 
-  
+        
         c = conn.getpeercert(True)
    
         
@@ -638,6 +682,8 @@ def server_thread(sock):
         sendOOB = {}
         #Send our oob data header to the other end of things.
         conn.send(json.dumps(sendOOB, separators=(',', ':')).encode()+b"\n")
+
+
 
 
         oob= b''
@@ -828,7 +874,6 @@ def start(localport):
 
     p2p_bindsocket = socket.socket()
     if services:
-        
         from . import upnpwrapper
 
         #Start the DHT.   Node that we would really like to avoid actually having to use this,

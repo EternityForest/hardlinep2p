@@ -65,8 +65,11 @@ I don't have any new devices to test with, but it works fine on older android.  
 This is using SSL, and I've tried to keep things standard and avoid having too many places to mess up.  It provides an encrypted channel to a server, and does not allow
 people to make malicious servers with the same hex identifier.
 
-It does NOT provide any protection other than what you get with standard HTTPS. People can sniff what domain you are visiting, and ANYONE can connect to a site that
-is made public with this tool.
+It does NOT provide any protection other than what you get with standard HTTPS. People can sniff traffic to finf the hex ID, and ANYONE can connect to a site that
+is made public with this tool if they know that, meaning your service must provide any username/password auth thaty is neededed.
+
+However, you should still keep your hex URLs secret from anyone who shouldn't be allowed to connect.  Many remote attackers cannot sniff traffic easily, and
+we do not intentionally reveal the URL to anyone outside your network.  You should not rely on this, but it is a useful extra layer that makes attacks a bit harder.
 
 Many applications already provide some basic username/password auth, and as such should be safe with this tool.
 
