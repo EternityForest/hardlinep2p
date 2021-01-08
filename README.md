@@ -51,7 +51,11 @@ You must have UPnP on your router, or manually open a port to the P2P port if yo
 
 Now look at foo.cert.hash that will be created.  This is your key hash.  Absolutely do not use the included certificates for anything real, generate your own, they are only there for consistent testing.
 
-On computer B, launch `python3 hardline.py` and visit e868423731872b8235a0adc9102bb45bb9e8321e.localhost:7009.  You may have to retry a few times, but you should see the service.
+On computer B, launch `python3 hardline.py` and visit hfhfdysvtziz6-e868423731872b8235a0adc9102bb45bb9e8321e.localhost:7009(replace hfhfdysvtziz6-e868423731872b8235a0adc9102bb45bb9e8321e with your key hash file contents)  You may have to retry a few times, but you should see the service.
+
+The part of the URL after the dash must be kept as is, or it won't connect, but you can freely choose the part before(hfhfdysvtziz6), replacing it with up to 23 chars, so long as there are 
+no dashes in it.  This can be used either as a weak layer of password protection, or to add vanity text.  You really shouldn't rely on the password though, it was only meant
+to protect from casual snoopers, and you can't have two services with dofferent freetext and the same main part of the URL.
 
 
 If you have Kivy installed, you can also run the GUI version.
@@ -65,7 +69,7 @@ I don't have any new devices to test with, but it works fine on older android.  
 This is using SSL, and I've tried to keep things standard and avoid having too many places to mess up.  It provides an encrypted channel to a server, and does not allow
 people to make malicious servers with the same hex identifier.
 
-It does NOT provide any protection other than what you get with standard HTTPS. People can sniff traffic to finf the hex ID, and ANYONE can connect to a site that
+It does NOT provide any protection other than what you get with standard HTTPS(It tries to, but you shouldn't rely on that). People can sniff traffic to find the hex ID, and ANYONE can connect to a site that
 is made public with this tool if they know that, meaning your service must provide any username/password auth thaty is neededed.
 
 However, you should still keep your hex URLs secret from anyone who shouldn't be allowed to connect.  Many remote attackers cannot sniff traffic easily, and
@@ -75,13 +79,21 @@ Many applications already provide some basic username/password auth, and as such
 
 You, or the app you are using, have to provide your own login mechanism.  If you go to a site and don't see a password prompt, nobody else will either!
 
-
 Another thing to keep in mind is that long strings of random chars all look the same. Don't open links from random places just because they look similar to the one you
 want.
 
+
+### The "password" before the hash
+
+The "hfhfdysvtziz6" string before the hash is actually a very weak sort of extra password.  It is not sent until *after* the connection has already been set up using the main part of the URL, so it
+cannot be sniffed the traditional way, except if you are on the same LAN as the server(not just the client), In which case you can get it through the service browsing feature.
+
+In theory, it could be enough protection in 99% of cases, however, the browser or OS itself may leak this password through log files, analytics, DNS, etc, and attackers may well be on the same net as the server in some cases.  Still,  it should provide a useful bit of extra protection from remote attackers.
+
 ## Protocol
 
-Bytes are tunneled 1-for-1 over an SSL connnection, except each side sends a JSON object followed by \\n before any payload data.
+Bytes are tunneled 1-for-1 over an SSL connnection, except each side sends a JSON object for out-of-band setup info followed by \\n before any payload data.  The server uses the TL
+server name to route, and the server buffers and sniffs the Host: in the HTTP stream.
 
 
 ### LAN Discovery
