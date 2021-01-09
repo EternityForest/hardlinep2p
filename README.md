@@ -60,6 +60,39 @@ to protect from casual snoopers, and you can't have two services with dofferent 
 
 If you have Kivy installed, you can also run the GUI version.
 
+
+### Running as a proper service
+
+Install with setup.py install or pip3 install hardline.  Then you can use the command "hardlined", which acts as both the client and the server.
+
+It takes the following options:
+
+#### --servicedir
+A directory of services that you would like to expose, in simple INI format.  See service_config_example for examples. Default is /etc/hardline/services.
+Here's what a complete file looks like:
+
+``` ini
+[Service]
+#The service you want to expose
+service=localhost
+port=80
+
+#Use absolute paths for non-example applications. 
+#The service file, and all it's associated files like the hash get created on-demand.
+#Look in myservice.cert.hash to find the hash ID for the URL.
+certfile=myservice.cert
+
+[Info]
+title="My Awesome Service"
+```
+
+#### --p2pport
+The port used for incoming secure connections. Default is 7008. This is the one you open on your firewall if you want to serve a public service(if UPnP doesn't do it for you).
+
+### --localport
+The port that your browser will use to connect to a hardline service.  Default is 7009.
+
+
 ## Android Support
 There is an Android app that only supports client mode, but allows you to access the services on port 7009.  As it does not use any kind of DHT, data usage should be extremely low.
 I don't have any new devices to test with, but it works fine on older android.  This is my very first android app ever, so expect bugs!

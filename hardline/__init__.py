@@ -21,6 +21,7 @@ import base64
 from nacl.hash import blake2b
 import nacl
 import hashlib
+import stat
 
 from . import util
 
@@ -234,15 +235,15 @@ class DiscoveryCache():
             self.lastTriedDHT = time.time()
 
             # Use SHA1 here as it is openDHT custom
-            k=hashlib.sha1(self.infohash.encode()).digest()[:20].hex()
+            k = hashlib.sha1(self.infohash.encode()).digest()[:20].hex()
 
-            r =None
+            r = None
             lines = []
             # Prioritized DHT proxies list
             for i in DHT_PROXIES:
                 print("Trying DHT Proxy request to: "+i+k)
                 try:
-                    r = requests.get(i+k,timeout=20,stream=True)
+                    r = requests.get(i+k, timeout=20, stream=True)
                     for j in r.iter_lines():
                         if j:
                             lines.append(j)
@@ -251,12 +252,12 @@ class DiscoveryCache():
                 except:
                     print(traceback.format_exc())
                     print("DHT Proxy request to: "+i+" failed for"+k)
-            
 
             if lines:
                 # This only tries one item, which is a little too easy to DoS, but that's also part of the inherent problem with DHTs.
                 # By randomizing, we allow for some very basic load balancing, although nodes will stay pinned to their chosen node until failure.
-                d = base64.b64decode(json.loads(random.choice(lines).strip())['data']).decode()
+                d = base64.b64decode(json.loads(
+                    random.choice(lines).strip())['data']).decode()
 
                 # Return a list of candidates to try
                 return parseHostsList(d)
@@ -615,16 +616,21 @@ class Service():
         with open(CERT_FILE, "wt") as f:
             f.write(crypto.dump_certificate(
                 crypto.FILETYPE_PEM, cert).decode("utf-8"))
+        os.chmod(CERT_FILE, stat.S_IRWXU)
 
         with open(KEY_FILE, "wt") as f:
             f.write(crypto.dump_privatekey(
                 crypto.FILETYPE_PEM, k).decode("utf-8"))
+
+        os.chmod(KEY_FILE, stat.S_IRWXU)
 
         with open(CERT_FILE+'.hash', "wt") as f:
             f.write(self.password + '-' + blake2b(crypto.dump_certificate(
                 crypto.FILETYPE_ASN1, cert), encoder=nacl.encoding.RawEncoder())[:20].hex())
             self.keyhash = blake2b(crypto.dump_certificate(
                 crypto.FILETYPE_ASN1, cert), encoder=nacl.encoding.RawEncoder())[:20]
+
+        os.chmod(CERT_FILE+'.hash', stat.S_IRWXU)
 
 
 def server_thread(sock):
@@ -708,7 +714,7 @@ def server_thread(sock):
                     print(traceback.format_exc())
             else:
                 # Retry discovery, this time refresh so we don't get old cached lan values
-                for host in discover(fullservice.decode(),refresh=True):
+                for host in discover(fullservice.decode(), refresh=True):
                     try:
                         connectingTo = host
                         print("trying", host)
