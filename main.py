@@ -61,7 +61,7 @@ class ServiceApp(App):
     
         layout = BoxLayout(orientation='vertical')
         mainScreen.add_widget(layout)
-        label = Label(text='HardlineP2P: The open source way to find and connect to servers with no fees or registration')
+        label = Label(halign='center',text='HardlineP2P: The open source way to find\n and connect to servers\nwith no fees or registration')
         layout.add_widget(label)
 
 
@@ -70,7 +70,7 @@ class ServiceApp(App):
         btn1.bind(on_press=self.goToDiscovery)
 
 
-        btn3 = Button(text='Stop the service(Service must be running to use hardlines)')
+        btn3 = Button(halign='center',text='Stop the service\n(Service must be running to use hardlines)')
         btn3.bind(on_press=self.stop_service)
 
         btn4 = Button(text='Start or restart.')

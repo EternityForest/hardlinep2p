@@ -20,6 +20,7 @@ import hmac
 import base64
 from nacl.hash import blake2b
 import nacl
+import hashlib
 
 from . import util
 
@@ -75,7 +76,7 @@ dhtlock = threading.RLock()
 # Both of these are hosted in the cloud.  The second one is Yggdrasil mesh version, in case you should find yourself without internet but having mesh
 DHT_PROXIES = [
     "http://185.198.26.230:4223/",
-    "[200:6a4e:d4a9:d773:388:b367:481:5382]:4223"
+    "http://[200:6a4e:d4a9:d773:388:b367:481:5382]:4223/"
     # "http://dhtproxy.jami.net/"
 ]
 
@@ -108,6 +109,7 @@ except Exception:
 
 DB_PATH = os.path.join(os.path.expanduser(settings_path), "peers.db")
 
+print("Peers DB: "+DB_PATH)
 discoveryDB = sqlite3.connect(DB_PATH)
 c = discoveryDB.cursor()
 
@@ -213,7 +215,7 @@ class DiscoveryCache():
 
         # Don't cache DHT all all, if gives the same info we will get and cache over SSL
         # But DO rate limit it.
-        self.lastTriedDHT = time.time()
+        self.lastTriedDHT = 0
 
     def doDHTLookup(self):
         """Perform a DHT lookup using the public OpenDHT proxy service.  We don't cache the result of this, we just rate limit.
@@ -231,24 +233,30 @@ class DiscoveryCache():
 
             self.lastTriedDHT = time.time()
 
-            import opendht as dht
+            # Use SHA1 here as it is openDHT custom
+            k=hashlib.sha1(self.infohash.encode()).digest()[:20].hex()
 
-            k = dht.InfoHash.get(self.infohash).toString().decode()
-
+            r =None
+            lines = []
             # Prioritized DHT proxies list
             for i in DHT_PROXIES:
+                print("Trying DHT Proxy request to: "+i+k)
                 try:
-                    r = requests.get(i+k)
-                    r.raise_for_status()
+                    r = requests.get(i+k,timeout=20,stream=True)
+                    for j in r.iter_lines():
+                        if j:
+                            lines.append(j)
+                            break
                     break
                 except:
-                    print("DHT Proxy request to: "+i+" failed")
+                    print(traceback.format_exc())
+                    print("DHT Proxy request to: "+i+" failed for"+k)
+            
 
-            if r.text:
+            if lines:
                 # This only tries one item, which is a little too easy to DoS, but that's also part of the inherent problem with DHTs.
                 # By randomizing, we allow for some very basic load balancing, although nodes will stay pinned to their chosen node until failure.
-                d = base64.b64decode(json.loads(random.choice(
-                    r.text.split("\n")).strip())['data']).decode()
+                d = base64.b64decode(json.loads(random.choice(lines).strip())['data']).decode()
 
                 # Return a list of candidates to try
                 return parseHostsList(d)
@@ -256,14 +264,19 @@ class DiscoveryCache():
             return []
 
     def doLookup(self):
-        discoveryPeer.search(self.infohash)
+        try:
+            discoveryPeer.search(self.infohash)
+        except:
+            print(traceback.format_exc())
 
     def get(self, invalidate=False):
 
         # Not on WiFi, refrain from trying and failing to do multicast discovery.
         if isOnLan():
+            if invalidate:
+                self.LPDcacheRecord = (None, 0, 10, '')
             # Try a local serach
-            for i in range(0, 3):
+            for i in range(0, 4):
 
                 # Look in the cache first
                 x = self.LPDcacheRecord
@@ -272,7 +285,7 @@ class DiscoveryCache():
 
                 self.doLookup()
                 # Wait a bit for replies, waiting a little longer every time
-                time.sleep(i*0.07 + 0.025)
+                time.sleep(i*0.1 + 0.05)
 
         # Local search failed, we haven't seen a packet from them, so we are probably not on their network.
         # lets try a stored WAN address search, maybe we have a record we can use?
@@ -341,6 +354,7 @@ def writeWanInfoToDatabase(infohash, hosts):
     # The device can tell us how to later find it even when we leave the WAN
     # TODO: People can give us fake values, which we will then save. Solution: digitally sign.
     if hosts:
+        print("Got WAN connection info from server")
         with dbLock:
             # Todo don't just reopen a new connection like this
             discoveryDB = getDB()
@@ -355,9 +369,11 @@ def writeWanInfoToDatabase(infohash, hosts):
                         return
                 except:
                     print(traceback.format_exc())
+                print("Writing updated info to DB")
                 cur.execute("update peers set info=? where serviceid=?",
                             (json.dumps({"WANHosts": hosts}), infohash))
             else:
+                print("Writing ne host info to DB")
                 cur.execute("insert into peers values (?,?)",
                             (infohash, json.dumps({"WANHosts": hosts})))
             discoveryDB.commit()
@@ -451,7 +467,7 @@ class Service():
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 15)
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
 
-            #Use weakrefs to track how many of these are running
+            # Use weakrefs to track how many of these are running
             instanceTracker = InstanceTracker()
 
             connections[time.time()] = instanceTracker
@@ -680,37 +696,43 @@ def server_thread(sock):
 
         conn = sk.wrap_socket(sock2, server_hostname=service)
 
-        # Try our discovered hosts
-        for host in hosts:
-            try:
-                connectingTo = host
-                conn.connect(host)
-                break
-            except:
-                print(traceback.format_exc())
-        else:
-            # Retry discovery
-            for host in discover(fullservice.decode()):
+        try:
+            # Try our discovered hosts
+            for host in hosts:
                 try:
                     connectingTo = host
+                    print("trying", host)
                     conn.connect(host)
                     break
                 except:
                     print(traceback.format_exc())
             else:
-                # Last resort we try using the DHT
-                for host in dhtDiscover(service):
+                # Retry discovery, this time refresh so we don't get old cached lan values
+                for host in discover(fullservice.decode(),refresh=True):
                     try:
                         connectingTo = host
+                        print("trying", host)
                         conn.connect(host)
                         break
                     except:
                         print(traceback.format_exc())
                 else:
-                    conn.close()
-                    sock2.close()
-                    raise RuntimeError(
-                        "All saved host options and dht options failed:"+str(hosts))
+                    # Last resort we try using the DHT
+                    for host in dhtDiscover(service):
+                        try:
+                            print("trying", host)
+                            connectingTo = host
+                            conn.connect(host)
+                            break
+                        except:
+                            print(traceback.format_exc())
+                    else:
+                        raise RuntimeError(
+                            "All saved host options and dht options failed:"+str(hosts))
+        except:
+            conn.close()
+            sock2.close()
+            raise
        # else:
             # We have failed, now we have to use DHT lookup
 
@@ -754,7 +776,7 @@ def server_thread(sock):
         # fail.  We record this, indexed by the key hash.  Note that we do this inside the SSL channel
         # because we don't want anyone to make us write fake crap to our database
         if 'WANHosts' in oob:
-            writeWanInfoToDatabase(service, oob['WANHosts'])
+            writeWanInfoToDatabase(fullservice.decode(), oob['WANHosts'])
 
         while(1):
             r, w, x = select.select(
@@ -914,7 +936,7 @@ def start(localport):
     if services:
         from . import upnpwrapper
 
-        # Start the DHT.   Node that we would really like to avoid actually having to use this,
+        # Start the d.   Node that we would really like to avoid actually having to use this,
         # So although we publish to it, we try local discovery and the local cache first.
         try:
             import opendht as dht

@@ -64,6 +64,8 @@ class LPDPeer():
                 '127', '192', '10', '172', '169'))
             if not isLan:
                 return
+            
+            self.handleData(d, addr)
 
         else:
             # Retry connect
@@ -73,7 +75,6 @@ class LPDPeer():
             except OSError:
                 return
 
-        self.handleData(d, addr)
 
     def handleData(self, d, addr):
         t, msg = self.parseLPD(d.decode('utf-8', errors='ignore'))
