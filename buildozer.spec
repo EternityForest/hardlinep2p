@@ -16,13 +16,13 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas
 
 # (list) List of inclusions using pattern matching
-#source.include_patterns = assets/*,images/*.png
+source.include_patterns = hardline/*, hardline/upnpclient/*,hardline/util/*
 
 # (list) Source files to exclude (let empty to not exclude anything)
 #source.exclude_exts = spec
 
 # (list) List of directory to exclude (let empty to not exclude anything)
-#source.exclude_dirs = tests, bin
+source.exclude_dirs = bin
 
 # (list) List of exclusions using pattern matching
 #source.exclude_patterns = license,images/*/*.jpg
@@ -36,7 +36,7 @@ version = 0.12
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy,pyjnius,pynacl,six,lxml,dateutil,requests,urllib3,chardet,idna,certifi
+requirements = python3,pyjnius,pynacl,six,lxml,dateutil,requests,urllib3,chardet,idna,certifi,kivy==2.0.0,kivymd==0.104.1
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
@@ -47,6 +47,8 @@ requirements = python3,kivy,pyjnius,pynacl,six,lxml,dateutil,requests,urllib3,ch
 
 # (str) Presplash of the application
 presplash.filename = %(source.dir)s/img/logo.png
+
+android.presplash_color=white
 
 # (str) Icon of the application
 icon.filename = %(source.dir)s/img/logo.png
@@ -251,7 +253,7 @@ android.arch = armeabi-v7a
 
 # (int) port number to specify an explicit --port= p4a argument (eg for bootstrap flask)
 #p4a.port =
-
+p4a.setup_py = false
 
 #
 # iOS specific
@@ -290,7 +292,7 @@ warn_on_root = 1
 # build_dir = ./.buildozer
 
 # (str) Path to build output (i.e. .apk, .ipa) storage
-# bin_dir = ./bin
+bin_dir = ./buildozer_bin
 
 #    -----------------------------------------------------------------------------
 #    List as sections

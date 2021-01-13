@@ -334,7 +334,8 @@ def getAllDiscoveries():
             if x.LPDcacheRecord[1] > (time.time()-10*60):
                 l.append({
                     'title':  x.LPDcacheRecord[3],
-                    'hash':  i
+                    'hash':  i,
+                    'from_ip': x.LPDcacheRecord[0][0]
                 })
     return l
 
@@ -932,8 +933,17 @@ def start(localport):
 
     bindsocket = socket.socket()
     if localport:
-        bindsocket.bind(('localhost', localport))
-        bindsocket.listen()
+        #Try for 30 seconds of waiting to see if the port becomes available.
+        for i in range(30):
+            try:
+                bindsocket.bind(('localhost', localport))
+                bindsocket.listen()
+                break
+            except OSError:
+                if i<9:
+                    time.sleep(1)
+                else:
+                    raise
 
     # This is the server context we use for the remote coms, accepting incoming ssl connections from other instances and proxying them into
     # local services
@@ -959,9 +969,19 @@ def start(localport):
             node.bootstrap("bootstrap.jami.net", "4222")
             dhtContainer[0] = node
 
-        p2p_bindsocket.bind(('0.0.0.0', P2P_PORT))
-        p2p_bindsocket.listen()
 
+        for i in range(30):
+            try:
+                p2p_bindsocket.bind(('0.0.0.0', P2P_PORT))
+                p2p_bindsocket.listen()
+                break
+            except OSError:
+                if i<9:
+                    time.sleep(1)
+                else:
+                    raise
+
+ 
         # Only daemons exposing a service need a WAN mapping
         t = threading.Thread(target=taskloop, daemon=True)
         t.start()

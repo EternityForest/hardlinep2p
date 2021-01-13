@@ -20,7 +20,7 @@ setuptools.setup(
     ],
     python_requires='>=3.6',
     install_requires=[
-          'pyOpenSSL','pynacl','requests','lxml','six','python-dateutil'
+          'pyOpenSSL','pynacl','requests','lxml','six','python-dateutil','kivy','kivymd'
       ],
     scripts=['bin/hardlined']
 )

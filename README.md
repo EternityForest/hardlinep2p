@@ -6,6 +6,8 @@ Application-level P2P tunnelling for securely accessing personal servers without
 
 OpenSSL, pynacl, dhtnode(On server side only), requests,six,lxml,dateutil
 
+## Building for Android
+You have to move setup.py out of the directory before using buildozer.  Otherwise, it will not work.  For some reason the settings to ignore the setup.py file aren't having any effect.
 ## What it does
 
 Takes a service on computer A, and makes it available on computer B at KEYHASH.localhost:7009.  It does this with a daemon on both computers

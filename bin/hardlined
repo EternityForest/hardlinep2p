@@ -1,0 +1,57 @@
+#!/usr/bin/python3
+import hardline
+import traceback
+import configparser
+import os
+
+# Just a quick demo test script
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='P2P Tunneling proxy on the LAN')
+
+    parser.add_argument(
+        '--localport', help='Pages will be proxied at <KEYID>.localhost:<PORT>.  Set to 0 to disable proxying.', default="7009")
+    parser.add_argument(
+        '--p2pport', help='Port used for secure P2P', default="7008")
+    parser.add_argument(
+        '--servicedir', help='Directory of services that you would like to expose', default="/etc/hardline/services")
+
+    args = vars(parser.parse_args())
+
+    print("Local port: "+args['localport'])
+    print("P2P port: "+args['p2pport'])
+    hardline.P2P_PORT = int(args['p2pport'])
+
+    try:
+        os.makedirs(args['servicedir'])
+    except:
+        pass
+
+    services = []
+    if os.path.exists(args['servicedir']):
+        for i in os.listdir(args['servicedir']):
+            if not i.endswith(".ini"):
+                continue
+            try:
+                config = configparser.ConfigParser()
+                config.read(os.path.join(args['servicedir'], i))
+
+                if "Info" in config.sections():
+                    title = config['Info'].get("title", 'untitled')
+                else:
+                    title = 'untitled'
+
+                service = config['Service']
+
+                s = hardline.Service(service['certfile'], service['service'], int(
+                    service.get('port', '80')), {'title': title})
+                print("Serving a service from "+service['service'])
+
+                services.append(s)
+            except:
+                print(traceback.format_exc())
+
+    hardline.start(int(args['localport']))
