@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="hardline",
-    version="0.0.12",
+    version="0.0.13",
     author="Daniel Dunn",
     author_email="dannydunn@eternityforest.com",
     description="HardlineP2P is a way to make web services securely acessible to the world, without any manual DNS or certificate setup",
@@ -22,7 +22,7 @@ setuptools.setup(
     install_requires=[
           'pyOpenSSL','pynacl','requests','lxml','six','python-dateutil','kivy','kivymd'
       ],
-    scripts=['bin/hardlined']
+    scripts=['bin/hardlined', 'bin/hardline-gui']
 )
 
 
