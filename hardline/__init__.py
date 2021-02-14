@@ -22,7 +22,7 @@ from nacl.hash import blake2b
 import nacl
 import hashlib
 import stat
-
+import struct
 from . import util
 
 
@@ -234,8 +234,15 @@ class DiscoveryCache():
 
             self.lastTriedDHT = time.time()
 
+            # Rolling code changes the DHT key every 24 hours, ensuring that we don't heavily load down any particular
+            # DHT node for more than a day, if there is somehow an incredibly popular site.
+            # It also gives less information to people who don't know the unhashed ID, who may want to
+            # spy on when your service is up, or some crap like that.
+            timePeriod = struct.pack("<Q", int(time.time()/(3600*24)))
+            rollingCode = blake2b(bytes.fromhex(self.infohash)+timePeriod,
+                                  encoder=nacl.encoding.RawEncoder())[:20]
             # Use SHA1 here as it is openDHT custom
-            k = hashlib.sha1(self.infohash.encode()).digest()[:20].hex()
+            k = hashlib.sha1(rollingCode.hex().encode()).digest()[:20].hex()
 
             r = None
             lines = []
@@ -435,15 +442,37 @@ class Service():
     def dhtPublish(self, node):
         # Publish this service to the DHT for WAN discovery.
 
+        timePeriod = struct.pack("<Q", int(time.time()/(3600*24)))
+        rollingCode = blake2b(self.keyhash+timePeriod,
+                              encoder=nacl.encoding.RawEncoder())[:20]
+
         # We never actually know if this will be available on the platform or not
-        try:
-            import opendht as dht
-        except:
+        if node:
+            try:
+                import opendht as dht
+
+                with dhtlock:
+                    node.put(dht.InfoHash.get(rollingCode.hex()),
+                             dht.Value(getWanHostsString().encode()))
+            except Exception:
+                print("Could not use local DHT node")
+                print(traceback.format_exc())
             return
 
-        with dhtlock:
-            node.put(dht.InfoHash.get(self.keyhash.hex()),
-                     dht.Value(getWanHostsString().encode()))
+        # Using a DHT proxy we can host a site without actually using the DHT directly.
+        # This is for future direct-from-android hosting.
+        for i in DHT_PROXIES:
+            import requests
+            try:
+                data = {"data": base64.b64encode(
+                    getWanHostsString()).decode(), "id": "id 1", "seq": 0, "type": 3}
+                url = i+hashlib.sha1(rollingCode.hex().encode()
+                                     ).digest()[:20].hex()
+                r = requests.post(url, data=data)
+                r.raise_for_status()
+                break
+            except Exception:
+                print(traceback.format_exc())
 
     def handleConnection(self, sock):
         "Handle incoming encrypted connection from another hardline instance.  The root server code has alreadt recieved the SNI and has dispatched it to us"
@@ -890,7 +919,7 @@ def taskloop():
 
         # If we can't get a UPNP listing we have to rely on a manual port mapping.
         if not success:
-            if time.time() > lastUsedIPAPI-30*40:
+            if time.time() > lastUsedIPAPI-30*60:
                 lastUsedIPAPI = time.time()
                 try:
                     import requests
@@ -904,12 +933,11 @@ def taskloop():
         if not success:
             ExternalAddrs[0] = ''
 
-        if dhtContainer[0]:
-            try:
-                for i in services:
-                    services[i].dhtPublish(dhtContainer[0])
-            except:
-                print(traceback.format_exc())
+        try:
+            for i in services:
+                services[i].dhtPublish(dhtContainer[0])
+        except:
+            print(traceback.format_exc())
 
         time.sleep(8*60)
 
@@ -929,21 +957,26 @@ def start(localport):
     global P2P_PORT, WANPort, portMapping, running
 
     running = True
-    # This is the server context we use for localhost coms
 
-    bindsocket = socket.socket()
-    if localport:
-        #Try for 30 seconds of waiting to see if the port becomes available.
-        for i in range(30):
-            try:
-                bindsocket.bind(('localhost', localport))
-                bindsocket.listen()
-                break
-            except OSError:
-                if i<9:
-                    time.sleep(1)
-                else:
-                    raise
+    ports = []
+    try:
+        # This is the server context we use for localhost coms
+        bindsocket = socket.socket()
+        if localport:
+            # Try for 30 seconds of waiting to see if the port becomes available.
+            for i in range(30):
+                try:
+                    bindsocket.bind(('localhost', localport))
+                    bindsocket.listen()
+                    ports.append(bindsocket)
+                    break
+                except OSError:
+                    if i < 9:
+                        time.sleep(1)
+                    else:
+                        raise
+    except Exception:
+        print("Failed to start localhost gateway.  Perhaps another Hardline instance is running.  Continuing as P2P only")
 
     # This is the server context we use for the remote coms, accepting incoming ssl connections from other instances and proxying them into
     # local services
@@ -969,19 +1002,17 @@ def start(localport):
             node.bootstrap("bootstrap.jami.net", "4222")
             dhtContainer[0] = node
 
-
         for i in range(30):
             try:
                 p2p_bindsocket.bind(('0.0.0.0', P2P_PORT))
                 p2p_bindsocket.listen()
                 break
             except OSError:
-                if i<9:
+                if i < 9:
                     time.sleep(1)
                 else:
                     raise
 
- 
         # Only daemons exposing a service need a WAN mapping
         t = threading.Thread(target=taskloop, daemon=True)
         t.start()
@@ -991,7 +1022,7 @@ def start(localport):
         # Default to the p2p port
         WANPortContainer[0] = P2P_PORT
 
-        for i in range(0, 25):
+        for i in range(0, 5):
             try:
                 portMapping = upnpwrapper.addMapping(
                     P2P_PORT, "TCP", WANPort=WANPortContainer[0])

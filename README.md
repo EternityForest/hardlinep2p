@@ -154,7 +154,10 @@ title: {title}
 
 
 Cookie is to tell your messages apart from others.
-Infohash is the 20 byte hex hash.
+Infohash is the 20 byte hex hash.  To slightly impede fingerprinting, we use a rolling code, rather than the real hash:
+Take the raw bytes of the keyhash, append `struct.pack("<Q",int(time.time()/(3600*24)))` to the end, then blake2b hash it.  Take the first 20 bytes and hex encode it.
+
+
 Port is the SSL server used to access the service, on the node sending the message
 Title is free-text, only for the user, for use in local discovery.
 
@@ -175,6 +178,27 @@ When you go offline, it it is unlikely that your IP address has changed, as dyna
 #### Other approaches
 
 Since 95% isn't enough, servers also advertise using OpenDHT, and clients use Jami's DHT proxy to make lookups, but only if everything else fails.
+
+The DHT lookup key is computed as follows:
+
+Take the raw bytes of the keyhash, append `struct.pack("<Q",int(time.time()/(3600*24)))` to the end, then blake2b hash it.  Take the first 20 bytes and hex encode it.
+
+Pass that to the OpenDHT APIs.   If you want to use that key to make a raw looklup via the REST api of a DHT node, we then need to replicate the internal hashing that
+seems to be customary with openDHT.
+
+To do this, Take that hex value, encode it to bytes, and SHA1 it. Now take the first 20 bytes, hex encoded, and use it in the URL.
+
+Complicated, but I wanted to stick to the most common OpenDHT APIs and follow along exactly.
+
+
+The reason for the rolling-code is so that a very popular site can never permanently accidentally DDoS a small number of nodes, and to help hide your DHT address from
+anyone who might want to DDoS you.
+
+It also makes it harder for people who don't know the unhashed subdomain to use DHT lookups to tell when your service is, or is not online, which may provide some
+useful information to some.
+
+But largely, it is an abundance of caution due to ease of implementation.
+
 
 ### Security
 

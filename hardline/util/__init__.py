@@ -84,21 +84,6 @@ class LPDPeer():
             if 'search' in t:
                 if not msg.get('cookie', '') == self.cookie:
                     with self.lock:
-                        if msg['Infohash'] in self.activeHashes:
-
-                            info = self.activeHashes[msg['Infohash']]
-
-                            # Note that the key we actually advertise might not be the stored one.  We need to tell them about the actual
-                            # Hash, but discovery may use the DOUBLE hash.  That way, the hash is only
-
-                            # Mcast works better on localhost to localhost in the same process it seems
-                            self.advertise(info[2], info[0],
-                                           info[1], addr=("239.192.152.143", 6771))
-
-                            # Unicast needed for android without needed the extra multicast permission
-                            self.advertise(
-                                info[2], info[0], info[1], addr=addr)
-                            print("responding to lpd")
 
                         # Empty infohash scans everyone.
                         if not msg['Infohash']:
@@ -111,6 +96,44 @@ class LPDPeer():
                                 self.advertise(
                                     self.activeHashes[i][2], self.activeHashes[i][0], self.activeHashes[i][1], addr=addr)
                             print("responding to lpd general scan")
+                        else:
+                            #Lookup by the legacy method
+                            if msg['Infohash'] in self.activeHashes:
+                                info = self.activeHashes[msg['Infohash']]
+
+                                # Note that the key we actually advertise might not be the stored one.  We need to tell them about the actual
+                                # Hash, but discovery may use the DOUBLE hash.  That way, the hash is only
+
+                                # Mcast works better on localhost to localhost in the same process it seems
+                                self.advertise(info[2], info[0],
+                                            info[1], addr=("239.192.152.143", 6771))
+
+                                # Unicast needed for android without needed the extra multicast permission
+                                self.advertise(
+                                    info[2], info[0], info[1], addr=addr)
+                                print("responding to lpd")
+
+                            #Allow lookup by the new rolling code method.
+                            #To do this, we compute the rolling code of every hash ID.
+                            else:
+                                for i in self.activeHashes:
+                                    rawHash = bytes.fromhex(i)
+                                    timePeriod = struct.pack("<Q",int(time.time()/(3600*24)))
+                                    rollingCode = blake2b(rawHash+timePeriod, encoder=nacl.encoding.RawEncoder())[:20].hex().lower()
+
+                                    if rollingCode == msg['Infohash'].lower().strip():
+                                        info = self.activeHashes[i]
+                                        # Note that the key we actually advertise might not be the stored one.  We need to tell them about the actual
+                                        # Hash, but discovery may use the DOUBLE hash.  That way, the hash is only
+
+                                        # Mcast works better on localhost to localhost in the same process it seems
+                                        self.advertise(info[2], info[0],
+                                                        info[1], addr=("239.192.152.143", 6771))
+
+                                        # Unicast needed for android without needed the extra multicast permission
+                                        self.advertise(
+                                            info[2], info[0], info[1], addr=addr)
+
 
             if 'announce' in t:
                 if not msg.get('cookie', '') == self.cookie:
@@ -148,7 +171,7 @@ class LPDPeer():
         h = bytes.fromhex(hash)
         doublehash = blake2b(h, encoder=nacl.encoding.RawEncoder())[:20].hex()
 
-        # Lookup by hash or doublehash, store by fullhash.
+        # Lookup by hash or rollingCode, store by fullhash.
         self.activeHashes[hash] = (port, info, fullhash)
         self.activeHashes[doublehash] = (port, info, fullhash)
 
@@ -156,7 +179,7 @@ class LPDPeer():
         # Not BT LPD compatible!! Use advertise for both searching and announcing
 
         # Empty hash leave as is for browsing
-        doublehash = ''
+        rollingCode = ''
         if hash:
 
             # Password isn't part of discovery at all
@@ -164,15 +187,25 @@ class LPDPeer():
 
             # Use double hashes for lookups, because we might be doing a lookup in public on someone eles's wifi
             h = bytes.fromhex(hash)
-            doublehash = blake2b(h, encoder=nacl.encoding.RawEncoder())[
-                :20].hex()
+            
+            #New clients use the rolling code method.  This is so that whenever you are on a public network that is not
+            #the same network as the server, we don't reveal much information about what sites we are looking for,
+            #which would allow fingerprinting based tracking.
+
+            #This limits your trackability time because the code changes.
+
+            #Note that because of traffic sniffing of the actual server connection, this is basically meaningless
+            #Except for on networks with isolation between clients and where the attacker is not the network operator.
+            #It's really just a slight bit of protection done opportinistically because it is so easy to implement.
+            timePeriod = struct.pack("<Q",int(time.time()/(3600*24)))
+            rollingCode = blake2b(h+timePeriod, encoder=nacl.encoding.RawEncoder())[:20].hex().lower()
 
         if not self.msock:
             self.connect()
 
         try:
             self.msock.sendto(self.makeLPDSearch(
-                {'Infohash': doublehash, 'cookie': self.cookie}, self.searchTopic), ("239.192.152.143", 6771))
+                {'Infohash': rollingCode, 'cookie': self.cookie}, self.searchTopic), ("239.192.152.143", 6771))
         except Exception:
             self.msock = None
             raise

@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="hardline",
-    version="0.0.13",
+    version="0.0.15",
     author="Daniel Dunn",
     author_email="dannydunn@eternityforest.com",
     description="HardlineP2P is a way to make web services securely acessible to the world, without any manual DNS or certificate setup",
