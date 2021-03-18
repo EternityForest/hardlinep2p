@@ -1,4 +1,5 @@
 
+import configparser
 from ipaddress import ip_network, ip_address
 import select
 import threading
@@ -90,7 +91,23 @@ try:
     from android.storage import app_storage_path
     settings_path = app_storage_path()
 except:
-    settings_path = '~/.hardlinep2p/'
+    settings_path = os.path.expanduser('~/.hardlinep2p/')
+
+
+try:
+    from jnius import autoclass, cast
+    PythonActivity = autoclass('org.kivy.android.PythonActivity')
+    Environment = autoclass('android.os.Environment')
+    context = cast('android.content.Context', PythonActivity.mActivity)
+
+    user_services_dir = context.getExternalFilesDir(
+        Environment.getDataDirectory().getAbsolutePath()
+    ).getAbsolutePath()
+
+    user_services_dir = os.path.join(user_services_dir, "services")
+
+except:
+    user_services_dir = os.path.expanduser('~/.hardlinep2p/services/')
 
 # clientidkeyfile = os.path.join(os.path.expanduser(settings_path), "clientid.txt")
 
@@ -436,8 +453,16 @@ class Service():
         services[self.keyhash.hex()] = self
 
         self.lpd = util.LPDPeer("HARDLINE-SERVICE", "HARDLINE-SEARCH")
-
         self.lpd.register(self.password+"-"+self.keyhash.hex(), P2P_PORT, info)
+
+    def close(self):
+        try:
+            services.pop(self.keyhash.hex())
+        except KeyError:
+            pass
+
+        self.lpd.unregister(self.password+"-" +
+                            self.keyhash.hex(), P2P_PORT, info)
 
     def dhtPublish(self, node):
         # Publish this service to the DHT for WAN discovery.
@@ -945,20 +970,30 @@ def taskloop():
 portMapping = None
 
 running = True
+exited = True
 
 
 def stop():
     # Will not instant;y stop active connections
-    global running
-    running = False
+    global running, exited
+    while not exited:
+        running = False
+        time.sleep(0.1)
 
 
-def start(localport):
-    global P2P_PORT, WANPort, portMapping, running
+cached_localport = 7008
+
+
+def start(localport=None):
+    global P2P_PORT, WANPort, portMapping, running, exited, cached_localport
 
     running = True
 
     ports = []
+
+    localport = localport or cached_localport
+    cached_localport = localport
+
     try:
         # This is the server context we use for localhost coms
         bindsocket = socket.socket()
@@ -976,7 +1011,8 @@ def start(localport):
                     else:
                         raise
     except Exception:
-        print("Failed to start localhost gateway.  Perhaps another Hardline instance is running.  Continuing as P2P only")
+        bindsocket = None
+        print("Failed to start localhost gateway.  Perhaps another Hardline instance is running.  Continuing as server only")
 
     # This is the server context we use for the remote coms, accepting incoming ssl connections from other instances and proxying them into
     # local services
@@ -1008,8 +1044,9 @@ def start(localport):
                 p2p_bindsocket.listen()
                 break
             except OSError:
-                if i < 9:
+                if i < 28:
                     time.sleep(1)
+                    P2P_PORT += 1
                 else:
                     raise
 
@@ -1036,9 +1073,17 @@ def start(localport):
             print("Failed to register port mapping, you will need to manually configure.")
             WANPortContainer[0] = P2P_PORT
 
+    if services:
+        toScan = [p2p_bindsocket]
+    else:
+        toScan = []
+
+    if bindsocket:
+        toScan.append(bindsocket)
+
+    exited = False
     while(running):
-        r, w, x = select.select([bindsocket, p2p_bindsocket] if services else [
-                                bindsocket], [], [], 1)
+        r, w, x = select.select(toScan, [], [], 1)
         try:
 
             # Whichever one has data, shove it down the other one
@@ -1051,5 +1096,98 @@ def start(localport):
         except:
             pass
 
-    bindsocket.close()
-    p2p_bindsocket.close()
+    try:
+        bindsocket.close()
+        p2p_bindsocket.close()
+    finally:
+        exited = True
+
+
+def clearServices():
+    for i in services.values():
+        i.close()
+    stop()
+    start()
+
+
+def loadServices(serviceDir):
+    try:
+        os.makedirs(serviceDir)
+    except:
+        pass
+
+    services = []
+    if os.path.exists(serviceDir):
+        for i in os.listdir(serviceDir):
+            if not i.endswith(".ini"):
+                continue
+            try:
+                config = configparser.ConfigParser()
+                config.read(os.path.join(serviceDir, i))
+
+                if "Info" in config.sections():
+                    title = config['Info'].get("title", 'untitled')
+                else:
+                    title = 'untitled'
+
+                service = config['Service']
+
+                s = Service(service['certfile'], service['service'], int(
+                    service.get('port', '80')), {'title': title})
+                print("Serving a service from "+service['service'])
+
+                services.append(s)
+            except:
+                print(traceback.format_exc())
+    stop()
+    start()
+    return services
+
+
+def makeService(dir, name, title="A service", service="localhost", port='80',  certfile=None):
+    c = configparser.ConfigParser()
+    c.add_section("Service")
+    c.add_section("Info")
+    file = os.path.join(dir, name+'.ini')
+
+    sinfo = c['Service']
+    sinfo['port'] = str(port)
+    sinfo['service'] = service
+    sinfo['certfile'] = certfile or file+('.cert')
+
+    info = c['Info']
+    info['title'] = title
+
+    with open(file, "w") as f:
+        c.write(f)
+   
+
+def delService(dir, name):
+ 
+    file = os.path.join(dir, name+'.ini')
+
+    if os.path.exists(dir):
+        for n in os.listdir(dir):
+            i=os.path.join(dir,n)
+            if file and i.startswith(file):
+                os.remove(i)
+   
+def listServices(serviceDir):
+    try:
+        os.makedirs(serviceDir)
+    except:
+        pass
+
+    services = {}
+    if os.path.exists(serviceDir):
+        for i in os.listdir(serviceDir):
+            if not i.endswith(".ini"):
+                continue
+            try:
+                config = configparser.ConfigParser()
+                config.read(os.path.join(serviceDir, i))
+                services[i[:-4]] = config
+            except:
+                print(traceback.format_exc())
+
+    return services

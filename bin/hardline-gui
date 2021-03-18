@@ -71,7 +71,7 @@ class ServiceApp(MDApp):
         layout.add_widget(label)
 
         btn1 = Button(text='Discover Services',
-                      size_hint=(1, None), font_size="26sp")
+                      size_hint=(1, None), font_size="22sp")
         label2 = Label(size_hint=(1, None), halign="center",
                        text='Find Hardline sites on your local network')
 
@@ -79,7 +79,7 @@ class ServiceApp(MDApp):
         layout.add_widget(btn1)
         layout.add_widget(label2)
 
-        btn3 = Button(text='Stop', size_hint=(1, None), font_size="26sp")
+        btn3 = Button(text='Stop', size_hint=(1, None), font_size="22sp")
         btn3.bind(on_press=self.stop_service)
         label3 = Label(size_hint=(1, None), halign="center",
                        text='Stop the background process.  It must be running to acess hardline sites.  Starting may take a few seconds.')
@@ -87,7 +87,7 @@ class ServiceApp(MDApp):
         layout.add_widget(label3)
 
         btn4 = Button(text='Start or Restart.',
-                      size_hint=(1, None), font_size="26sp")
+                      size_hint=(1, None), font_size="22sp")
         btn4.bind(on_press=self.start_service)
         label4 = Label(size_hint=(1, None), halign="center",
                        text='Restart the process. It will show in your notifications.')
@@ -108,9 +108,9 @@ class ServiceApp(MDApp):
         screen.add_widget(layout)
 
         btn1 = Button(text='Back to main page',
-                      size_hint=(1, None), font_size="26sp")
+                      size_hint=(1, None), font_size="20sp")
         label = Label(size_hint=(1, None), halign="center",
-                      text='Browsing your local network.\nWarning: anyone on your network\ncan advertise a site with any title.\nVerify the actual URL before\nentering sensitive data into any site.')
+                      text='Browsing your local network.\nWarning: anyone on your network\ncan advertise a site with any title they want.')
 
         def goMain(*a):
             self.screenManager.current = "Main"
@@ -193,4 +193,3 @@ class ServiceApp(MDApp):
 
 if __name__ == '__main__':
     ServiceApp().run()
-

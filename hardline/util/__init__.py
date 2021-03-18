@@ -175,6 +175,16 @@ class LPDPeer():
         self.activeHashes[hash] = (port, info, fullhash)
         self.activeHashes[doublehash] = (port, info, fullhash)
 
+    def unregister(self, hash):
+        hash = hash.split("-")[-1]
+
+        h = bytes.fromhex(hash)
+        doublehash = blake2b(h, encoder=nacl.encoding.RawEncoder())[:20].hex()
+
+        # Lookup by hash or rollingCode, store by fullhash.
+        del self.activeHashes[hash] 
+        del self.activeHashes[doublehash] 
+        
     def search(self, hash):
         # Not BT LPD compatible!! Use advertise for both searching and announcing
 
