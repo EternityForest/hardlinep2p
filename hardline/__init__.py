@@ -1,4 +1,10 @@
 
+import urllib
+import sys
+import shutil
+import urllib.request
+import socketserver
+import http.server
 import configparser
 from ipaddress import ip_network, ip_address
 import select
@@ -31,44 +37,217 @@ services = weakref.WeakValueDictionary()
 
 socket.setdefaulttimeout(5)
 
-# Todo fix this
 
-# def createWifiChecker():
-
-#     """Detects if we are on something like WiFi.  But if we aren't on android at all, assume that we are always connected to a LAN, even htough there are 4g laptops.
-#        don't use for anything critical because of that.
-
-#     """
-#     def alwaysTrue():
-#         return True
-#     try:
-#         from kivy.utils import platform
-#         from jnius import autoclass
-#     except:
-#         return alwaysTrue
-
-#     if platform != 'android':
-#             return alwaysTrue
+# A simple HTTP proxy which does caching of requests.
+# Inspired by: https://gist.github.com/bxt/5195500
+# but updated for Python 3 and some additional sanity improvements:
+# - shutil is used to serve files in a streaming manner, so the entire data is not loaded into memory.
+# - the http request is written to a temp file and renamed on success
+# - forward headers
 
 
-#     def check_connectivity():
+def countDirSize(d):
+    total_size = 0
+    for path, dirs, files in os.walk(d):
+        for f in files:
+            fp = os.path.join(path, f)
+            total_size += os.path.getsize(fp)
+    return total_size
 
 
-#         Activity = autoclass('android.app.Activity')
-#         PythonActivity = autoclass('org.kivy.android.PythonActivity')
-#         activity = PythonActivity.mActivity
-#         ConnectivityManager = autoclass('android.net.ConnectivityManager')
+def deleteOldFiles(d, maxSize):
+    "Delete the oldest in D until the whole cache is smaller than maxSize*0.75"
+    total_size = countDirSize(d)
+    if total_size < (maxSize):
+        return
 
-#         con_mgr = activity.getSystemService(Activity.CONNECTIVITY_SERVICE)
+    listing = []
 
-#         conn = con_mgr.getNetworkInfo(ConnectivityManager.TYPE_WIFI).isConnectedOrConnecting()
-#         if conn:
-#             return True
+    for path, dirs, files in os.walk(d):
+        for f in files:
+            fp = os.path.join(path, f)
+            listing.append((os.stat(fp).st_mtime, fp))
 
-#     return check_connectivity()
+    listing.sort()
 
-# isOnLan= createWifiChecker()
-def isOnLan(): return True
+    for i in listing:
+        total_size -= os.path.getsize(i[1])
+        os.remove(i[1])
+
+        # Use some hysteresis
+        if total_size < (maxSize*0.75):
+            break
+
+    return total_size
+
+
+class CachingProxy():
+    "Return an object that can be used as either a caching proxy or a plain static file server."
+
+    def __init__(self, site, directory, maxAge=7*24*3600, downloadRateLimit=1200, maxSize=1024*1024*256):
+
+        # Convert to int because we have to expect that the params will be supplied directly from an ini file parser.
+        # And the user may have supplied blanks.
+
+        # Calculate in 128kb blocks
+        maxRequestsPerHour = int(downloadRateLimit or 1200)*8
+
+        timePerBlock = 3600/maxRequestsPerHour
+
+        maxAge = int(maxAge or 7*24*3600)
+        maxSize = int(maxSize or 1024*1024*256)
+
+        downloadQuotaHolder = [maxRequestsPerHour]
+        downloadQuotaTimestamp = [time.time()]
+        self.port = None
+
+        try:
+            os.makedirs(directory)
+        except:
+            pass
+
+        totalSize = [countDirSize(directory)]
+
+        class CacheHandler(http.server.SimpleHTTPRequestHandler):
+            def do_GET(self):
+                cache_filename = urllib.parse.quote(self.path[1:])
+                if not cache_filename or cache_filename == '/':
+                    cache_filename = "@root"
+                cache_filename = os.path.join(directory, cache_filename)
+
+                useCache = True
+
+                #Approximately calculate how many download blocks are left in the quota
+                def doQuotaCalc():
+                    # Accumulate quota units up to the maximum allowed
+                    downloadQuotaHolder[0] += min(((time.time()-downloadQuotaTimestamp[0])/3600)
+                                                  * maxRequestsPerHour+maxRequestsPerHour, maxRequestsPerHour)
+                    downloadQuotaTimestamp[0] = time.time()
+                    return downloadQuotaHolder[0]
+
+                if not os.path.exists(cache_filename):
+                    useCache = False
+
+                else:
+                    age = time.time()-os.stat(cache_filename).st_mtime
+                    if age > maxAge:
+                        # If totally empty, we are in high load conditions,
+                        # Use cache even if it is old, to prioritize getting stuff we don't have already.
+                        if doQuotaCalc():
+                            useCache = False
+
+                doQuotaCalc()
+
+                if not useCache:
+                    if site:
+
+                        try:
+                            os.makedirs(os.path.dirname(cache_filename))
+                        except:
+                            pass
+                        with open(cache_filename + ".temp", "wb") as output:
+                            req = urllib.request.Request(site + self.path)
+                            # copy request headers
+                            for k in self.headers:
+                                if k not in ["Host"]:
+                                    req.add_header(k, self.headers[k])
+                            try:
+                                with urllib.request.urlopen(req) as resp:
+                                    self.send_response(200)
+                                    self.end_headers()
+
+                                    for i in range(256000):
+                                        #Partial blocks count for one whole block.
+                                        d = resp.read(128*1024)
+
+                                        totalSize[0] += d(len)
+
+                                        downloadQuotaHolder[0] -= 1
+                                        for i in range(1000):
+                                            doQuotaCalc()
+                                            time.sleep(0.1)
+
+                                        if not downloadQuotaHolder[0]:
+                                            time.sleep(timePerBlock)
+
+                                        # No write the too big
+                                        # TODO avoid this in the first place.
+                                        if totalSize[0] < maxSize:
+                                            output.write(d)
+
+                                        self.wfile.write(d)
+
+                                os.rename(cache_filename +
+                                          ".temp", cache_filename)
+
+                                if totalSize[0] > maxSize:
+                                    totalSize[0] = deleteOldFiles(directory)
+
+                                return
+
+                            except urllib.error.HTTPError as err:
+                                self.send_response(err.code)
+                                self.end_headers()
+                                return
+
+                    else:
+                        self.send_redsponse(404)
+                        self.end_heaers()
+                        return
+
+                with open(cache_filename, "rb") as cached:
+                    self.send_response(200)
+                    self.end_headers()
+                    shutil.copyfileobj(cached, self.wfile)
+
+        def f():
+            for i in range(128):
+                p = 50000 + int(random.random()*8192)
+                try:
+                    with socketserver.TCPServer(("localhost", p), CacheHandler) as httpd:
+                        self.port = p
+                        self.server = httpd
+                        httpd.serve_forever()
+                except:
+                    print(traceback.format_exc())
+
+            self.port = None
+
+        self.thread = threading.Thread(target=f, daemon=True)
+        self.thread.start()
+
+
+def createWifiChecker():
+    """Detects if we are on something like WiFi, and if we have sufficient battery power to keep going.
+
+    But if we aren't on android at all, assume that we are always connected to a LAN, even htough there are 4g laptops.
+    don't use for anything critical because of that.
+
+    """
+    def alwaysTrue():
+        return True
+
+    try:
+        import kivy.utils
+    except ImportError:
+        return alwaysTrue
+
+    if kivy.utils.platform != 'android':
+        return alwaysTrue
+
+    from plyer import wifi
+    from plyer import battery
+
+    def check_connectivity():
+        if battery.status['isCharging'] or battery.status['percentage'] > 30:
+            return wifi.is_connected()
+        else:
+            return False
+
+    return check_connectivity()
+
+
+isOnLan = createWifiChecker()
 
 
 P2P_PORT = 7009
@@ -100,14 +279,16 @@ try:
     Environment = autoclass('android.os.Environment')
     context = cast('android.content.Context', PythonActivity.mActivity)
 
-    user_services_dir = context.getExternalFilesDir(
+    r = context.getExternalFilesDir(
         Environment.getDataDirectory().getAbsolutePath()
     ).getAbsolutePath()
 
-    user_services_dir = os.path.join(user_services_dir, "services")
+    user_services_dir = os.path.join(r, "services")
+    proxy_cache_root = os.path.join(r, "proxycache")
 
 except:
     user_services_dir = os.path.expanduser('~/.hardlinep2p/services/')
+    proxy_cache_root = os.path.expanduser('~/.hardlinep2p/proxycache/')
 
 # clientidkeyfile = os.path.join(os.path.expanduser(settings_path), "clientid.txt")
 
@@ -296,21 +477,20 @@ class DiscoveryCache():
 
     def get(self, invalidate=False):
 
-        # Not on WiFi, refrain from trying and failing to do multicast discovery.
-        if isOnLan():
-            if invalidate:
-                self.LPDcacheRecord = (None, 0, 10, '')
-            # Try a local serach
-            for i in range(0, 4):
+        if invalidate:
+            self.LPDcacheRecord = (None, 0, 10, '')
 
-                # Look in the cache first
-                x = self.LPDcacheRecord
-                if x[1] > (time.time() - 60):
-                    return [x[0]]
+        # Try a local serach
+        for i in range(0, 4):
 
-                self.doLookup()
-                # Wait a bit for replies, waiting a little longer every time
-                time.sleep(i*0.1 + 0.05)
+            # Look in the cache first
+            x = self.LPDcacheRecord
+            if x[1] > (time.time() - 60):
+                return [x[0]]
+
+            self.doLookup()
+            # Wait a bit for replies, waiting a little longer every time
+            time.sleep(i*0.1 + 0.05)
 
         # Local search failed, we haven't seen a packet from them, so we are probably not on their network.
         # lets try a stored WAN address search, maybe we have a record we can use?
@@ -413,12 +593,16 @@ connections = weakref.WeakValueDictionary()
 
 
 class Service():
-    def __init__(self, cert, destination, port, info={'title': ''},):
+    def __init__(self, cert, destination, port, info={'title': ''}, friendlyName=None, cacheSettings={}):
         global P2P_PORT
 
         self.certfile = cert
         self.dest = destination+":"+str(port)
 
+        self.closed = False
+
+        # This is a name we use in GUI service listings for display
+        self.friendlyName = friendlyName
         # #Used for tracking who we have directly connected to on the lan.
         # #For GDPR reasons, we do not store data besides the anonymous ID and the fact that they connected at some point.
         # self.lanClientsFile = self.certfile+".lanclients"
@@ -450,19 +634,54 @@ class Service():
         else:
             self.cert_gen(cert)
 
+        # Should there be a proxy dir set up, we run an in-process caching proxy
+        # Just for that.  It's mostly an extra convenience and not something
+        # Deeply integrated.
+        self.cachingProxy = None
+        proxyDir = cacheSettings.get("directory")
+        if proxyDir:
+            proxyDir = os.path.join(proxy_cache_root, proxyDir)
+            if destination.endswith("/"):
+                destination = destination[:-1]
+            # No spurious port 80 that isn't needed and breaks stuff
+            if port and not int(port) == 80:
+                dest = destination+":"+str(port)
+            else:
+                dest = destination
+
+            self.cachingProxy = CachingProxy(dest, proxyDir)
+            for i in range(0, 10):
+                if self.cachingProxy.port:
+                    break
+                time.sleep(1)
+            else:
+                raise RuntimeError("Proxy did not start")
+
+            self.dest = "localhost:"+str(self.cachingProxy.port)
+
         services[self.keyhash.hex()] = self
 
         self.lpd = util.LPDPeer("HARDLINE-SERVICE", "HARDLINE-SEARCH")
-        self.lpd.register(self.password+"-"+self.keyhash.hex(), P2P_PORT, info)
+        self.lpd.register(self.password+"-"+self.keyhash.hex(), WANPortContainer, info)
 
     def close(self):
+        global P2P_PORT
         try:
             services.pop(self.keyhash.hex())
         except KeyError:
             pass
 
+        if self.cachingProxy:
+            try:
+                self.cachingProxy.close()
+                self.cachingProxy = None
+            except KeyError:
+                pass
+
+        self.closed = True
+
         self.lpd.unregister(self.password+"-" +
-                            self.keyhash.hex(), P2P_PORT, info)
+                            self.keyhash.hex())
 
     def dhtPublish(self, node):
         # Publish this service to the DHT for WAN discovery.
@@ -533,7 +752,7 @@ class Service():
                 raise RuntimeError(
                     "Too many incoming P2P connections all at once")
 
-            h, p = self.dest.split(":")
+            h, p = self.dest.split(":")[-2:]
             conn.connect((h, int(p)))
 
             # Wait for ready
@@ -559,6 +778,8 @@ class Service():
 
             # The first part of the data is reserved for an OOB header
             while(1):
+                if self.closed:
+                    raise RuntimeError("Closed at server side")
                 r, w, x = select.select([sock, ], [], [], 1)
                 if r:
                     oob += sock.recv(4096)
@@ -577,6 +798,8 @@ class Service():
             conn.send(overflow)
 
             while(1):
+                if self.closed:
+                    raise RuntimeError("Closed at server side")
                 r, w, x = select.select([sock, conn], [], [], 1)
 
                 # Whichever one has data, shove it down the other one
@@ -736,34 +959,37 @@ def server_thread(sock):
         # Use fullservice for discovery, the LPD code takes care of not actually sending the password part
         hosts = discover(fullservice.decode())
 
-        # We do our own verification
-        sk = ssl.create_default_context()
+        conn=None
+        def connect(to):
+            # We do our own verification
+            sk = ssl.create_default_context()
 
-        sk.options |= ssl.OP_NO_TLSv1
-        sk.options |= ssl.OP_NO_TLSv1_1
+            sk.options |= ssl.OP_NO_TLSv1
+            sk.options |= ssl.OP_NO_TLSv1_1
 
-        sk.check_hostname = False
-        sk.verify_mode = ssl.CERT_NONE
-        sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sk.check_hostname = False
+            sk.verify_mode = ssl.CERT_NONE
+            sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        # clientID = blake2b(clientUUID.encode()+service ,encoder=nacl.encoding.RawEncoder())[:20]
+            # clientID = blake2b(clientUUID.encode()+service ,encoder=nacl.encoding.RawEncoder())[:20]
 
-        # Use TCP keepalives here.  Note that this isn't really secure because it's at the TCP layer,
-        # Someone could DoS it, but DoS is hard to stop no matter what.
-        sock2.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-        sock2.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 5)
-        sock2.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 15)
-        sock2.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+            # Use TCP keepalives here.  Note that this isn't really secure because it's at the TCP layer,
+            # Someone could DoS it, but DoS is hard to stop no matter what.
+            sock2.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            sock2.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 5)
+            sock2.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 15)
+            sock2.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
 
-        conn = sk.wrap_socket(sock2, server_hostname=service)
-
+            conn = sk.wrap_socket(sock2, server_hostname=service)
+            conn.connect(to)
+            return conn
         try:
             # Try our discovered hosts
             for host in hosts:
                 try:
                     connectingTo = host
                     print("trying", host)
-                    conn.connect(host)
+                    conn = connect(host)
                     break
                 except:
                     print(traceback.format_exc())
@@ -773,7 +999,7 @@ def server_thread(sock):
                     try:
                         connectingTo = host
                         print("trying", host)
-                        conn.connect(host)
+                        conn = connect(host)
                         break
                     except:
                         print(traceback.format_exc())
@@ -783,7 +1009,7 @@ def server_thread(sock):
                         try:
                             print("trying", host)
                             connectingTo = host
-                            conn.connect(host)
+                            conn = connect(host)
                             break
                         except:
                             print(traceback.format_exc())
@@ -791,8 +1017,8 @@ def server_thread(sock):
                         raise RuntimeError(
                             "All saved host options and dht options failed:"+str(hosts))
         except:
-            conn.close()
-            sock2.close()
+            if conn:
+                conn.close()
             raise
        # else:
             # We have failed, now we have to use DHT lookup
@@ -944,23 +1170,26 @@ def taskloop():
 
         # If we can't get a UPNP listing we have to rely on a manual port mapping.
         if not success:
-            if time.time() > lastUsedIPAPI-30*60:
-                lastUsedIPAPI = time.time()
-                try:
-                    import requests
-                    r = requests.get("https://api.ipify.org/", timeout=5)
-                    r.raise_for_status()
-                    ExternalAddrs[0] = r.text
-                    success = True
-                except:
-                    print(traceback.format_exc())
+            # Don't hammer IP API for no reason if we don't actually have services to serve.
+            if services and isOnLan():
+                if time.time() > lastUsedIPAPI-40*60:
+                    lastUsedIPAPI = time.time()
+                    try:
+                        import requests
+                        r = requests.get("https://api.ipify.org/", timeout=5)
+                        r.raise_for_status()
+                        ExternalAddrs[0] = r.text
+                        success = True
+                    except:
+                        print(traceback.format_exc())
 
-        if not success:
-            ExternalAddrs[0] = ''
+                if not success:
+                    ExternalAddrs[0] = ''
 
         try:
             for i in services:
-                services[i].dhtPublish(dhtContainer[0])
+                if isOnLan():
+                    services[i].dhtPublish(dhtContainer[0])
         except:
             print(traceback.format_exc())
 
@@ -1018,6 +1247,21 @@ def start(localport=None):
     # local services
 
     p2p_bindsocket = socket.socket()
+
+    for i in range(30):
+        try:
+            p2p_bindsocket.bind(('0.0.0.0', P2P_PORT))
+            p2p_bindsocket.listen()
+            WANPortContainer[0]=P2P_PORT
+            break
+        except OSError:
+            if i < 28:
+                time.sleep(1)
+                P2P_PORT += 1
+
+            else:
+                raise
+
     if services:
         from . import upnpwrapper
 
@@ -1037,18 +1281,6 @@ def start(localport=None):
             # here using a known bootstrap node.
             node.bootstrap("bootstrap.jami.net", "4222")
             dhtContainer[0] = node
-
-        for i in range(30):
-            try:
-                p2p_bindsocket.bind(('0.0.0.0', P2P_PORT))
-                p2p_bindsocket.listen()
-                break
-            except OSError:
-                if i < 28:
-                    time.sleep(1)
-                    P2P_PORT += 1
-                else:
-                    raise
 
         # Only daemons exposing a service need a WAN mapping
         t = threading.Thread(target=taskloop, daemon=True)
@@ -1073,10 +1305,7 @@ def start(localport=None):
             print("Failed to register port mapping, you will need to manually configure.")
             WANPortContainer[0] = P2P_PORT
 
-    if services:
-        toScan = [p2p_bindsocket]
-    else:
-        toScan = []
+    toScan = [p2p_bindsocket]
 
     if bindsocket:
         toScan.append(bindsocket)
@@ -1093,6 +1322,8 @@ def start(localport=None):
                 else:
                     if services:
                         handleP2PClient(i.accept()[0])
+                    else:
+                        i.accept()[0].close()
         except:
             pass
 
@@ -1103,24 +1334,37 @@ def start(localport=None):
         exited = True
 
 
-def clearServices():
+def closeServices(only=None):
+    "Only lets us only close one,  by it's friendly name"
     for i in services.values():
-        i.close()
-    stop()
-    start()
+        try:
+            if only:
+                if not i.friendlyName == only:
+                    continue
+            i.close()
+        except:
+            print(traceback.format_exc())
 
 
-def loadServices(serviceDir):
+userServices = {}
+
+# "User Services" are configurable services stored in files, asw opposed to those defined in code
+
+
+def loadUserServices(serviceDir, only=None):
+    "Load services from a configuration directory.  Only to  only reload one."
     try:
         os.makedirs(serviceDir)
     except:
         pass
 
-    services = []
     if os.path.exists(serviceDir):
         for i in os.listdir(serviceDir):
             if not i.endswith(".ini"):
                 continue
+            if only:
+                if not i == only+".ini":
+                    continue
             try:
                 config = configparser.ConfigParser()
                 config.read(os.path.join(serviceDir, i))
@@ -1130,48 +1374,64 @@ def loadServices(serviceDir):
                 else:
                     title = 'untitled'
 
+                if "Cache" in config.sections():
+                    cache = config['Cache']
+                else:
+                    cache = {}
+
                 service = config['Service']
 
-                s = Service(service['certfile'], service['service'], int(
-                    service.get('port', '80')), {'title': title})
+                # Close any existing service by that same friendly local name
+                closeServices(i[:-4])
+
+                defaultCertFile = os.path.join(serviceDir, i+".cert")
+                # Take friendly name from filename
+                s = Service(service['certfile'] or defaultCertFile, service['service'], int(
+                    service.get('port', '80')), {'title': title}, friendlyName=i[:-4], cacheSettings=cache)
                 print("Serving a service from "+service['service'])
 
-                services.append(s)
+                userServices[i] = s
             except:
                 print(traceback.format_exc())
-    stop()
-    start()
-    return services
 
 
-def makeService(dir, name, title="A service", service="localhost", port='80',  certfile=None):
+def makeUserService(dir, name, title="A service", service="localhost", port='80',  certfile=None, cacheInfo={}):
     c = configparser.ConfigParser()
     c.add_section("Service")
     c.add_section("Info")
+    c.add_section("Cache")
+
     file = os.path.join(dir, name+'.ini')
 
     sinfo = c['Service']
     sinfo['port'] = str(port)
     sinfo['service'] = service
-    sinfo['certfile'] = certfile or file+('.cert')
+    # Default gets used
+    sinfo['certfile'] = ""
 
     info = c['Info']
     info['title'] = title
 
+    for i in cacheInfo:
+        c['Cache'][i] = cacheInfo[i]
+
     with open(file, "w") as f:
         c.write(f)
-   
+    loadUserServices(dir, name)
 
-def delService(dir, name):
- 
+
+def delUserService(dir, name):
+
     file = os.path.join(dir, name+'.ini')
 
     if os.path.exists(dir):
         for n in os.listdir(dir):
-            i=os.path.join(dir,n)
+            i = os.path.join(dir, n)
             if file and i.startswith(file):
                 os.remove(i)
-   
+    closeServices(dir, name)
+
+
 def listServices(serviceDir):
     try:
         os.makedirs(serviceDir)

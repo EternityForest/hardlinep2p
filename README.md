@@ -86,6 +86,32 @@ certfile=myservice.cert
 
 [Info]
 title="My Awesome Service"
+
+#Cache mode lets hardlinep2p cache the service.  In this mode it will
+#Only support plain static content and will try to refresh files more than
+#a week old(configurability and more intelligence coming soon).
+
+#Files are cached as just plain files that only have the content.  
+# Leave the "service" blank and this becomes cache-only, and a
+# very convenient way to serve some files from an Android device.
+
+#Cache services act like any other service.
+
+#The / cannot be represented as an empty string filename, so it is special
+#cased to @root.
+[Cache]
+directory="Leave this as an empty string for no cache"
+
+#All these are optional and have defaults:
+
+#Time in seconds before trying to refresh a cache item.
+maxAge= 36000000
+#Size in bytes to try to limit the cache to
+maxSize=256000000
+#Try to keep the total downloading to under this many mb/s.
+#Use this to protect your flash memory from cache churn!
+#Bursts are allowed, the quota refills up to the 1 hour max.
+downloadRateLimit=1200
 ```
 
 #### --p2pport

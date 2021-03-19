@@ -12,6 +12,8 @@ from kivymd.uix.dialog import MDDialog
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.label import MDLabel as Label
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.checkbox import CheckBox
+
 
 from kivymd.uix.boxlayout import MDBoxLayout as BoxLayout
 import threading
@@ -27,9 +29,6 @@ import sys
 
 for i in os.listdir(os.path.dirname(os.path.abspath(__file__))):
     print(i)
-
-
-
 
 
 class ServiceApp(MDApp):
@@ -55,14 +54,15 @@ class ServiceApp(MDApp):
         else:
             def f():
                 import hardline
-                #Ensure stopped
+                # Ensure stopped
                 hardline.stop()
 
-                loadedServices = hardline.listServices(hardline.user_services_dir)
+                loadedServices = hardline.loadUserServices(
+                    hardline.user_services_dir)
                 hardline.start(7009)
-                #Unload them at exit because we will be loading them again on restart
+                # Unload them at exit because we will be loading them again on restart
                 for i in loadedServices:
-                    i.close()
+                    loadedServices[i].close()
             t = threading.Thread(target=f, daemon=True)
             t.start()
 
@@ -85,8 +85,8 @@ class ServiceApp(MDApp):
         self.screenManager = sm
         return sm
 
-
-    def askQuestion(self, question,answer='', cb=None):
+    def askQuestion(self, question, answer='', cb=None):
+        "As a text box based question, with optional  default answer.  If user confirm, call cb."
 
         t = MDTextField(text='')
 
@@ -99,32 +99,68 @@ class ServiceApp(MDApp):
             self.dialog.dismiss()
 
         self.dialog = MDDialog(
-               type="custom",
-                title=question,
-                content_cls=t,
-                buttons=[
-                    Button(
-                        text="Accept", text_color=self.theme_cls.primary_color, on_press= cbr_yes
-                    ),
-                    Button(
-                        text="Cancel", text_color=self.theme_cls.primary_color, on_press=cbr_no
-                    ),
-                ],
-            )
-        t.text=answer
+            type="custom",
+            title=question,
+            content_cls=t,
+            buttons=[
+                Button(
+                    text="Accept", text_color=self.theme_cls.primary_color, on_press=cbr_yes
+                ),
+                Button(
+                    text="Cancel", text_color=self.theme_cls.primary_color, on_press=cbr_no
+                ),
+            ],
+        )
+        t.text = answer
         self.dialog.open()
 
+    def checkboxPrompt(self, question, answer=False, cb=None):
+        "As a text box based question, with optional  default answer.  If user confirm, call cb."
+
+        t = CheckBox(active=True)
+
+        def cbr_yes(*a):
+            cb(t.active)
+            self.dialog.dismiss()
+
+        def cbr_no(*a):
+            cb(None)
+            self.dialog.dismiss()
+
+        self.dialog = MDDialog(
+            type="custom",
+            title=question,
+            content_cls=t,
+            buttons=[
+                Button(
+                    text="Accept", text_color=self.theme_cls.primary_color, on_press=cbr_yes
+                ),
+                Button(
+                    text="Cancel", text_color=self.theme_cls.primary_color, on_press=cbr_no
+                ),
+            ],
+        )
+        t.active = answer
+        self.dialog.open()
+
+
     def settingButton(self, configObj, section, key):
-        "Return a button representing a setting in a configparser obj which you can press to edit." 
-        
-        x =MDFlatButton(text=key+":"+configObj[section].get(key, "")[:25])
+        "Return a button representing a setting in a configparser obj which you can press to edit."
+
+        try:
+            configObj.add_section(section)
+        except:
+            pass
+
+        x = MDFlatButton(text=key+":"+configObj[section].get(key, "")[:25])
 
         def f(*a):
             def g(r):
                 if r:
-                    configObj[section][key] =r
-                    x.text=key+":"+configObj[section].get(key, "")[:25]
-            self.askQuestion(section+":"+key, configObj[section].get(key, ""), g)
+                    configObj[section][key] = r
+                    x.text = key+":"+configObj[section].get(key, "")[:25]
+            self.askQuestion(
+                section+":"+key, configObj[section].get(key, ""), g)
 
         x.bind(on_press=f)
 
@@ -148,23 +184,17 @@ class ServiceApp(MDApp):
         layout.add_widget(btn1)
         layout.add_widget(label2)
 
-       
-
-
         btn5 = Button(text='Settings+Tools',
                       size_hint=(1, None), font_size="20sp")
 
         btn5.bind(on_press=self.goToSettings)
-        
 
         layout.add_widget(btn5)
 
         return mainScreen
 
-
     def goToSettings(self, *a):
         self.screenManager.current = "Settings"
-
 
     def makeSettingsPage(self):
         page = Screen(name='Settings')
@@ -175,6 +205,15 @@ class ServiceApp(MDApp):
                       text='HardlineP2P Settings')
         layout.add_widget(label)
 
+        btn = Button(text='Back to main page',
+                      size_hint=(1, None), font_size="20sp")
+    
+        def goMain(*a):
+            self.screenManager.current = "Main"
+        btn.bind(on_press=goMain)
+        layout.add_widget(btn)
+
+
         btn1 = Button(text='Local Services',
                       size_hint=(1, None), font_size="20sp")
         label1 = Label(size_hint=(1, None), halign="center",
@@ -184,7 +223,7 @@ class ServiceApp(MDApp):
         layout.add_widget(btn1)
         layout.add_widget(label1)
 
-        #Start/Stop
+        # Start/Stop
         btn3 = Button(text='Stop', size_hint=(1, None), font_size="22sp")
         btn3.bind(on_press=self.stop_service)
         label3 = Label(size_hint=(1, None), halign="center",
@@ -200,9 +239,8 @@ class ServiceApp(MDApp):
         layout.add_widget(btn4)
         layout.add_widget(label4)
 
-
         return page
-    
+
     def makeLocalServicesPage(self):
 
         screen = Screen(name='LocalServices')
@@ -224,14 +262,11 @@ class ServiceApp(MDApp):
 
         layout.add_widget(label)
 
-
         btn2 = Button(text='Create a service',
                       size_hint=(1, None), font_size="20sp")
 
-    
         btn2.bind(on_press=self.promptAddService)
         layout.add_widget(btn2)
-
 
         self.localServicesListBoxScroll = ScrollView(size_hint=(1, 1))
 
@@ -241,17 +276,17 @@ class ServiceApp(MDApp):
             minimum_height=self.localServicesListBox.setter('height'))
 
         self.localServicesListBoxScroll.add_widget(self.localServicesListBox)
-        
+
         layout.add_widget(self.localServicesListBoxScroll)
 
         return screen
 
-    def promptAddService(self,*a,**k):
+    def promptAddService(self, *a, **k):
 
         def f(v):
             if v:
                 self.editLocalService(v)
-        self.askQuestion("New Service filename?",cb=f)
+        self.askQuestion("New Service filename?", cb=f)
 
     def goToLocalServices(self, *a):
         "Go to a page wherein we can list user-modifiable services."
@@ -262,7 +297,8 @@ class ServiceApp(MDApp):
             s = hardline.listServices(hardline.user_services_dir)
             time.sleep(0.5)
             for i in s:
-                self.localServicesListBox.add_widget(self.makeButtonForLocalService(i,s[i]))
+                self.localServicesListBox.add_widget(
+                    self.makeButtonForLocalService(i, s[i]))
 
         except Exception:
             print(traceback.format_exc())
@@ -276,18 +312,15 @@ class ServiceApp(MDApp):
 
         layout = BoxLayout(orientation='vertical', spacing=10)
         screen.add_widget(layout)
-        self.localServiceEditorName = Label(size_hint=(1, None), halign="center", text="??????????")
+        self.localServiceEditorName = Label(size_hint=(
+            1, None), halign="center", text="??????????")
         btn1 = Button(text='Back to main page',
                       size_hint=(1, None), font_size="20sp")
-
 
         def goMain(*a):
             self.screenManager.current = "Main"
         btn1.bind(on_press=goMain)
         layout.add_widget(btn1)
-
-
-
 
         self.localServiceEditPanelScroll = ScrollView(size_hint=(1, 1))
 
@@ -297,14 +330,14 @@ class ServiceApp(MDApp):
             minimum_height=self.localServiceEditPanel.setter('height'))
 
         self.localServiceEditPanelScroll.add_widget(self.localServiceEditPanel)
-        
+
         layout.add_widget(self.localServiceEditPanelScroll)
 
         return screen
 
-    def editLocalService(self,name, c=None):
+    def editLocalService(self, name, c=None):
         if not c:
-            c=configparser.ConfigParser()
+            c = configparser.ConfigParser()
 
         try:
             c.add_section("Service")
@@ -320,33 +353,57 @@ class ServiceApp(MDApp):
         self.localServiceEditorName.text = name
 
         def save(*a):
-            hardline.makeService(hardline.user_services_dir,name,c['Info'].get("title",'Untitled'), service=c['Service'].get("service",""),
-             port=c['Service'].get("port",""))
-
+            hardline.makeUserService(hardline.user_services_dir, name, c['Info'].get("title", 'Untitled'), service=c['Service'].get("service", ""),
+                                 port=c['Service'].get("port", ""), cacheInfo=c['Cache'])
             self.goToLocalServices()
 
         def delete(*a):
             def f(n):
-                if n and n==name:
-                    hardline.delService(hardline.user_services_dir,n)
+                if n and n == name:
+                    hardline.delUserService(hardline.user_services_dir, n)
                     self.goToLocalServices()
 
-            self.askQuestion("Really delete?",name, f)
+            self.askQuestion("Really delete?", name, f)
 
-            
+        self.localServiceEditPanel.add_widget(
+            self.settingButton(c, "Service", "service"))
+        self.localServiceEditPanel.add_widget(
+            self.settingButton(c, "Service", "port"))
+        self.localServiceEditPanel.add_widget(
+            self.settingButton(c, "Info", "title"))
 
-            
-        self.localServiceEditPanel.add_widget(self.settingButton(c, "Service","service"))
-        self.localServiceEditPanel.add_widget(self.settingButton(c, "Service","port"))
-        self.localServiceEditPanel.add_widget(self.settingButton(c, "Info","title"))
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
+                       text='Cache Settings(Cache mode only works for static content)'))
 
-    
+        self.localServiceEditPanel.add_widget(
+            self.settingButton(c, "Cache", "directory"))
+
+        self.localServiceEditPanel.add_widget(
+            self.settingButton(c, "Cache", "maxAge"))
+
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
+                       text='Try to refresh after maxAge seconds(default 1 week)'))
+
+        self.localServiceEditPanel.add_widget(
+            self.settingButton(c, "Cache", "maxSize"))
+
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
+                       text='Max size to use for the cache(default 256MB)'))
+
+        self.localServiceEditPanel.add_widget(
+            self.settingButton(c, "Cache", "downloadRateLimit"))
+
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
+                       text='Max MB per hour to download(Default: 1200)'))
+
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
+                       text='Directory names are subfolders within the HardlineP2P folder,\nand can also be used to share\nstatic files by leaving the service blank.'))    
+
         btn1 = Button(text='Save Changes',
                       size_hint=(1, None), font_size="20sp")
 
         btn1.bind(on_press=save)
         self.localServiceEditPanel.add_widget(btn1)
-
 
         btn2 = Button(text='Delete this service',
                       size_hint=(1, None), font_size="20sp")
@@ -354,8 +411,7 @@ class ServiceApp(MDApp):
         btn2.bind(on_press=delete)
         self.localServiceEditPanel.add_widget(btn2)
 
-        self.screenManager.current= "EditLocalService"
-
+        self.screenManager.current = "EditLocalService"
 
     def makeButtonForLocalService(self, name, c=None):
         "Make a button that, when pressed, edits the local service in the title"
@@ -365,13 +421,11 @@ class ServiceApp(MDApp):
                      font_size="26sp", size_hint=(1, None))
 
         def f(*a):
-            self.editLocalService(name,c)
+            self.editLocalService(name, c)
         btn.bind(on_press=f)
         layout.add_widget(btn)
 
-
         return layout
-
 
     def makeDiscoveryPage(self):
 

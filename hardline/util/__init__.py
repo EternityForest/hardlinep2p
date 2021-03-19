@@ -89,12 +89,12 @@ class LPDPeer():
                         if not msg['Infohash']:
                             for i in self.activeHashes:
                                 # Mcast works better on localhost to localhost in the same process it seems
-                                self.advertise(self.activeHashes[i][2], self.activeHashes[i][0], self.activeHashes[i][1], addr=(
+                                self.advertise(self.activeHashes[i][2], self.activeHashes[i][0][0], self.activeHashes[i][1], addr=(
                                     "239.192.152.143", 6771))
 
                                 # Unicast needed for android without needed the extra multicast permission
                                 self.advertise(
-                                    self.activeHashes[i][2], self.activeHashes[i][0], self.activeHashes[i][1], addr=addr)
+                                    self.activeHashes[i][2], self.activeHashes[i][0][0], self.activeHashes[i][1], addr=addr)
                             print("responding to lpd general scan")
                         else:
                             #Lookup by the legacy method
@@ -105,12 +105,12 @@ class LPDPeer():
                                 # Hash, but discovery may use the DOUBLE hash.  That way, the hash is only
 
                                 # Mcast works better on localhost to localhost in the same process it seems
-                                self.advertise(info[2], info[0],
+                                self.advertise(info[2], info[0][0],
                                             info[1], addr=("239.192.152.143", 6771))
 
                                 # Unicast needed for android without needed the extra multicast permission
                                 self.advertise(
-                                    info[2], info[0], info[1], addr=addr)
+                                    info[2], info[0][0], info[1], addr=addr)
                                 print("responding to lpd")
 
                             #Allow lookup by the new rolling code method.
@@ -127,12 +127,12 @@ class LPDPeer():
                                         # Hash, but discovery may use the DOUBLE hash.  That way, the hash is only
 
                                         # Mcast works better on localhost to localhost in the same process it seems
-                                        self.advertise(info[2], info[0],
+                                        self.advertise(info[2], info[0][0],
                                                         info[1], addr=("239.192.152.143", 6771))
 
                                         # Unicast needed for android without needed the extra multicast permission
                                         self.advertise(
-                                            info[2], info[0], info[1], addr=addr)
+                                            info[2], info[0][0], info[1], addr=addr)
 
 
             if 'announce' in t:
@@ -157,6 +157,10 @@ class LPDPeer():
             {'Infohash': hash, 'Port': port, 'cookie': self.cookie, 'title': title}, self.announceTopic), addr)
 
     def register(self, hash, port, info, addr=None):
+
+        #Port must be a list where the first item is the actual port!!!
+        #This is so it can be mutable and changed later.
+
         # Ok, so the client should never broadcast the full hash, he might be in a coffee shop or something, roaming where attackers are.
         # So the lookup part of discovery only uses the certificate digest part of the hash.
 
