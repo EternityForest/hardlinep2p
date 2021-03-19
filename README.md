@@ -95,10 +95,17 @@ title="My Awesome Service"
 # Leave the "service" blank and this becomes cache-only, and a
 # very convenient way to serve some files from an Android device.
 
+# Because files and directories are the same thing to the web, newly-downloaded
+#files get postfixed with @http to avoid conflict with dirs.
+
+#For compatibility with manually-created files you want to serve, if the unpostfixed
+#file already exists, it will be used instead, and will be updated according to the same rules.
+
+#The root page will just be /cachedir/@http. /foo/bar will be /cachedir/foo/bar@http, but /foo/bar/ with 
+# a trailing slash is /cachedir/foo/bar/@http
+
 #Cache services act like any other service.
 
-#The / cannot be represented as an empty string filename, so it is special
-#cased to @root.
 [Cache]
 directory="Leave this as an empty string for no cache"
 
@@ -112,6 +119,15 @@ maxSize=256000000
 #Use this to protect your flash memory from cache churn!
 #Bursts are allowed, the quota refills up to the 1 hour max.
 downloadRateLimit=1200
+
+#Dynamic content allows you to manually place a file ending with @mako
+#as a handler.  /foo/bar?param=q gets mapped to /cachedir/foo/bar@mako.
+
+#These files are never fetched from the site, updated, or deleted.  They are purely local,
+#As a convenience for adding trivial bits of dynamic behavior to your app.
+#There is NO sandboxing here whatsoever.  Use files containing @data if your app
+#needs a bit of persistent storage.
+dynamicContent=no
 ```
 
 #### --p2pport

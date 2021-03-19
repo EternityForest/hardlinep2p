@@ -396,8 +396,20 @@ class ServiceApp(MDApp):
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
                        text='Max MB per hour to download(Default: 1200)'))
 
+        self.localServiceEditPanel.add_widget(
+            self.settingButton(c, "Cache", "dynamicContent"))
+
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
-                       text='Directory names are subfolders within the HardlineP2P folder,\nand can also be used to share\nstatic files by leaving the service blank.'))    
+                       text='Allow executing code in protected @mako files in the cache dir. yes to enable. Do not use with untrusted @mako'))
+
+        self.localServiceEditPanel.add_widget(
+            self.settingButton(c, "Cache", "allowListing"))
+
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
+                       text='Allow directory listing'))
+
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
+                       text='Directory names are subfolders within the HardlineP2P cache folder,\nand can also be used to share\nstatic files by leaving the service blank.'))    
 
         btn1 = Button(text='Save Changes',
                       size_hint=(1, None), font_size="20sp")

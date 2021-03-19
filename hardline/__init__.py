@@ -1,10 +1,7 @@
 
 import urllib
 import sys
-import shutil
-import urllib.request
-import socketserver
-import http.server
+
 import configparser
 from ipaddress import ip_network, ip_address
 import select
@@ -31,190 +28,12 @@ import hashlib
 import stat
 import struct
 from . import util
-
+from .cachingproxy import CachingProxy
 
 services = weakref.WeakValueDictionary()
 
 socket.setdefaulttimeout(5)
 
-
-# A simple HTTP proxy which does caching of requests.
-# Inspired by: https://gist.github.com/bxt/5195500
-# but updated for Python 3 and some additional sanity improvements:
-# - shutil is used to serve files in a streaming manner, so the entire data is not loaded into memory.
-# - the http request is written to a temp file and renamed on success
-# - forward headers
-
-
-def countDirSize(d):
-    total_size = 0
-    for path, dirs, files in os.walk(d):
-        for f in files:
-            fp = os.path.join(path, f)
-            total_size += os.path.getsize(fp)
-    return total_size
-
-
-def deleteOldFiles(d, maxSize):
-    "Delete the oldest in D until the whole cache is smaller than maxSize*0.75"
-    total_size = countDirSize(d)
-    if total_size < (maxSize):
-        return
-
-    listing = []
-
-    for path, dirs, files in os.walk(d):
-        for f in files:
-            fp = os.path.join(path, f)
-            listing.append((os.stat(fp).st_mtime, fp))
-
-    listing.sort()
-
-    for i in listing:
-        total_size -= os.path.getsize(i[1])
-        os.remove(i[1])
-
-        # Use some hysteresis
-        if total_size < (maxSize*0.75):
-            break
-
-    return total_size
-
-
-class CachingProxy():
-    "Return an object that can be used as either a caching proxy or a plain static file server."
-
-    def __init__(self, site, directory, maxAge=7*24*3600, downloadRateLimit=1200, maxSize=1024*1024*256):
-
-        # Convert to int because we have to expect that the params will be supplied directly from an ini file parser.
-        # And the user may have supplied blanks.
-
-        # Calculate in 128kb blocks
-        maxRequestsPerHour = int(downloadRateLimit or 1200)*8
-
-        timePerBlock = 3600/maxRequestsPerHour
-
-        maxAge = int(maxAge or 7*24*3600)
-        maxSize = int(maxSize or 1024*1024*256)
-
-        downloadQuotaHolder = [maxRequestsPerHour]
-        downloadQuotaTimestamp = [time.time()]
-        self.port = None
-
-        try:
-            os.makedirs(directory)
-        except:
-            pass
-
-        totalSize = [countDirSize(directory)]
-
-        class CacheHandler(http.server.SimpleHTTPRequestHandler):
-            def do_GET(self):
-                cache_filename = urllib.parse.quote(self.path[1:])
-                if not cache_filename or cache_filename == '/':
-                    cache_filename = "@root"
-                cache_filename = os.path.join(directory, cache_filename)
-
-                useCache = True
-
-                #Approximately calculate how many download blocks are left in the quota
-                def doQuotaCalc():
-                    # Accumulate quota units up to the maximum allowed
-                    downloadQuotaHolder[0] += min(((time.time()-downloadQuotaTimestamp[0])/3600)
-                                                  * maxRequestsPerHour+maxRequestsPerHour, maxRequestsPerHour)
-                    downloadQuotaTimestamp[0] = time.time()
-                    return downloadQuotaHolder[0]
-
-                if not os.path.exists(cache_filename):
-                    useCache = False
-
-                else:
-                    age = time.time()-os.stat(cache_filename).st_mtime
-                    if age > maxAge:
-                        # If totally empty, we are in high load conditions,
-                        # Use cache even if it is old, to prioritize getting stuff we don't have already.
-                        if doQuotaCalc():
-                            useCache = False
-
-                doQuotaCalc()
-
-                if not useCache:
-                    if site:
-
-                        try:
-                            os.makedirs(os.path.dirname(cache_filename))
-                        except:
-                            pass
-                        with open(cache_filename + ".temp", "wb") as output:
-                            req = urllib.request.Request(site + self.path)
-                            # copy request headers
-                            for k in self.headers:
-                                if k not in ["Host"]:
-                                    req.add_header(k, self.headers[k])
-                            try:
-                                with urllib.request.urlopen(req) as resp:
-                                    self.send_response(200)
-                                    self.end_headers()
-
-                                    for i in range(256000):
-                                        #Partial blocks count for one whole block.
-                                        d = resp.read(128*1024)
-
-                                        totalSize[0] += d(len)
-
-                                        downloadQuotaHolder[0] -= 1
-                                        for i in range(1000):
-                                            doQuotaCalc()
-                                            time.sleep(0.1)
-
-                                        if not downloadQuotaHolder[0]:
-                                            time.sleep(timePerBlock)
-
-                                        # No write the too big
-                                        # TODO avoid this in the first place.
-                                        if totalSize[0] < maxSize:
-                                            output.write(d)
-
-                                        self.wfile.write(d)
-
-                                os.rename(cache_filename +
-                                          ".temp", cache_filename)
-
-                                if totalSize[0] > maxSize:
-                                    totalSize[0] = deleteOldFiles(directory)
-
-                                return
-
-                            except urllib.error.HTTPError as err:
-                                self.send_response(err.code)
-                                self.end_headers()
-                                return
-
-                    else:
-                        self.send_redsponse(404)
-                        self.end_heaers()
-                        return
-
-                with open(cache_filename, "rb") as cached:
-                    self.send_response(200)
-                    self.end_headers()
-                    shutil.copyfileobj(cached, self.wfile)
-
-        def f():
-            for i in range(128):
-                p = 50000 + int(random.random()*8192)
-                try:
-                    with socketserver.TCPServer(("localhost", p), CacheHandler) as httpd:
-                        self.port = p
-                        self.server = httpd
-                        httpd.serve_forever()
-                except:
-                    print(traceback.format_exc())
-
-            self.port = None
-
-        self.thread = threading.Thread(target=f, daemon=True)
-        self.thread.start()
 
 
 def createWifiChecker():
@@ -641,15 +460,19 @@ class Service():
         proxyDir = cacheSettings.get("directory")
         if proxyDir:
             proxyDir = os.path.join(proxy_cache_root, proxyDir)
-            if destination.endswith("/"):
-                destination = destination[:-1]
+
             # No spurious port 80 that isn't needed and breaks stuff
             if port and not int(port) == 80:
                 dest = destination+":"+str(port)
             else:
                 dest = destination
+            yes = ('yes','true','on','Yes','True','On','TRUE')
+            self.cachingProxy = CachingProxy(dest, proxyDir, maxAge=cacheSettings.get("maxAge"), 
+            maxSize=cacheSettings.get("maxSize"),
+            downloadRateLimit=cacheSettings.get("downloadRateLimit"), 
+            allowListing=cacheSettings.get("allowListing") in yes,
+            dynamicContent=cacheSettings.get("dynamicContent") in yes)
 
-            self.cachingProxy = CachingProxy(dest, proxyDir)
             for i in range(0, 10):
                 if self.cachingProxy.port:
                     break
@@ -662,7 +485,8 @@ class Service():
         services[self.keyhash.hex()] = self
 
         self.lpd = util.LPDPeer("HARDLINE-SERVICE", "HARDLINE-SEARCH")
-        self.lpd.register(self.password+"-"+self.keyhash.hex(), WANPortContainer, info)
+        self.lpd.register(self.password+"-"+self.keyhash.hex(),
+                          WANPortContainer, info)
 
     def close(self):
         global P2P_PORT
@@ -673,7 +497,7 @@ class Service():
 
         if self.cachingProxy:
             try:
-                self.cachingProxy.close()
+                self.cachingProxy.server.shutdown()
                 self.cachingProxy = None
             except KeyError:
                 pass
@@ -959,7 +783,8 @@ def server_thread(sock):
         # Use fullservice for discovery, the LPD code takes care of not actually sending the password part
         hosts = discover(fullservice.decode())
 
-        conn=None
+        conn = None
+
         def connect(to):
             # We do our own verification
             sk = ssl.create_default_context()
@@ -1252,7 +1077,7 @@ def start(localport=None):
         try:
             p2p_bindsocket.bind(('0.0.0.0', P2P_PORT))
             p2p_bindsocket.listen()
-            WANPortContainer[0]=P2P_PORT
+            WANPortContainer[0] = P2P_PORT
             break
         except OSError:
             if i < 28:
@@ -1336,7 +1161,7 @@ def start(localport=None):
 
 def closeServices(only=None):
     "Only lets us only close one,  by it's friendly name"
-    for i in services.values():
+    for i in list(services.values()):
         try:
             if only:
                 if not i.friendlyName == only:
