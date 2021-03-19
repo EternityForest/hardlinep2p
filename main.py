@@ -27,8 +27,7 @@ import os
 import sys
 
 
-for i in os.listdir(os.path.dirname(os.path.abspath(__file__))):
-    print(i)
+
 
 
 class ServiceApp(MDApp):

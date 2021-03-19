@@ -17,7 +17,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--p2pport', help='Port used for secure P2P', default="7008")
     parser.add_argument(
-        '--servicedir', help='Directory of services that you would like to expose', default="/etc/hardline/services")
+        '--servicedir', help='Directory of services that you would like to expose', default="/home/daniel/.hardlinep2p/services/")
 
     args = vars(parser.parse_args())
 
@@ -32,26 +32,6 @@ if __name__ == "__main__":
 
     services = []
     if os.path.exists(args['servicedir']):
-        for i in os.listdir(args['servicedir']):
-            if not i.endswith(".ini"):
-                continue
-            try:
-                config = configparser.ConfigParser()
-                config.read(os.path.join(args['servicedir'], i))
-
-                if "Info" in config.sections():
-                    title = config['Info'].get("title", 'untitled')
-                else:
-                    title = 'untitled'
-
-                service = config['Service']
-
-                s = hardline.Service(service['certfile'], service['service'], int(
-                    service.get('port', '80')), {'title': title})
-                print("Serving a service from "+service['service'])
-
-                services.append(s)
-            except:
-                print(traceback.format_exc())
+        hardline.loadUserServices(args['servicedir'])
 
     hardline.start(int(args['localport']))

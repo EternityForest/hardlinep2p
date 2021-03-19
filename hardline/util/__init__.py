@@ -269,5 +269,5 @@ class LPDPeer():
         self.lock = threading.Lock()
 
         self.thread = threading.Thread(
-            target=makeLoopWorker(weakref.ref(self)))
+            target=makeLoopWorker(weakref.ref(self)),daemon=True)
         self.thread.start()

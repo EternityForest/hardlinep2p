@@ -127,6 +127,9 @@ downloadRateLimit=1200
 #As a convenience for adding trivial bits of dynamic behavior to your app.
 #There is NO sandboxing here whatsoever.  Use files containing @data if your app
 #needs a bit of persistent storage.
+
+#The template has access to variable:
+#path, the str path,  __file__, the absolute location of the template file
 dynamicContent=no
 ```
 

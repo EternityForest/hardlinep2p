@@ -1,11 +1,12 @@
-import setuptools
+import setuptools,os
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
+d = os.path.dirname(__file__)
 setuptools.setup(
     name="hardline",
-    version="0.0.15",
+    version="0.0.16",
     author="Daniel Dunn",
     author_email="dannydunn@eternityforest.com",
     description="HardlineP2P is a way to make web services securely acessible to the world, without any manual DNS or certificate setup",
@@ -20,9 +21,10 @@ setuptools.setup(
     ],
     python_requires='>=3.6',
     install_requires=[
-          'pyOpenSSL','pynacl','requests','lxml','six','python-dateutil','kivy','kivymd'
+          'pyOpenSSL','pynacl','requests','lxml','six','python-dateutil','kivy','kivymd','mako'
       ],
-    scripts=['bin/hardlined', 'bin/hardline-gui']
+
+    scripts=[os.path.join(d,'bin/hardlined'), os.path.join(d,'bin/hardline-gui')]
 )
 
 

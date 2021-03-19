@@ -293,7 +293,7 @@ def startIfNeeded():
     global rth
     if rth:
         return
-    rth = threading.Thread(target=renewer)
+    rth = threading.Thread(target=renewer,daemon=True)
     rth.daemon=True
     rth.start()
 

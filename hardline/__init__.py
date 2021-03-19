@@ -1184,7 +1184,8 @@ def loadUserServices(serviceDir, only=None):
         pass
 
     if os.path.exists(serviceDir):
-        for i in os.listdir(serviceDir):
+        x = os.listdir(serviceDir)
+        for i in x:
             if not i.endswith(".ini"):
                 continue
             if only:
@@ -1209,9 +1210,12 @@ def loadUserServices(serviceDir, only=None):
                 # Close any existing service by that same friendly local name
                 closeServices(i[:-4])
 
-                defaultCertFile = os.path.join(serviceDir, i+".cert")
+                certFile = os.path.join(serviceDir, i+".cert")
+                if service.get('certfile',''):
+                    certFile=service['certfile']
+
                 # Take friendly name from filename
-                s = Service(service['certfile'] or defaultCertFile, service['service'], int(
+                s = Service(certFile, service['service'], int(
                     service.get('port', '80')), {'title': title}, friendlyName=i[:-4], cacheSettings=cache)
                 print("Serving a service from "+service['service'])
 
