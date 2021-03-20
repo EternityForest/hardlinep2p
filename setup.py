@@ -21,7 +21,7 @@ setuptools.setup(
     ],
     python_requires='>=3.6',
     install_requires=[
-          'pyOpenSSL','pynacl','requests','lxml','six','python-dateutil','kivy','kivymd','mako'
+          'pynacl','requests','lxml','six','python-dateutil','kivy','kivymd','mako','cryptography',netifaces
       ],
 
     scripts=[os.path.join(d,'bin/hardlined'), os.path.join(d,'bin/hardline-gui')]

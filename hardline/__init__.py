@@ -104,6 +104,8 @@ DHT_PROXIES = [
 
 # Mutable containers we can pass to services
 WANPortContainer = [0]
+LocalP2PPortContainer=[P2P_PORT]
+
 ExternalAddrs = ['']
 
 try:
@@ -114,31 +116,21 @@ except:
 
 
 try:
-    print("getting path")
     from jnius import autoclass, cast
-    print("got")
     PythonActivity = autoclass('org.kivy.android.PythonActivity')
-    print("activ",PythonActivity)
 
     if PythonActivity and PythonActivity.mActivity:
-        print("get ctx")
         context = cast('android.content.Context', PythonActivity.mActivity)
     else:
-        print("nope")
         PythonActivity = autoclass('org.kivy.android.PythonService')
-        print("yep")
         context = cast('android.content.Context', PythonActivity.mService)
 
-    print("hjkjk")
     Environment = autoclass('android.os.Environment')
-    print("hjkjk")
 
-    print("hjkjk")
 
     r = context.getExternalFilesDir(
         Environment.getDataDirectory().getAbsolutePath()
     ).getAbsolutePath()
-    print("hjkjk")
 
     user_services_dir = os.path.join(r, "services")
     proxy_cache_root = os.path.join(r, "proxycache")
@@ -444,8 +436,6 @@ connections = weakref.WeakValueDictionary()
 
 class Service():
     def __init__(self, cert, destination, port, info={'title': ''}, friendlyName=None, cacheSettings={}):
-        global P2P_PORT
-
         self.certfile = cert
         self.dest = destination+":"+str(port)
 
@@ -517,10 +507,9 @@ class Service():
 
         self.lpd = util.LPDPeer("HARDLINE-SERVICE", "HARDLINE-SEARCH")
         self.lpd.register(self.password+"-"+self.keyhash.hex(),
-                          WANPortContainer, info)
+                          LocalP2PPortContainer, info)
 
     def close(self):
-        global P2P_PORT
         try:
             services.pop(self.keyhash.hex())
         except KeyError:
@@ -607,8 +596,15 @@ class Service():
                 raise RuntimeError(
                     "Too many incoming P2P connections all at once")
 
-            h, p = self.dest.split(":")[-2:]
+            h = self.dest.split("://")[-1]
+            h, p =h.split(":")[-2:]
+
             conn.connect((h, int(p)))
+            
+            if self.dest.startswith("https://") or self.dest.startswith("wss://"):
+                context = ssl.create_default_context()
+                context.wrap_socket(conn, server_hostname=h)
+                conn = context
 
             # Wait for ready
             for i in range(50):
@@ -699,43 +695,8 @@ class Service():
     #             f.write("\r\n"+l)
 
     def cert_gen(self, fn):
-        # None of these parameters matter.  We will be using the hash directly, comparing
-        # exact certificate identity
-        from OpenSSL import crypto, SSL
-
-        emailAddress = "emailAddress"
-        commonName = "commonName"
-        countryName = "NT"
-        localityName = "localityName"
-        stateOrProvinceName = "stateOrProvinceName"
-        organizationName = "organizationName"
-        organizationUnitName = "organizationUnitName"
-        serialNumber = 0
-        validityStartInSeconds = 0
-        validityEndInSeconds = 100*365*24*60*60
-        KEY_FILE = fn+".private"
-        CERT_FILE = fn
-        # can look at generated file using openssl:
-        # openssl x509 -inform pem -in selfsigned.crt -noout -text
-        # create a key pair
-        k = crypto.PKey()
-        k.generate_key(crypto.TYPE_RSA, 4096)
-        # create a self-signed cert
-        cert = crypto.X509()
-        cert.get_subject().C = countryName
-        cert.get_subject().ST = stateOrProvinceName
-        cert.get_subject().L = localityName
-        cert.get_subject().O = organizationName
-        cert.get_subject().OU = organizationUnitName
-        cert.get_subject().CN = commonName
-        cert.get_subject().emailAddress = emailAddress
-        cert.set_serial_number(serialNumber)
-        cert.gmtime_adj_notBefore(0)
-        cert.gmtime_adj_notAfter(validityEndInSeconds)
-        cert.set_issuer(cert.get_subject())
-        cert.set_pubkey(k)
-        cert.sign(k, 'sha512')
-
+        from . import selfsigned
+        a,b, c= selfsigned.generate_selfsigned_cert("nonsense.example")
         # This is NOT meant to be anyone's primary means of security!  It is only for a very basic
         # layer that keeps casual remote attackers out.   The password can also be reused to put a bit of freetext in the domain.
         # That is how insecure it is!!
@@ -746,24 +707,21 @@ class Service():
         self.password = base64.b32encode(
             os.urandom(8)).decode().replace("=", '').lower()
 
-        with open(CERT_FILE, "wt") as f:
-            f.write(crypto.dump_certificate(
-                crypto.FILETYPE_PEM, cert).decode("utf-8"))
-        os.chmod(CERT_FILE, stat.S_IRWXU)
+        with open(fn, "wt") as f:
+            f.write(a.decode("utf-8"))
+        os.chmod(fn, stat.S_IRWXU)
 
-        with open(KEY_FILE, "wt") as f:
-            f.write(crypto.dump_privatekey(
-                crypto.FILETYPE_PEM, k).decode("utf-8"))
+        with open(fn+'.private', "wt") as f:
+            f.write(b.decode("utf-8"))
 
-        os.chmod(KEY_FILE, stat.S_IRWXU)
+        os.chmod(fn+'.private', stat.S_IRWXU)
 
-        with open(CERT_FILE+'.hash', "wt") as f:
-            f.write(self.password + '-' + blake2b(crypto.dump_certificate(
-                crypto.FILETYPE_ASN1, cert), encoder=nacl.encoding.RawEncoder())[:20].hex())
-            self.keyhash = blake2b(crypto.dump_certificate(
-                crypto.FILETYPE_ASN1, cert), encoder=nacl.encoding.RawEncoder())[:20]
+        with open(fn+'.hash', "wt") as f:
+            f.write(self.password + '-' + blake2b(c, encoder=nacl.encoding.RawEncoder())[:20].hex())
 
-        os.chmod(CERT_FILE+'.hash', stat.S_IRWXU)
+            self.keyhash = blake2b(c, encoder=nacl.encoding.RawEncoder())[:20]
+
+        os.chmod(fn+'.hash', stat.S_IRWXU)
 
 
 def server_thread(sock):
@@ -1070,7 +1028,7 @@ cached_localport = 7008
 
 
 def start(localport=None):
-    global P2P_PORT, WANPort, portMapping, running, exited, cached_localport
+    global  portMapping, running, exited, cached_localport
 
     running = True
 
@@ -1078,6 +1036,46 @@ def start(localport=None):
 
     localport = localport or cached_localport
     cached_localport = localport
+    
+    try:
+    
+        import kivy.utils
+        if kivy.utils.platform == 'android' and services:
+            print("Getting multicast lock")
+            from jnius import autoclass, cast
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            Context = autoclass('android.content.Context')
+
+            if PythonActivity and PythonActivity.mActivity:
+                activity=PythonActivity.mActivity
+            else:
+                PythonActivity = autoclass('org.kivy.android.PythonService')
+                activity=PythonActivity.mService
+            print("getting mgr")
+
+            WifiManager = autoclass('android.net.wifi.WifiManager')
+            print("getting service")
+            service = activity.getApplicationContext().getSystemService(Context.WIFI_SERVICE)
+
+            if service:
+                print(1)
+                wlock = service.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF , "hlp2p")
+                print(2)
+                wlock.acquire()
+                print("yes")
+                mlock = service.createMulticastLock("Hardlinep2p")
+                print(2)
+                mlock.acquire()
+                print(3)
+
+        
+            PowerManager = autoclass('android.os.PowerManager')
+            pm = activity.getApplicationContext().getSystemService(Context.POWER_SERVICE)
+            wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, 'Hardlinep2p')
+
+            wl.acquire()
+    except ImportError:
+        print("ERR, ignore this unless running on android")
 
     try:
         # This is the server context we use for localhost coms
@@ -1106,14 +1104,15 @@ def start(localport=None):
 
     for i in range(30):
         try:
-            p2p_bindsocket.bind(('0.0.0.0', P2P_PORT))
+            p2p_bindsocket.bind(('0.0.0.0', LocalP2PPortContainer[0]))
             p2p_bindsocket.listen()
-            WANPortContainer[0] = P2P_PORT
+            #If possible we would like to keep these the same for simplicity
+            WANPortContainer[0] = LocalP2PPortContainer[0]
             break
         except OSError:
             if i < 28:
                 time.sleep(1)
-                P2P_PORT += 1
+                LocalP2PPortContainer[0] += 1
 
             else:
                 raise
@@ -1145,12 +1144,12 @@ def start(localport=None):
         # Note that there is a slight bit of unreliableness here.  The router could get rebooted, and lose
         # our mapping, and someone else could have taken it when we retry.  But that is rather unlikely.
         # Default to the p2p port
-        WANPortContainer[0] = P2P_PORT
+        WANPortContainer[0] = LocalP2PPortContainer[0]
 
         for i in range(0, 5):
             try:
                 portMapping = upnpwrapper.addMapping(
-                    P2P_PORT, "TCP", WANPort=WANPortContainer[0])
+                    LocalP2PPortContainer[0], "TCP", WANPort=WANPortContainer[0])
                 break
             except:
                 WANPortContainer[0] += 1
@@ -1159,7 +1158,7 @@ def start(localport=None):
         else:
             # Default to the p2p port
             print("Failed to register port mapping, you will need to manually configure.")
-            WANPortContainer[0] = P2P_PORT
+            WANPortContainer[0]=LocalP2PPortContainer[0]
 
     toScan = [p2p_bindsocket]
 
@@ -1224,9 +1223,12 @@ def loadUserServices(serviceDir, only=None):
     except:
         pass
 
+    print("Loading Services from ", serviceDir)
+
     if os.path.exists(serviceDir):
         x = os.listdir(serviceDir)
         for i in x:
+            print("File",i)
             if not i.endswith(".ini"):
                 continue
             if only:
@@ -1254,10 +1256,10 @@ def loadUserServices(serviceDir, only=None):
                 certFile = os.path.join(serviceDir, i+".cert")
                 if service.get('certfile',''):
                     certFile=service['certfile']
-
+                print("Loading Service")
                 # Take friendly name from filename
                 s = Service(certFile, service['service'], int(
-                    service.get('port', '80')), {'title': title}, friendlyName=i[:-4], cacheSettings=cache)
+                    service.get('port', '80') or 80), {'title': title}, friendlyName=i[:-4], cacheSettings=cache)
                 print("Serving a service from "+service['service'])
 
                 userServices[i] = s
@@ -1301,7 +1303,7 @@ def delUserService(dir, name):
             i = os.path.join(dir, n)
             if file and i.startswith(file):
                 os.remove(i)
-    closeServices(dir, name)
+    closeServices(name)
 
 
 def listServices(serviceDir):

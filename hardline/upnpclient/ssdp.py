@@ -4,7 +4,7 @@ import socket
 import re
 from datetime import datetime, timedelta
 import select
-import ifaddr
+import netifaces
 
 DISCOVER_TIMEOUT = 2
 SSDP_TARGET = ("239.255.255.250", 1900)
@@ -94,19 +94,27 @@ def scan(timeout=5):
     return set(urls)
 
 
+
 def get_addresses_ipv4():
-    # Get all adapters on current machine
-    adapters = ifaddr.get_adapters()
-    # Get the ip from the found adapters
-    # Ignore localhost und IPv6 addresses
-    return list(
-        set(
-            addr.ip
-            for iface in adapters
-            for addr in iface.ips
-            if addr.is_IPv4 and addr.ip != "127.0.0.1"
-        )
-    )
+    """
+    Find all IPs for this machine.
+
+    :return: ``set`` of IP addresses (``IPAddress``).
+    """
+    ips = set()
+    interfaces = netifaces.interfaces()
+    for interface in interfaces:
+        addresses = netifaces.ifaddresses(interface)
+        for address_family in (netifaces.AF_INET,):
+            family_addresses = addresses.get(address_family)
+            if not family_addresses:
+                continue
+            for address in family_addresses:
+                ips.add(address['addr'])
+    return [i for i in ips if not i.startswith('127.')]
+
+
+
 
 
 def discover(timeout=5):

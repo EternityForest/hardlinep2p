@@ -73,6 +73,7 @@ class LPDPeer():
             try:
                 self.connect()
             except OSError:
+                print(traceback.format_exc())
                 return
 
 
@@ -156,7 +157,7 @@ class LPDPeer():
         self.msock.sendto(self.makeLPD(
             {'Infohash': hash, 'Port': port, 'cookie': self.cookie, 'title': title}, self.announceTopic), addr)
 
-    def register(self, hash, port, info, addr=None):
+    def register(self, hash, port, info, addr=None,n=1):
 
         #Port must be a list where the first item is the actual port!!!
         #This is so it can be mutable and changed later.
@@ -189,7 +190,7 @@ class LPDPeer():
         del self.activeHashes[hash] 
         del self.activeHashes[doublehash] 
         
-    def search(self, hash):
+    def search(self, hash,n=1):
         # Not BT LPD compatible!! Use advertise for both searching and announcing
 
         # Empty hash leave as is for browsing
@@ -218,9 +219,13 @@ class LPDPeer():
             self.connect()
 
         try:
-            self.msock.sendto(self.makeLPDSearch(
-                {'Infohash': rollingCode, 'cookie': self.cookie}, self.searchTopic), ("239.192.152.143", 6771))
+            t= self.makeLPDSearch(
+                {'Infohash': rollingCode, 'cookie': self.cookie}, self.searchTopic)
+            for i in range(n):
+                self.msock.sendto(t,("239.192.152.143", 6771))
+
         except Exception:
+            print(traceback.format_exc())
             self.msock = None
             raise
 

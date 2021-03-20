@@ -4,6 +4,7 @@
 import hardline
 
 
-
+loadedServices = hardline.loadUserServices(
+                    hardline.user_services_dir)
 # This is the android service
 hardline.start(7009)

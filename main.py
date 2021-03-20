@@ -270,7 +270,7 @@ class ServiceApp(MDApp):
         self.localServicesListBoxScroll = ScrollView(size_hint=(1, 1))
 
         self.localServicesListBox = BoxLayout(
-            orientation='vertical', size_hint=(1, None))
+            orientation='vertical', size_hint=(1, None),spacing=10)
         self.localServicesListBox.bind(
             minimum_height=self.localServicesListBox.setter('height'))
 
@@ -434,7 +434,7 @@ class ServiceApp(MDApp):
 
     def makeButtonForLocalService(self, name, c=None):
         "Make a button that, when pressed, edits the local service in the title"
-        layout = BoxLayout(orientation='vertical')
+        layout = BoxLayout(orientation='vertical',height=64)
 
         btn = Button(text=name,
                      font_size="26sp", size_hint=(1, None))
@@ -485,10 +485,11 @@ class ServiceApp(MDApp):
 
         try:
             import hardline
-            hardline.discoveryPeer.search('')
+            hardline.discoveryPeer.search('',n=5)
             time.sleep(0.5)
             for i in hardline.getAllDiscoveries():
-                self.discoveryListbox.add_widget(self.makeButtonForPeer(i))
+                for j in self.makeButtonForPeer(i):
+                    self.discoveryListbox.add_widget(j)
 
         except Exception:
             print(traceback.format_exc())
@@ -497,7 +498,6 @@ class ServiceApp(MDApp):
 
     def makeButtonForPeer(self, info):
         "Make a button that, when pressed, opens a link to the service denoted by the hash"
-        layout = BoxLayout(orientation='vertical')
 
         btn = Button(text=str(info['title']),
                      font_size="26sp", size_hint=(1, None))
@@ -506,13 +506,10 @@ class ServiceApp(MDApp):
             self.openInBrowser("http://"+info['hash']+".localhost:7009")
         btn.bind(on_press=f)
 
-        layout.add_widget(btn)
-        layout.add_widget(
-            Label(text="Hosted By: "+info.get("from_ip", ""), font_size="14sp"))
+        return(btn,Label(text="Hosted By: "+info.get("from_ip", ""), font_size="14sp",size_hint=(1, None)),
 
-        layout.add_widget(Label(text="ID: "+info['hash'], font_size="14sp"))
+        Label(text="ID: "+info['hash'], font_size="14sp",size_hint=(1, None)))
 
-        return layout
 
     def openInBrowser(self, link):
         "Opens a link in the browser"

@@ -140,7 +140,7 @@ Useful Links:
 * https://embeddedinn.wordpress.com/tutorials/upnp-device-architecture/
 * http://upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.1.pdf
 """
-from upnpclient import const, errors, marshal, soap, ssdp, upnp, util  # noqa: F401
+from . import const, errors, marshal, soap, ssdp, upnp, util  # noqa: F401
 from .upnp import (
     Device,
     Action,

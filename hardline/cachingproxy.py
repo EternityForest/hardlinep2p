@@ -82,6 +82,10 @@ class CachingProxy():
         downloadQuotaTimestamp = [time.time()]
         self.port = None
 
+        if not "://" in site:
+            site= "https://"+site
+            
+
         try:
             from mako.lookup import TemplateLookup
             templateLookup = TemplateLookup([directory])
