@@ -127,17 +127,35 @@ try:
 
     Environment = autoclass('android.os.Environment')
 
+    internalDir = context.getExternalFilesDir(None).getAbsolutePath()
+    print("Internal App Dir", internalDir)
+    r = internalDir
 
-    r = context.getExternalFilesDir(
-        Environment.getDataDirectory().getAbsolutePath()
-    ).getAbsolutePath()
+    for i in context.getExternalFilesDirs(None):
+        print("Found storage dir:",i)
+        p = i.getAbsolutePath()
+        if p.startswith("/sdcard") or p.startswith("/storage/sdcard0/") or (p.startswith("/storage/") and not p.startswith("/storage/emulated/")):
+            print("Found External SD")
+            r= p
+            break
 
     user_services_dir = os.path.join(r, "services")
     proxy_cache_root = os.path.join(r, "proxycache")
 
+    #First time copy-over to new SD card from internal storage.
+    import shutil
+    if not os.path.exists(proxy_cache_root) and os.path.exists(os.path.join(internalDir, "proxycache")):
+        print("Copying proxy cache to external SD")
+        shutil.copytree(os.path.join(internalDir, "proxycache"), proxy_cache_root)
+
+    if not os.path.exists(user_services_dir) and os.path.exists(os.path.join(internalDir, "services")):
+        print("Copying service files to external SD")
+        shutil.copytree(os.path.join(internalDir, "services"), user_services_dir)
+
     print(user_services_dir)
 
 except:
+    print(traceback.format_exc())
     user_services_dir = os.path.expanduser('~/.hardlinep2p/services/')
     proxy_cache_root = os.path.expanduser('~/.hardlinep2p/proxycache/')
 
@@ -1268,6 +1286,11 @@ def loadUserServices(serviceDir, only=None):
 
 
 def makeUserService(dir, name, title="A service", service="localhost", port='80',  certfile=None, cacheInfo={}, noStart=False):
+    try:
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+    except:
+        print(traceback.format_exception())
     c = configparser.ConfigParser()
     c.add_section("Service")
     c.add_section("Info")

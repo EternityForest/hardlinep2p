@@ -90,6 +90,7 @@ class ServiceApp(MDApp):
         t = MDTextField(text='')
 
         def cbr_yes(*a):
+            print("Accept Button")
             cb(t.text)
             self.dialog.dismiss()
 
@@ -110,6 +111,8 @@ class ServiceApp(MDApp):
                 ),
             ],
         )
+        self.dialog.set_normal_height()
+
         t.text = answer
         self.dialog.open()
 
@@ -139,6 +142,7 @@ class ServiceApp(MDApp):
                 ),
             ],
         )
+        self.dialog.set_normal_height()
         t.active = answer
         self.dialog.open()
 
@@ -254,12 +258,15 @@ class ServiceApp(MDApp):
         label = Label(size_hint=(1, None), halign="center",
                       text='WARNING: Running a local service may use a lot of data and battery.\nChanges may require service restart.')
 
+        labelw = Label(size_hint=(1, None), halign="center",
+                      text='WARNING 2: This app currently prefers the external SD card for almost everything including the keys.')
         def goMain(*a):
             self.screenManager.current = "Main"
         btn1.bind(on_press=goMain)
         layout.add_widget(btn1)
 
         layout.add_widget(label)
+        layout.add_widget(labelw)
 
         btn2 = Button(text='Create a service',
                       size_hint=(1, None), font_size="20sp")
@@ -352,6 +359,7 @@ class ServiceApp(MDApp):
         self.localServiceEditorName.text = name
 
         def save(*a):
+            print("SAVE BUTTON WAS PRESSED")
             #On android this is the bg service's job
             hardline.makeUserService(hardline.user_services_dir, name, c['Info'].get("title", 'Untitled'), service=c['Service'].get("service", ""),
                                  port=c['Service'].get("port", ""), cacheInfo=c['Cache'],noStart=(platform == 'android'))
@@ -434,7 +442,6 @@ class ServiceApp(MDApp):
 
     def makeButtonForLocalService(self, name, c=None):
         "Make a button that, when pressed, edits the local service in the title"
-        layout = BoxLayout(orientation='vertical',height=64)
 
         btn = Button(text=name,
                      font_size="26sp", size_hint=(1, None))
@@ -442,9 +449,8 @@ class ServiceApp(MDApp):
         def f(*a):
             self.editLocalService(name, c)
         btn.bind(on_press=f)
-        layout.add_widget(btn)
 
-        return layout
+        return btn
 
     def makeDiscoveryPage(self):
 
@@ -474,6 +480,7 @@ class ServiceApp(MDApp):
             orientation='vertical', size_hint=(1, None))
         self.discoveryListbox.bind(
             minimum_height=self.discoveryListbox.setter('height'))
+
         self.discoveryScroll.add_widget(self.discoveryListbox)
         layout.add_widget(self.discoveryScroll)
 
