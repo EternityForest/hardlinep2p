@@ -16,7 +16,8 @@ import shutil
 import urllib.request
 import socketserver
 import http.server
-
+import requests
+import hashlib
 
 def countDirSize(d):
     total_size = 0
@@ -114,9 +115,13 @@ class CachingProxy():
 
                 cache_filename = urllib.parse.quote(cache_filename)
 
+        
                 # Defensive programming because we may depend on @ files for special purposes.
                 if '@' in cache_filename:
                     raise RuntimeError("This should not happen")
+
+                if len(cache_filename) > 192:
+                    cache_filename=hashlib.md5(cache_filename.encode()).hexdigest()
 
                 # Very lightweight dynamic content support in the form of Mako templates.
                 # Just enough for a tiny bit of custom stuff on top of a cached site to compensate
@@ -134,7 +139,7 @@ class CachingProxy():
 
                 cache_filename = os.path.join(directory, cache_filename)
 
-                if not os.path.exists(cache_filename):
+                if not os.path.isfile(cache_filename):
                     # HTTP lets you access a dir and a file the same way.  Filesystems do not,
                     # So retrieved files need the special postfix to be sure they never collide with dirs.
 
@@ -174,19 +179,19 @@ class CachingProxy():
                         except:
                             pass
                         with open(cache_filename + ".temp", "wb") as output:
-                            req = urllib.request.Request(site + self.path)
                             # copy request headers
-                            for k in self.headers:
-                                if k not in ["Host"]:
-                                    req.add_header(k, self.headers[k])
+                            # for k in self.headers:
+                            #     if k not in ["Host"]:
+                            #         req.add_header(k, self.headers[k])
                             try:
-                                with urllib.request.urlopen(req) as resp:
+                                with requests.get(site + self.path,stream=True) as resp:
+
                                     self.send_response(200)
                                     self.end_headers()
 
-                                    for i in range(256000):
+                                    for i in resp.iter_content(128*1024):
                                         # Partial blocks count for one whole block.
-                                        d = resp.read(128*1024)
+                                        d = i
                                         if not d:
                                             break
 
@@ -208,13 +213,13 @@ class CachingProxy():
 
                                         self.wfile.write(d)
 
-                                os.rename(cache_filename +
-                                          ".temp", cache_filename)
+                                    os.rename(cache_filename +
+                                            ".temp", cache_filename)
 
-                                if totalSize[0] > maxSize:
-                                    totalSize[0] = deleteOldFiles(directory)
+                                    if totalSize[0] > maxSize:
+                                        totalSize[0] = deleteOldFiles(directory)
 
-                                return
+                                    return
 
                             except urllib.error.HTTPError as err:
                                 self.send_response(err.code)

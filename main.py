@@ -155,7 +155,7 @@ class ServiceApp(MDApp):
 
         def f(*a):
             def g(r):
-                if r:
+                if not r is None:
                     configObj[section][key] = r
                     x.text = key+":"+configObj[section].get(key, "")[:25]
             self.askQuestion(
@@ -352,14 +352,22 @@ class ServiceApp(MDApp):
         self.localServiceEditorName.text = name
 
         def save(*a):
+            #On android this is the bg service's job
             hardline.makeUserService(hardline.user_services_dir, name, c['Info'].get("title", 'Untitled'), service=c['Service'].get("service", ""),
-                                 port=c['Service'].get("port", ""), cacheInfo=c['Cache'])
+                                 port=c['Service'].get("port", ""), cacheInfo=c['Cache'],noStart=(platform == 'android'))
+            if platform == 'android':
+                self.stop_service()
+                self.start_service()
+
             self.goToLocalServices()
 
         def delete(*a):
             def f(n):
                 if n and n == name:
                     hardline.delUserService(hardline.user_services_dir, n)
+                    if platform == 'android':
+                        self.stop_service()
+                        self.start_service()
                     self.goToLocalServices()
 
             self.askQuestion("Really delete?", name, f)

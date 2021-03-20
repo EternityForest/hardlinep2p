@@ -54,17 +54,38 @@ def createWifiChecker():
     if kivy.utils.platform != 'android':
         return alwaysTrue
 
-    from plyer import wifi
-    from plyer import battery
+    #from plyer import battery
+ 
+    # from jnius import autoclass,cast
+
+    # activity = autoclass('org.kivy.android.PythonActivity').mActivity or autoclass('org.kivy.android.PythonService').mService
+    # ConnectivityManager = autoclass('android.net.ConnectivityManager')
+    # context = cast('android.content.Context', activity)
+
+    def check_wifi():
+        #Hack because I have not been able to make this work
+        return True
+
+        # con_mgr = activity.getSystemService(context.CONNECTIVITY_SERVICE)
+        # conn = con_mgr.getNetworkInfo(ConnectivityManager.TYPE_WIFI).isConnected()
+        # if conn:
+        #     return 1
+
+        # conn = con_mgr.getNetworkInfo(ConnectivityManager.TYPE_ETHERNET).isConnected()
+        # if conn:
+        #     return 1
 
     def check_connectivity():
-        if battery.status['isCharging'] or battery.status['percentage'] > 30:
-            return wifi.is_connected()
-        else:
-            return False
+        return True 
+        # if battery.status['isCharging'] or battery.status['percentage'] > 30:
+        #     return check_wifi()
+        # else:
+        #     return False
 
     return check_connectivity()
 
+
+lanStat = [0]
 
 isOnLan = createWifiChecker()
 
@@ -93,31 +114,41 @@ except:
 
 
 try:
+    print("getting path")
     from jnius import autoclass, cast
+    print("got")
     PythonActivity = autoclass('org.kivy.android.PythonActivity')
+    print("activ",PythonActivity)
+
+    if PythonActivity and PythonActivity.mActivity:
+        print("get ctx")
+        context = cast('android.content.Context', PythonActivity.mActivity)
+    else:
+        print("nope")
+        PythonActivity = autoclass('org.kivy.android.PythonService')
+        print("yep")
+        context = cast('android.content.Context', PythonActivity.mService)
+
+    print("hjkjk")
     Environment = autoclass('android.os.Environment')
-    context = cast('android.content.Context', PythonActivity.mActivity)
+    print("hjkjk")
+
+    print("hjkjk")
 
     r = context.getExternalFilesDir(
         Environment.getDataDirectory().getAbsolutePath()
     ).getAbsolutePath()
+    print("hjkjk")
 
     user_services_dir = os.path.join(r, "services")
     proxy_cache_root = os.path.join(r, "proxycache")
+
+    print(user_services_dir)
 
 except:
     user_services_dir = os.path.expanduser('~/.hardlinep2p/services/')
     proxy_cache_root = os.path.expanduser('~/.hardlinep2p/proxycache/')
 
-# clientidkeyfile = os.path.join(os.path.expanduser(settings_path), "clientid.txt")
-
-# #This client ID is only ever sent in hashed form to remote sites.  It cannot be used to track you unless they know the raw unhashed key
-# if not os.path.exists(clientidkeyfile):
-#     with os.path.open(clientidkeyfile, "w") as f:
-#         f.write(str(uuid.uuid4()))
-
-# with os.path.open(clientidkeyfile) as f:
-#     clientUUID = f.read()
 
 
 try:
@@ -996,7 +1027,7 @@ def taskloop():
         # If we can't get a UPNP listing we have to rely on a manual port mapping.
         if not success:
             # Don't hammer IP API for no reason if we don't actually have services to serve.
-            if services and isOnLan():
+            if services and lanStat[0]:
                 if time.time() > lastUsedIPAPI-40*60:
                     lastUsedIPAPI = time.time()
                     try:
@@ -1013,7 +1044,7 @@ def taskloop():
 
         try:
             for i in services:
-                if isOnLan():
+                if lanStat[0]:
                     services[i].dhtPublish(dhtContainer[0])
         except:
             print(traceback.format_exc())
@@ -1136,7 +1167,17 @@ def start(localport=None):
         toScan.append(bindsocket)
 
     exited = False
+
+    lastCheckedLan =0
     while(running):
+
+        if time.time()> lastCheckedLan> 30:
+            try:
+                lanStat[0] = isOnLan()
+                lastCheckedLan=time.time()
+            except:
+                print(traceback.format_exc())
+
         r, w, x = select.select(toScan, [], [], 1)
         try:
 
@@ -1224,7 +1265,7 @@ def loadUserServices(serviceDir, only=None):
                 print(traceback.format_exc())
 
 
-def makeUserService(dir, name, title="A service", service="localhost", port='80',  certfile=None, cacheInfo={}):
+def makeUserService(dir, name, title="A service", service="localhost", port='80',  certfile=None, cacheInfo={}, noStart=False):
     c = configparser.ConfigParser()
     c.add_section("Service")
     c.add_section("Info")
@@ -1246,7 +1287,9 @@ def makeUserService(dir, name, title="A service", service="localhost", port='80'
 
     with open(file, "w") as f:
         c.write(f)
-    loadUserServices(dir, name)
+
+    if not noStart:
+        loadUserServices(dir, name)
 
 
 def delUserService(dir, name):
