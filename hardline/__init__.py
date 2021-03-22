@@ -30,6 +30,12 @@ import struct
 from . import util
 from .cachingproxy import CachingProxy
 
+
+from . import directories
+from . import drayerdb
+
+drayerdb.nodeIDSecretPath = os.path.join(directories.drayerDB_root, "nodeIDSecret.txt")
+
 services = weakref.WeakValueDictionary()
 
 socket.setdefaulttimeout(5)
@@ -66,7 +72,7 @@ def createWifiChecker():
         else:
             return False
 
-    return check_connectivity()
+    return check_connectivity
 
 
 
@@ -78,12 +84,6 @@ P2P_PORT = 7009
 
 dhtlock = threading.RLock()
 
-# Both of these are hosted in the cloud.  The second one is Yggdrasil mesh version, in case you should find yourself without internet but having mesh
-DHT_PROXIES = [
-    "http://185.198.26.230:4223/",
-    "http://[200:6a4e:d4a9:d773:388:b367:481:5382]:4223/"
-    # "http://dhtproxy.jami.net/"
-]
 
 
 # Mutable containers we can pass to services
@@ -92,68 +92,10 @@ LocalP2PPortContainer=[P2P_PORT]
 
 ExternalAddrs = ['']
 
-try:
-    from android.storage import app_storage_path
-    settings_path = app_storage_path()
-except:
-    settings_path = os.path.expanduser('~/.hardlinep2p/')
 
-
-try:
-    from jnius import autoclass, cast
-    PythonActivity = autoclass('org.kivy.android.PythonActivity')
-
-    if PythonActivity and PythonActivity.mActivity:
-        context = cast('android.content.Context', PythonActivity.mActivity)
-    else:
-        PythonActivity = autoclass('org.kivy.android.PythonService')
-        context = cast('android.content.Context', PythonActivity.mService)
-
-    Environment = autoclass('android.os.Environment')
-
-    internalDir = context.getExternalFilesDir(None).getAbsolutePath()
-    print("Internal App Dir", internalDir)
-    r = internalDir
-
-    for i in context.getExternalFilesDirs(None):
-        print("Found storage dir:",i)
-        p = i.getAbsolutePath()
-        if p.startswith("/sdcard") or p.startswith("/storage/sdcard0/") or (p.startswith("/storage/") and not p.startswith("/storage/emulated/")):
-            print("Found External SD")
-            r= p
-            break
-
-    user_services_dir = os.path.join(r, "services")
-    proxy_cache_root = os.path.join(r, "proxycache")
-
-    #First time copy-over to new SD card from internal storage.
-    import shutil
-    if not os.path.exists(proxy_cache_root) and os.path.exists(os.path.join(internalDir, "proxycache")):
-        print("Copying proxy cache to external SD")
-        shutil.copytree(os.path.join(internalDir, "proxycache"), proxy_cache_root)
-
-    if not os.path.exists(user_services_dir) and os.path.exists(os.path.join(internalDir, "services")):
-        print("Copying service files to external SD")
-        shutil.copytree(os.path.join(internalDir, "services"), user_services_dir)
-
-    print(user_services_dir)
-
-except:
-    print(traceback.format_exc())
-    user_services_dir = os.path.expanduser('~/.hardlinep2p/services/')
-    proxy_cache_root = os.path.expanduser('~/.hardlinep2p/proxycache/')
-
-
-
-try:
-    os.makedirs(os.path.expanduser(settings_path))
-except Exception:
-    pass
-
-DB_PATH = os.path.join(os.path.expanduser(settings_path), "peers.db")
-
-print("Peers DB: "+DB_PATH)
-discoveryDB = sqlite3.connect(DB_PATH)
+from . import directories
+print("Peers DB: "+directories.DB_PATH)
+discoveryDB = sqlite3.connect(directories.DB_PATH)
 c = discoveryDB.cursor()
 
 # Create table which we will use to store our peers.
@@ -167,6 +109,46 @@ dbLock = threading.RLock()
 # LThread local storage to store DB connections, we can only  use each from one thread.
 dbLocal = threading.local()
 
+
+globalSettingsPath = os.path.join(directories.settings_path,"settings.ini")
+globalConfig = configparser.ConfigParser()
+globalConfig.read(globalSettingsPath)
+
+if not "DHTProxy" in globalConfig:
+    globalConfig.add_section("DHTProxy")
+
+if not globalConfig['DHTProxy'].get("server1",'').strip():
+    globalConfig['DHTProxy']['server1']="http://185.198.26.230:4223/"
+
+if not globalConfig['DHTProxy'].get("server3",'').strip():
+    globalConfig['DHTProxy']['server2']="http://[200:6a4e:d4a9:d773:388:b367:481:5382]:4223/"
+
+with open(globalSettingsPath,'w') as f:
+    globalConfig.write(f)
+
+def getDHTProxies():
+    globalConfig = configparser.ConfigParser()
+    globalConfig.read(globalSettingsPath)
+
+    if not "DHTProxy" in globalConfig:
+        globalConfig.add_section("DHTProxy")
+
+    l = []
+
+    p = globalConfig['DHTProxy'].get("server1",'').strip()
+    if p:
+        l.append(p)
+
+
+    p = globalConfig['DHTProxy'].get("server2",'').strip()
+    if p:
+        l.append(p)
+
+    p = globalConfig['DHTProxy'].get("server3",'').strip()
+    if p:
+        l.append(p)
+
+    return l
 
 try:
     import netifaces
@@ -209,7 +191,7 @@ def getDB():
     try:
         return dbLocal.db
     except:
-        dbLocal.db = sqlite3.connect(DB_PATH)
+        dbLocal.db = sqlite3.connect(directories.DB_PATH)
         return dbLocal.db
 
 
@@ -289,7 +271,7 @@ class DiscoveryCache():
             r = None
             lines = []
             # Prioritized DHT proxies list
-            for i in DHT_PROXIES:
+            for i in getDHTProxies():
                 print("Trying DHT Proxy request to: "+i+k)
                 try:
                     r = requests.get(i+k, timeout=20, stream=True)
@@ -482,7 +464,7 @@ class Service():
         self.cachingProxy = None
         proxyDir = cacheSettings.get("directory")
         if proxyDir:
-            proxyDir = os.path.join(proxy_cache_root, proxyDir)
+            proxyDir = os.path.join(directories.proxy_cache_root, proxyDir)
 
             # No spurious port 80 that isn't needed and breaks stuff
             if port and not int(port) == 80:
@@ -556,7 +538,7 @@ class Service():
 
         # Using a DHT proxy we can host a site without actually using the DHT directly.
         # This is for future direct-from-android hosting.
-        for i in DHT_PROXIES:
+        for i in getDHTProxies():
             import requests
             try:
                 data = {"data": base64.b64encode(
@@ -1079,38 +1061,9 @@ def start(localport=None):
         import kivy.utils
         if kivy.utils.platform == 'android' and services:
             print("Getting multicast lock")
-            from jnius import autoclass, cast
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            Context = autoclass('android.content.Context')
+            from . import androidtools
+            androidtools.getLocksForBackgroundOperation()
 
-            if PythonActivity and PythonActivity.mActivity:
-                activity=PythonActivity.mActivity
-            else:
-                PythonActivity = autoclass('org.kivy.android.PythonService')
-                activity=PythonActivity.mService
-            print("getting mgr")
-
-            WifiManager = autoclass('android.net.wifi.WifiManager')
-            print("getting service")
-            service = activity.getApplicationContext().getSystemService(Context.WIFI_SERVICE)
-
-            if service:
-                print(1)
-                wlock = service.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF , "hlp2p")
-                print(2)
-                wlock.acquire()
-                print("yes")
-                mlock = service.createMulticastLock("Hardlinep2p")
-                print(2)
-                mlock.acquire()
-                print(3)
-
-        
-            PowerManager = autoclass('android.os.PowerManager')
-            pm = activity.getApplicationContext().getSystemService(Context.POWER_SERVICE)
-            wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, 'Hardlinep2p')
-
-            wl.acquire()
     except ImportError:
         print("ERR, ignore this unless running on android")
 
@@ -1240,6 +1193,8 @@ userServices = {}
 
 
 def loadUserServices(serviceDir, only=None):
+    serviceDir=serviceDir or directories.user_services_dir
+
     "Load services from a configuration directory.  Only to  only reload one."
     try:
         os.makedirs(serviceDir)
@@ -1301,6 +1256,8 @@ def loadUserServices(serviceDir, only=None):
 
 
 def makeUserService(dir, name, title="A service", service="localhost", port='80',  certfile=None, cacheInfo={}, noStart=False):
+    dir=dir or directories.user_services_dir
+
     try:
         if not os.path.exists(dir):
             os.makedirs(dir)
@@ -1333,6 +1290,7 @@ def makeUserService(dir, name, title="A service", service="localhost", port='80'
 
 
 def delUserService(dir, name):
+    dir=dir or directories.user_services_dir
 
     file = os.path.join(dir, name+'.ini')
 
@@ -1345,6 +1303,7 @@ def delUserService(dir, name):
 
 
 def listServices(serviceDir):
+    serviceDir=serviceDir or directories.user_services_dir
     try:
         os.makedirs(serviceDir)
     except:
@@ -1363,3 +1322,59 @@ def listServices(serviceDir):
                 print(traceback.format_exc())
 
     return services
+
+
+userDatabases = {}
+
+
+def delDatabase(dir, name):
+    dir=dir or directories.drayerDB_root
+
+    file = os.path.join(dir, name+'.db')
+
+    if os.path.exists(dir):
+        for n in os.listdir(dir):
+            i = os.path.join(dir, n)
+            if file and i.startswith(file):
+                os.remove(i)
+    del userDatabases[name]
+    
+
+def loadUserDatabases(serviceDir, only=None):
+    serviceDir=serviceDir or directories.drayerDB_root
+
+    "Load services from a configuration directory.  Only to  only reload one."
+    try:
+        os.makedirs(serviceDir)
+    except:
+        pass
+
+    print("Loading Databases from ", serviceDir)
+
+    if os.path.exists(serviceDir):
+        x = os.listdir(serviceDir)
+        for i in x:
+            print("File",i)
+            if not i.endswith(".db"):
+                continue
+            if only:
+                if not i == only+".db":
+                    continue
+
+            try:
+                userDatabases[i].close()
+            except KeyError:
+                pass
+            try:
+                userDatabases[i] = drayerdb.DocumentDatabase(i)                
+            except:
+                print(traceback.format_exc())
+
+def makeUserDatabase(dir, name, conf=None):
+    dir=dir or directories.drayerDB_root
+
+    "Load services from a configuration directory.  Only to  only reload one."
+    try:
+        os.makedirs(serviceDir)
+    except:
+        pass

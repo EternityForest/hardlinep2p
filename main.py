@@ -8,11 +8,10 @@ from kivymd.app import MDApp
 from kivy.utils import platform
 from kivymd.uix.button import MDFillRoundFlatButton as Button
 from kivymd.uix.button import MDFlatButton
-from kivymd.uix.dialog import MDDialog
+
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.label import MDLabel as Label
 from kivy.uix.scrollview import ScrollView
-from kivy.uix.checkbox import CheckBox
 
 
 from kivymd.uix.boxlayout import MDBoxLayout as BoxLayout
@@ -26,11 +25,9 @@ import traceback
 import os
 import sys
 
+from hardline import uihelpers
 
-
-
-
-class ServiceApp(MDApp):
+class ServiceApp(MDApp,uihelpers.AppHelpers):
 
     def stop_service(self, foo=None):
         if self.service:
@@ -57,7 +54,7 @@ class ServiceApp(MDApp):
                 hardline.stop()
 
                 loadedServices = hardline.loadUserServices(
-                    hardline.user_services_dir)
+                    None)
                 hardline.start(7009)
                 # Unload them at exit because we will be loading them again on restart
                 for i in loadedServices:
@@ -78,105 +75,21 @@ class ServiceApp(MDApp):
 
         sm.add_widget(self.makeLocalServiceEditPage())
         sm.add_widget(self.makeLocalServicesPage())
+        sm.add_widget(self.makeGlobalSettingsPage())
 
         self.theme_cls.primary_palette = "Green"
 
         self.screenManager = sm
         return sm
 
-    def askQuestion(self, question, answer='', cb=None):
-        "As a text box based question, with optional  default answer.  If user confirm, call cb."
-
-        t = MDTextField(text='')
-
-        def cbr_yes(*a):
-            print("Accept Button")
-            cb(t.text)
-            self.dialog.dismiss()
-
-        def cbr_no(*a):
-            cb(None)
-            self.dialog.dismiss()
-
-        self.dialog = MDDialog(
-            type="custom",
-            title=question,
-            content_cls=t,
-            buttons=[
-                Button(
-                    text="Accept", text_color=self.theme_cls.primary_color, on_press=cbr_yes
-                ),
-                Button(
-                    text="Cancel", text_color=self.theme_cls.primary_color, on_press=cbr_no
-                ),
-            ],
-        )
-        self.dialog.set_normal_height()
-
-        t.text = answer
-        self.dialog.open()
-
-    def checkboxPrompt(self, question, answer=False, cb=None):
-        "As a text box based question, with optional  default answer.  If user confirm, call cb."
-
-        t = CheckBox(active=True)
-
-        def cbr_yes(*a):
-            cb(t.active)
-            self.dialog.dismiss()
-
-        def cbr_no(*a):
-            cb(None)
-            self.dialog.dismiss()
-
-        self.dialog = MDDialog(
-            type="custom",
-            title=question,
-            content_cls=t,
-            buttons=[
-                Button(
-                    text="Accept", text_color=self.theme_cls.primary_color, on_press=cbr_yes
-                ),
-                Button(
-                    text="Cancel", text_color=self.theme_cls.primary_color, on_press=cbr_no
-                ),
-            ],
-        )
-        self.dialog.set_normal_height()
-        t.active = answer
-        self.dialog.open()
-
-
-    def settingButton(self, configObj, section, key,default=''):
-        "Return a button representing a setting in a configparser obj which you can press to edit."
-
-        try:
-            configObj.add_section(section)
-        except:
-            pass
-
-        configObj[section][key]= configObj[section].get(key,default) or default
-
-        x = MDFlatButton(text=key+":"+configObj[section].get(key, "")[:25], font_size="18sp")
-
-        def f(*a):
-            def g(r):
-                if not r is None:
-                    configObj[section][key] = r
-                    x.text = key+":"+configObj[section].get(key, "")[:25]
-            self.askQuestion(
-                section+":"+key, configObj[section].get(key, ""), g)
-
-        x.bind(on_press=f)
-
-        return x
+   
 
     def makeMainScreen(self):
         mainScreen = Screen(name='Main')
 
         layout = BoxLayout(orientation='vertical', spacing=10)
         mainScreen.add_widget(layout)
-        label = Label(size_hint=(1, 6), halign="center", valign="top",
+        label = Label(size_hint=(1, 6), halign="center", 
                       text='HardlineP2P: The open source way to find\n and connect to servers\nwith no fees or registration')
         layout.add_widget(label)
 
@@ -201,12 +114,67 @@ class ServiceApp(MDApp):
     def goToSettings(self, *a):
         self.screenManager.current = "Settings"
 
+
+    def goToGlobalSettings(self,*a):
+        globalConfig = configparser.ConfigParser()
+        globalConfig.read(hardline.globalSettingsPath)
+        self.localSettingsBox.clear_widgets()
+
+        self.localSettingsBox.add_widget(Label(size_hint=(1, 6), halign="center", 
+                      text='OpenDHT Proxies'))
+        self.localSettingsBox.add_widget(Label(size_hint=(1, None),
+                      text='Proxies are tried in order from 1-3'))
+
+        self.localSettingsBox.add_widget(self.settingButton(globalConfig,"DHTProxy",'server1'))
+        self.localSettingsBox.add_widget(self.settingButton(globalConfig,"DHTProxy",'server2'))
+        self.localSettingsBox.add_widget(self.settingButton(globalConfig,"DHTProxy",'server3'))
+
+        btn1 = Button(text='Save',
+                size_hint=(1, None), font_size="14sp")
+
+        def save(*a):
+            with open(hardline.globalSettingsPath,'w') as f:
+                globalConfig.write(f)
+                
+            self.screenManager.current = "Main"
+
+        btn1.bind(on_press=save)
+        self.localSettingsBox.add_widget(btn1)
+        self.screenManager.current="GlobalSettings"
+
+
+    def makeGlobalSettingsPage(self):
+
+        screen = Screen(name='GlobalSettings')
+        layout = BoxLayout(orientation='vertical', spacing=10)
+        screen.add_widget(layout)
+
+        btn1 = Button(text='Back to main page',
+                      size_hint=(1, None), font_size="14sp")
+        def goMain(*a):
+            self.screenManager.current = "Main"
+        btn1.bind(on_press=goMain)
+        layout.add_widget(btn1)
+
+        self.localSettingsScroll = ScrollView(size_hint=(1, 1))
+        self.localSettingsBox = BoxLayout(
+            orientation='vertical', size_hint=(1, None),spacing=10)
+        self.localSettingsBox.bind(
+            minimum_height=self.localSettingsBox.setter('height'))
+
+        self.localSettingsScroll.add_widget(self.localSettingsBox)
+
+        layout.add_widget(self.localSettingsScroll)
+
+        return screen
+
+
     def makeSettingsPage(self):
         page = Screen(name='Settings')
 
         layout = BoxLayout(orientation='vertical', spacing=10)
         page.add_widget(layout)
-        label = Label(size_hint=(1, 6), halign="center", valign="top",
+        label = Label(size_hint=(1, 6), halign="center", 
                       text='HardlineP2P Settings')
         layout.add_widget(label)
 
@@ -227,6 +195,13 @@ class ServiceApp(MDApp):
         btn1.bind(on_press=self.goToLocalServices)
         layout.add_widget(btn1)
         layout.add_widget(label1)
+
+        btn = Button(text='Global Settings',
+                      size_hint=(1, None), font_size="14sp")
+       
+        btn.bind(on_press=self.goToGlobalSettings)
+        layout.add_widget(btn)
+
 
         # Start/Stop
         btn3 = Button(text='Stop', size_hint=(1, None), font_size="14sp")
@@ -302,7 +277,7 @@ class ServiceApp(MDApp):
 
         try:
             import hardline
-            s = hardline.listServices(hardline.user_services_dir)
+            s = hardline.listServices(None)
             time.sleep(0.5)
             for i in s:
                 self.localServicesListBox.add_widget(
@@ -363,7 +338,7 @@ class ServiceApp(MDApp):
         def save(*a):
             print("SAVE BUTTON WAS PRESSED")
             #On android this is the bg service's job
-            hardline.makeUserService(hardline.user_services_dir, name, c['Info'].get("title", 'Untitled'), service=c['Service'].get("service", ""),
+            hardline.makeUserService(None, name, c['Info'].get("title", 'Untitled'), service=c['Service'].get("service", ""),
                                  port=c['Service'].get("port", ""), cacheInfo=c['Cache'],noStart=(platform == 'android'))
             if platform == 'android':
                 self.stop_service()
@@ -374,7 +349,7 @@ class ServiceApp(MDApp):
         def delete(*a):
             def f(n):
                 if n and n == name:
-                    hardline.delUserService(hardline.user_services_dir, n)
+                    hardline.delUserService(None, n)
                     if platform == 'android':
                         self.stop_service()
                         self.start_service()
@@ -539,30 +514,7 @@ class ServiceApp(MDApp):
         Label(text="ID: "+info['hash'], font_size="14sp",size_hint=(1, None)))
 
 
-    def openInBrowser(self, link):
-        "Opens a link in the browser"
-        if platform == 'android':
-            from jnius import autoclass, cast
-            # import the needed Java class
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            Intent = autoclass('android.content.Intent')
-            Uri = autoclass('android.net.Uri')
 
-            # create the intent
-            intent = Intent()
-            intent.setAction(Intent.ACTION_VIEW)
-            intent.setData(Uri.parse(link))
-
-            # PythonActivity.mActivity is the instance of the current Activity
-            # BUT, startActivity is a method from the Activity class, not from our
-            # PythonActivity.
-            # We need to cast our class into an activity and use it
-            currentActivity = cast(
-                'android.app.Activity', PythonActivity.mActivity)
-            currentActivity.startActivity(intent)
-        else:
-            import webbrowser
-            webbrowser.open(link)
 
 
 if __name__ == '__main__':
