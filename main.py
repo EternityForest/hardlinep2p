@@ -147,7 +147,7 @@ class ServiceApp(MDApp):
         self.dialog.open()
 
 
-    def settingButton(self, configObj, section, key):
+    def settingButton(self, configObj, section, key,default=''):
         "Return a button representing a setting in a configparser obj which you can press to edit."
 
         try:
@@ -155,7 +155,9 @@ class ServiceApp(MDApp):
         except:
             pass
 
-        x = MDFlatButton(text=key+":"+configObj[section].get(key, "")[:25])
+        configObj[section][key]= configObj[section].get(key,default) or default
+
+        x = MDFlatButton(text=key+":"+configObj[section].get(key, "")[:25], font_size="18sp")
 
         def f(*a):
             def g(r):
@@ -179,7 +181,7 @@ class ServiceApp(MDApp):
         layout.add_widget(label)
 
         btn1 = Button(text='Discover Services',
-                      size_hint=(1, None), font_size="20sp")
+                      size_hint=(1, None), font_size="14sp")
         label2 = Label(size_hint=(1, None), halign="center",
                        text='Find Hardline sites on your local network')
 
@@ -188,7 +190,7 @@ class ServiceApp(MDApp):
         layout.add_widget(label2)
 
         btn5 = Button(text='Settings+Tools',
-                      size_hint=(1, None), font_size="20sp")
+                      size_hint=(1, None), font_size="14sp")
 
         btn5.bind(on_press=self.goToSettings)
 
@@ -209,7 +211,7 @@ class ServiceApp(MDApp):
         layout.add_widget(label)
 
         btn = Button(text='Back to main page',
-                      size_hint=(1, None), font_size="20sp")
+                      size_hint=(1, None), font_size="14sp")
     
         def goMain(*a):
             self.screenManager.current = "Main"
@@ -218,7 +220,7 @@ class ServiceApp(MDApp):
 
 
         btn1 = Button(text='Local Services',
-                      size_hint=(1, None), font_size="20sp")
+                      size_hint=(1, None), font_size="14sp")
         label1 = Label(size_hint=(1, None), halign="center",
                        text='Share a local webservice with the world')
 
@@ -227,7 +229,7 @@ class ServiceApp(MDApp):
         layout.add_widget(label1)
 
         # Start/Stop
-        btn3 = Button(text='Stop', size_hint=(1, None), font_size="22sp")
+        btn3 = Button(text='Stop', size_hint=(1, None), font_size="14sp")
         btn3.bind(on_press=self.stop_service)
         label3 = Label(size_hint=(1, None), halign="center",
                        text='Stop the background process.  It must be running to acess hardline sites.  Starting may take a few seconds.')
@@ -235,7 +237,7 @@ class ServiceApp(MDApp):
         layout.add_widget(label3)
 
         btn4 = Button(text='Start or Restart.',
-                      size_hint=(1, None), font_size="20sp")
+                      size_hint=(1, None), font_size="14sp")
         btn4.bind(on_press=self.start_service)
         label4 = Label(size_hint=(1, None), halign="center",
                        text='Restart the process. It will show in your notifications.')
@@ -253,7 +255,7 @@ class ServiceApp(MDApp):
         screen.add_widget(layout)
 
         btn1 = Button(text='Back to main page',
-                      size_hint=(1, None), font_size="20sp")
+                      size_hint=(1, None), font_size="14sp")
 
         label = Label(size_hint=(1, None), halign="center",
                       text='WARNING: Running a local service may use a lot of data and battery.\nChanges may require service restart.')
@@ -269,7 +271,7 @@ class ServiceApp(MDApp):
         layout.add_widget(labelw)
 
         btn2 = Button(text='Create a service',
-                      size_hint=(1, None), font_size="20sp")
+                      size_hint=(1, None), font_size="14sp")
 
         btn2.bind(on_press=self.promptAddService)
         layout.add_widget(btn2)
@@ -321,7 +323,7 @@ class ServiceApp(MDApp):
         self.localServiceEditorName = Label(size_hint=(
             1, None), halign="center", text="??????????")
         btn1 = Button(text='Back to main page',
-                      size_hint=(1, None), font_size="20sp")
+                      size_hint=(1, None), font_size="14sp")
 
         def goMain(*a):
             self.screenManager.current = "Main"
@@ -380,6 +382,10 @@ class ServiceApp(MDApp):
 
             self.askQuestion("Really delete?", name, f)
 
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="24sp",
+                       text='Service'))
+
+
         self.localServiceEditPanel.add_widget(
             self.settingButton(c, "Service", "service"))
         self.localServiceEditPanel.add_widget(
@@ -387,8 +393,11 @@ class ServiceApp(MDApp):
         self.localServiceEditPanel.add_widget(
             self.settingButton(c, "Info", "title"))
 
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
-                       text='Cache Settings(Cache mode only works for static content)'))
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="24sp",
+                       text='Cache'))
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), font_size="14sp",
+                       text='Cache mode only works for static content'))
+
 
         self.localServiceEditPanel.add_widget(
             self.settingButton(c, "Cache", "directory"))
@@ -396,44 +405,56 @@ class ServiceApp(MDApp):
         self.localServiceEditPanel.add_widget(
             self.settingButton(c, "Cache", "maxAge"))
 
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), font_size="14sp",
                        text='Try to refresh after maxAge seconds(default 1 week)'))
 
         self.localServiceEditPanel.add_widget(
-            self.settingButton(c, "Cache", "maxSize"))
+            self.settingButton(c, "Cache", "maxSize",'256'))
 
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
-                       text='Max size to use for the cache(default 256MB)'))
-
-        self.localServiceEditPanel.add_widget(
-            self.settingButton(c, "Cache", "downloadRateLimit"))
-
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
-                       text='Max MB per hour to download(Default: 1200)'))
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
+                       text='Max size to use for the cache in MB'))
 
         self.localServiceEditPanel.add_widget(
-            self.settingButton(c, "Cache", "dynamicContent"))
+            self.settingButton(c, "Cache", "downloadRateLimit",'1200'))
 
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
+                       text='Max MB per hour to download'))
+
+        self.localServiceEditPanel.add_widget(
+            self.settingButton(c, "Cache", "dynamicContent",'no'))
+
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
                        text='Allow executing code in protected @mako files in the cache dir. yes to enable. Do not use with untrusted @mako'))
 
         self.localServiceEditPanel.add_widget(
-            self.settingButton(c, "Cache", "allowListing"))
+            self.settingButton(c, "Cache", "allowListing",'no'))
 
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
-                       text='Allow directory listing'))
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
+                       text='Allow directory listing of cached content'))
 
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
                        text='Directory names are subfolders within the HardlineP2P cache folder,\nand can also be used to share\nstatic files by leaving the service blank.'))    
 
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="24sp",
+                       text='Access Settings'))
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
+                       text='Cache mode only works for static content'))
+
+        self.localServiceEditPanel.add_widget(
+            self.settingButton(c, "Access", "useDHT",'yes'))
+
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), font_size="14sp",
+                       text='DHT Discovery uses a proxy server on Android. \nDisabling this saves bandwidth but makes access from outside your network\nunreliable.'))
+
+
         btn1 = Button(text='Save Changes',
-                      size_hint=(1, None), font_size="20sp")
+                      size_hint=(1, None), font_size="14sp")
 
         btn1.bind(on_press=save)
         self.localServiceEditPanel.add_widget(btn1)
 
         btn2 = Button(text='Delete this service',
-                      size_hint=(1, None), font_size="20sp")
+                      size_hint=(1, None), font_size="14sp")
 
         btn2.bind(on_press=delete)
         self.localServiceEditPanel.add_widget(btn2)
@@ -444,7 +465,7 @@ class ServiceApp(MDApp):
         "Make a button that, when pressed, edits the local service in the title"
 
         btn = Button(text=name,
-                     font_size="26sp", size_hint=(1, None))
+                     font_size="14", size_hint=(1, None))
 
         def f(*a):
             self.editLocalService(name, c)
@@ -463,7 +484,7 @@ class ServiceApp(MDApp):
         screen.add_widget(layout)
 
         btn1 = Button(text='Back to main page',
-                      size_hint=(1, None), font_size="20sp")
+                      size_hint=(1, None), font_size="16sp")
         label = Label(size_hint=(1, None), halign="center",
                       text='Browsing your local network.\nWarning: anyone on your network\ncan advertise a site with any title they want.')
 

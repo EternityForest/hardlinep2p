@@ -132,6 +132,11 @@ downloadRateLimit=1200
 #The template has access to variable:
 #path, the str path,  __file__, the absolute location of the template file
 dynamicContent=no
+
+[Access]
+#Set this to "no" to prevent publishing this service to the global DHT.
+#This saves bandwidth but makes accessing the service unreliable outside your local network.
+useDHT=yes
 ```
 
 #### --p2pport

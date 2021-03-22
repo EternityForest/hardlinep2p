@@ -147,7 +147,7 @@ class LPDPeer():
 
         title = info.get('title', '')
 
-        if addr:
+        if not addr:
             if self.lastAdvertised.get(hash, 0) > time.time()+10:
                 return
             self.lastAdvertised[hash] = time.time()
@@ -190,6 +190,26 @@ class LPDPeer():
         del self.activeHashes[hash] 
         del self.activeHashes[doublehash] 
         
+    
+    def calcRollingCode(hash):
+         # Password isn't part of discovery at all
+        hash = hash.split("-")[-1]
+
+        # Use double hashes for lookups, because we might be doing a lookup in public on someone eles's wifi
+        h = bytes.fromhex(hash)
+        
+        #New clients use the rolling code method.  This is so that whenever you are on a public network that is not
+        #the same network as the server, we don't reveal much information about what sites we are looking for,
+        #which would allow fingerprinting based tracking.
+
+        #This limits your trackability time because the code changes.
+
+        #Note that because of traffic sniffing of the actual server connection, this is basically meaningless
+        #Except for on networks with isolation between clients and where the attacker is not the network operator.
+        #It's really just a slight bit of protection done opportinistically because it is so easy to implement.
+        timePeriod = struct.pack("<Q",int(time.time()/(3600*24)))
+        return blake2b(h+timePeriod, encoder=nacl.encoding.RawEncoder())[:20].hex().lower()
+
     def search(self, hash,n=1):
         # Not BT LPD compatible!! Use advertise for both searching and announcing
 
@@ -197,24 +217,11 @@ class LPDPeer():
         rollingCode = ''
         if hash:
 
+            rollingCode =self.calcRollingCode(hash)
             # Password isn't part of discovery at all
             hash = hash.split("-")[-1]
 
-            # Use double hashes for lookups, because we might be doing a lookup in public on someone eles's wifi
-            h = bytes.fromhex(hash)
-            
-            #New clients use the rolling code method.  This is so that whenever you are on a public network that is not
-            #the same network as the server, we don't reveal much information about what sites we are looking for,
-            #which would allow fingerprinting based tracking.
-
-            #This limits your trackability time because the code changes.
-
-            #Note that because of traffic sniffing of the actual server connection, this is basically meaningless
-            #Except for on networks with isolation between clients and where the attacker is not the network operator.
-            #It's really just a slight bit of protection done opportinistically because it is so easy to implement.
-            timePeriod = struct.pack("<Q",int(time.time()/(3600*24)))
-            rollingCode = blake2b(h+timePeriod, encoder=nacl.encoding.RawEncoder())[:20].hex().lower()
-
+    
         if not self.msock:
             self.connect()
 

@@ -54,41 +54,25 @@ def createWifiChecker():
     if kivy.utils.platform != 'android':
         return alwaysTrue
 
-    #from plyer import battery
- 
-    # from jnius import autoclass,cast
+    from plyer import battery
 
-    # activity = autoclass('org.kivy.android.PythonActivity').mActivity or autoclass('org.kivy.android.PythonService').mService
-    # ConnectivityManager = autoclass('android.net.ConnectivityManager')
-    # context = cast('android.content.Context', activity)
 
     def check_wifi():
-        #Hack because I have not been able to make this work
-        return True
-
-        # con_mgr = activity.getSystemService(context.CONNECTIVITY_SERVICE)
-        # conn = con_mgr.getNetworkInfo(ConnectivityManager.TYPE_WIFI).isConnected()
-        # if conn:
-        #     return 1
-
-        # conn = con_mgr.getNetworkInfo(ConnectivityManager.TYPE_ETHERNET).isConnected()
-        # if conn:
-        #     return 1
+        return 1
 
     def check_connectivity():
-        return True 
-        # if battery.status['isCharging'] or battery.status['percentage'] > 30:
-        #     return check_wifi()
-        # else:
-        #     return False
+        if battery.status['isCharging'] or battery.status['percentage'] > 30:
+            return check_wifi()
+        else:
+            return False
 
     return check_connectivity()
 
 
-lanStat = [0]
+
 
 isOnLan = createWifiChecker()
-
+lanStat = [isOnLan()]
 
 P2P_PORT = 7009
 
@@ -380,7 +364,7 @@ def cleanDiscoveries():
 
 
 def getDiscoveryCacheFor(key):
-    "this function is not perfectlu threadsafe and may very rarely fail, that's fine for now, it's still way more reliable than the network itself."
+    "this function is not perfectly threadsafe and may very rarely fail, that's fine for now, it's still way more reliable than the network itself."
     if not key in discoveries:
         with discoveriesLock:
             discoveries[key] = DiscoveryCache(key)
@@ -453,12 +437,12 @@ connections = weakref.WeakValueDictionary()
 
 
 class Service():
-    def __init__(self, cert, destination, port, info={'title': ''}, friendlyName=None, cacheSettings={}):
+    def __init__(self, cert, destination, port, info={'title': ''}, friendlyName=None, cacheSettings={},useDHT=True):
         self.certfile = cert
         self.dest = destination+":"+str(port)
 
         self.closed = False
-
+        self.useDHT =useDHT
         # This is a name we use in GUI service listings for display
         self.friendlyName = friendlyName
         # #Used for tracking who we have directly connected to on the lan.
@@ -545,20 +529,25 @@ class Service():
         self.lpd.unregister(self.password+"-" +
                             self.keyhash.hex())
 
-    def dhtPublish(self, node):
+    def dhtPublish(self):
         # Publish this service to the DHT for WAN discovery.
+
+        if not self.useDHT:
+            return
+
+        tryDHTConnect()
 
         timePeriod = struct.pack("<Q", int(time.time()/(3600*24)))
         rollingCode = blake2b(self.keyhash+timePeriod,
                               encoder=nacl.encoding.RawEncoder())[:20]
 
         # We never actually know if this will be available on the platform or not
-        if node:
+        if dhtContainer[0]:
             try:
                 import opendht as dht
 
                 with dhtlock:
-                    node.put(dht.InfoHash.get(rollingCode.hex()),
+                    dhtContainer[0].put(dht.InfoHash.get(rollingCode.hex()),
                              dht.Value(getWanHostsString().encode()))
             except Exception:
                 print("Could not use local DHT node")
@@ -596,8 +585,9 @@ class Service():
             certfile=self.certfile, keyfile=self.certfile+".private")
         sock.context = p2p_server_context
 
-    def handleConnectionReady(self, sock):
+    def handleConnectionReady(self, sock, addr):
         def f():
+
             conn = socket.socket(socket.AF_INET)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 5)
@@ -945,7 +935,7 @@ def handleClient(sock):
     server_thread(sock)
 
 
-def handleP2PClient(sock):
+def handleP2PClient(sock,addr):
     def f():
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 5)
@@ -963,7 +953,7 @@ def handleP2PClient(sock):
         conn = p2p_server_context.wrap_socket(sock, server_side=True)
 
         # handleP2PClientHello put the name in the list
-        services[l[0]].handleConnectionReady(conn)
+        services[l[0]].handleConnectionReady(conn,addr)
 
     threading.Thread(target=f, daemon=True).start()
 
@@ -1021,7 +1011,7 @@ def taskloop():
         try:
             for i in services:
                 if lanStat[0]:
-                    services[i].dhtPublish(dhtContainer[0])
+                    services[i].dhtPublish()
         except:
             print(traceback.format_exc())
 
@@ -1044,6 +1034,35 @@ def stop():
 
 cached_localport = 7008
 
+
+lastTriedDHTConnect = [0]
+
+def tryDHTConnect():
+    # Start the d.   Node that we would really like to avoid actually having to use this,
+    # So although we publish to it, we try local discovery and the local cache first.
+
+    if lastTriedDHTConnect[0] > (time.time()- 10*60):
+        return
+
+    if dhtContainer[0]:
+        return
+    try:
+        import opendht as dht
+    except:
+        dht = None
+        print("Unable to import openDHT.  If you would like to use this feature, install dhtnode if you are on debian.")
+
+    if dht:
+        try:
+            node = dht.DhtRunner()
+            node.run()
+
+            # Join the network through any running node,
+            # here using a known bootstrap node.
+            node.bootstrap("bootstrap.jami.net", "4222")
+            dhtContainer[0] = node
+        except:
+            print(traceback.format_exc())
 
 def start(localport=None):
     global  portMapping, running, exited, cached_localport
@@ -1138,22 +1157,7 @@ def start(localport=None):
     if services:
         from . import upnpwrapper
 
-        # Start the d.   Node that we would really like to avoid actually having to use this,
-        # So although we publish to it, we try local discovery and the local cache first.
-        try:
-            import opendht as dht
-        except:
-            dht = None
-            print("Unable to import openDHT.  If you would like to use this feature, install dhtnode if you are on debian.")
 
-        if dht:
-            node = dht.DhtRunner()
-            node.run()
-
-            # Join the network through any running node,
-            # here using a known bootstrap node.
-            node.bootstrap("bootstrap.jami.net", "4222")
-            dhtContainer[0] = node
 
         # Only daemons exposing a service need a WAN mapping
         t = threading.Thread(target=taskloop, daemon=True)
@@ -1204,7 +1208,8 @@ def start(localport=None):
                     handleClient(i.accept()[0])
                 else:
                     if services:
-                        handleP2PClient(i.accept()[0])
+                        x = i.accept()
+                        handleP2PClient(x[0],x[1])
                     else:
                         i.accept()[0].close()
         except:
@@ -1266,6 +1271,13 @@ def loadUserServices(serviceDir, only=None):
                 else:
                     cache = {}
 
+                
+                if "Access" in config.sections():
+                    access = config['Access']
+                else:
+                    access = {}
+
+
                 service = config['Service']
 
                 # Close any existing service by that same friendly local name
@@ -1275,9 +1287,12 @@ def loadUserServices(serviceDir, only=None):
                 if service.get('certfile',''):
                     certFile=service['certfile']
                 print("Loading Service")
+
+                useDHT = (access.get("useDHT",'yes') or 'yes').lower() in ('yes','true','enable','on')
+
                 # Take friendly name from filename
                 s = Service(certFile, service['service'], int(
-                    service.get('port', '80') or 80), {'title': title}, friendlyName=i[:-4], cacheSettings=cache)
+                    service.get('port', '80') or 80), {'title': title}, friendlyName=i[:-4], cacheSettings=cache, useDHT=useDHT)
                 print("Serving a service from "+service['service'])
 
                 userServices[i] = s
