@@ -27,7 +27,8 @@ import sys
 
 from hardline import makeUserDatabase, uihelpers, drayerdb
 
-class ServiceApp(MDApp,uihelpers.AppHelpers):
+
+class ServiceApp(MDApp, uihelpers.AppHelpers):
 
     def stop_service(self, foo=None):
         if self.service:
@@ -54,6 +55,8 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
                 hardline.stop()
 
                 loadedServices = hardline.loadUserServices(
+                    None)
+                db = hardline.loadUserDatabases(
                     None)
                 hardline.start(7009)
                 # Unload them at exit because we will be loading them again on restart
@@ -84,17 +87,14 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
         self.screenManager = sm
         return sm
 
-   
-
     def makeMainScreen(self):
         mainScreen = Screen(name='Main')
 
         layout = BoxLayout(orientation='vertical', spacing=10)
         mainScreen.add_widget(layout)
-        label = Label(size_hint=(1, 6), halign="center", 
+        label = Label(size_hint=(1, 6), halign="center",
                       text='HardlineP2P: The open source way to find\n and connect to servers\nwith no fees or registration')
         layout.add_widget(label)
-
 
         btn1 = Button(text='My Streams',
                       size_hint=(1, None), font_size="14sp")
@@ -126,34 +126,35 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
     def goToSettings(self, *a):
         self.screenManager.current = "Settings"
 
-
-    def goToGlobalSettings(self,*a):
+    def goToGlobalSettings(self, *a):
         globalConfig = configparser.ConfigParser()
         globalConfig.read(hardline.globalSettingsPath)
         self.localSettingsBox.clear_widgets()
 
-        self.localSettingsBox.add_widget(Label(size_hint=(1, 6), halign="center", 
-                      text='OpenDHT Proxies'))
+        self.localSettingsBox.add_widget(Label(size_hint=(1, 6), halign="center",
+                                               text='OpenDHT Proxies'))
         self.localSettingsBox.add_widget(Label(size_hint=(1, None),
-                      text='Proxies are tried in order from 1-3'))
+                                               text='Proxies are tried in order from 1-3'))
 
-        self.localSettingsBox.add_widget(self.settingButton(globalConfig,"DHTProxy",'server1'))
-        self.localSettingsBox.add_widget(self.settingButton(globalConfig,"DHTProxy",'server2'))
-        self.localSettingsBox.add_widget(self.settingButton(globalConfig,"DHTProxy",'server3'))
+        self.localSettingsBox.add_widget(
+            self.settingButton(globalConfig, "DHTProxy", 'server1'))
+        self.localSettingsBox.add_widget(
+            self.settingButton(globalConfig, "DHTProxy", 'server2'))
+        self.localSettingsBox.add_widget(
+            self.settingButton(globalConfig, "DHTProxy", 'server3'))
 
         btn1 = Button(text='Save',
-                size_hint=(1, None), font_size="14sp")
+                      size_hint=(1, None), font_size="14sp")
 
         def save(*a):
-            with open(hardline.globalSettingsPath,'w') as f:
+            with open(hardline.globalSettingsPath, 'w') as f:
                 globalConfig.write(f)
-                
+
             self.screenManager.current = "Main"
 
         btn1.bind(on_press=save)
         self.localSettingsBox.add_widget(btn1)
-        self.screenManager.current="GlobalSettings"
-
+        self.screenManager.current = "GlobalSettings"
 
     def makeGlobalSettingsPage(self):
 
@@ -163,6 +164,7 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
 
         btn1 = Button(text='Back to main page',
                       size_hint=(1, None), font_size="14sp")
+
         def goMain(*a):
             self.screenManager.current = "Main"
         btn1.bind(on_press=goMain)
@@ -170,7 +172,7 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
 
         self.localSettingsScroll = ScrollView(size_hint=(1, 1))
         self.localSettingsBox = BoxLayout(
-            orientation='vertical', size_hint=(1, None),spacing=10)
+            orientation='vertical', size_hint=(1, None), spacing=10)
         self.localSettingsBox.bind(
             minimum_height=self.localSettingsBox.setter('height'))
 
@@ -180,24 +182,22 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
 
         return screen
 
-
     def makeSettingsPage(self):
         page = Screen(name='Settings')
 
         layout = BoxLayout(orientation='vertical', spacing=10)
         page.add_widget(layout)
-        label = Label(size_hint=(1, 6), halign="center", 
+        label = Label(size_hint=(1, 6), halign="center",
                       text='HardlineP2P Settings')
         layout.add_widget(label)
 
         btn = Button(text='Back to main page',
-                      size_hint=(1, None), font_size="14sp")
-    
+                     size_hint=(1, None), font_size="14sp")
+
         def goMain(*a):
             self.screenManager.current = "Main"
         btn.bind(on_press=goMain)
         layout.add_widget(btn)
-
 
         btn1 = Button(text='Local Services',
                       size_hint=(1, None), font_size="14sp")
@@ -209,11 +209,10 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
         layout.add_widget(label1)
 
         btn = Button(text='Global Settings',
-                      size_hint=(1, None), font_size="14sp")
-       
+                     size_hint=(1, None), font_size="14sp")
+
         btn.bind(on_press=self.goToGlobalSettings)
         layout.add_widget(btn)
-
 
         # Start/Stop
         btn3 = Button(text='Stop', size_hint=(1, None), font_size="14sp")
@@ -257,7 +256,7 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
         self.streamsListBoxScroll = ScrollView(size_hint=(1, 1))
 
         self.streamsListBox = BoxLayout(
-            orientation='vertical', size_hint=(1, None),spacing=10)
+            orientation='vertical', size_hint=(1, None), spacing=10)
         self.streamsListBox.bind(
             minimum_height=self.streamsListBox.setter('height'))
 
@@ -267,17 +266,16 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
 
         return screen
 
-
     def goToStreams(self, *a):
         "Go to a page wherein we can list user-modifiable services."
-        self.localServicesListBox.clear_widgets()
+        self.streamsListBox.clear_widgets()
 
         try:
             import hardline
             s = hardline.userDatabases
             time.sleep(0.5)
             for i in s:
-                self.localServicesListBox.add_widget(
+                self.streamsListBox.add_widget(
                     self.makeButtonForStream(i))
 
         except Exception:
@@ -299,27 +297,20 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
     def promptAddStream(self, *a, **k):
         def f(v):
             if v:
-                hardline.makeUserDatabase(None,v)
+                hardline.makeUserDatabase(None, v)
                 self.editStream(v)
-                
+
         self.askQuestion("New Stream Name?", cb=f)
 
     def makeStreamEditPage(self):
+        "Prettu much just an empty page filled in by the specific goto functions"
 
         screen = Screen(name='EditStream')
         self.servicesScreen = screen
 
         layout = BoxLayout(orientation='vertical', spacing=10)
         screen.add_widget(layout)
-        self.streamEditorName = Label(size_hint=(
-            1, None), halign="center", text="??????????")
-        btn1 = Button(text='Back to main page',
-                      size_hint=(1, None), font_size="14sp")
 
-        def goMain(*a):
-            self.screenManager.current = "Main"
-        btn1.bind(on_press=goMain)
-        layout.add_widget(btn1)
 
         self.streamEditPanelScroll = ScrollView(size_hint=(1, 1))
 
@@ -335,6 +326,48 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
         return screen
 
 
+
+    def gotoStreamPosts(self, stream):
+        self.streamEditPanel.clear_widgets()
+        self.streamEditPanel.add_widget(Label(size_hint=(
+            1, None), halign="center", text=stream))
+
+
+
+        def back(*a):
+            self.editStream(stream)
+        btn1 = Button(text='Back',
+                size_hint=(1, None), font_size="14sp")
+
+        btn1.bind(on_press=back)
+        self.streamEditPanel.add_widget(btn1)
+
+
+        newp = MDTextField(text='')
+
+        def post(*a):
+            if newp.text:
+                with hardline.userDatabases[stream]:
+                    hardline.userDatabases[stream].setDocument({'body': newp.text,'type':'post'})
+                self.gotoStreamPosts(stream)
+
+        btn1 = Button(text='Post!',
+                      size_hint=(1, None), font_size="14sp")
+        btn1.bind(on_release=post)
+
+        self.streamEditPanel.add_widget(newp)
+        self.streamEditPanel.add_widget(btn1)
+
+        s = hardline.userDatabases[stream]
+        p = s.getDocumentsByType("post")
+        for i in p:
+            self.streamEditPanel.add_widget(Label(text=i.get('body',"?????"), size_hint=(1,None)))
+        self.screenManager.current = "EditStream"
+
+
+
+    #Reuse the same panel for editStream, the main hub for accessing the stream,
+    #and it's core settings
     def editStream(self, name):
         db = hardline.userDatabases[name]
         c = db.config
@@ -349,50 +382,102 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
 
         self.streamEditPanel.clear_widgets()
 
-        self.streamEditorName.text = name
+        self.streamEditPanel.add_widget(Label(size_hint=(
+            1, None), halign="center", text=name))
+
+        btn1 = Button(text='Back',
+                      size_hint=(1, None), font_size="14sp")
+
+        btn1.bind(on_press=self.goToStreams)
+        self.streamEditPanel.add_widget(btn1)
+
+
+        btn2 = Button(text='View Feed',
+                size_hint=(1, None), font_size="14sp")
+        def goPosts(*a):
+            self.gotoStreamPosts(name)
+        btn2.bind(on_press=goPosts)
+        self.streamEditPanel.add_widget(btn2)
+
+
+
+        btn2 = Button(text='Stream Settings',
+                size_hint=(1, None), font_size="14sp")
+        def goSettings(*a):
+            self.editStreamSettings(name)
+        btn2.bind(on_press=goSettings)
+        self.streamEditPanel.add_widget(btn2)
+
+
+        self.screenManager.current = "EditStream"
+
+    def editStreamSettings(self, name):
+        db = hardline.userDatabases[name]
+        c = db.config
+        try:
+            c.add_section("Service")
+        except:
+            pass
+        try:
+            c.add_section("Info")
+        except:
+            pass
+
+        self.streamEditPanel.clear_widgets()
+
+        self.streamEditPanel.add_widget(Label(size_hint=(
+            1, None), halign="center", text=name))
+
+        def back(*a):
+            self.editStream(name)
+        btn1 = Button(text='Back',
+                size_hint=(1, None), font_size="14sp")
+
+        btn1.bind(on_press=back)
+        self.streamEditPanel.add_widget(btn1)
+
+      
 
         def save(*a):
             print("SAVE BUTTON WAS PRESSED")
-            #On android this is the bg service's job
+            # On android this is the bg service's job
             db.saveConfig()
-            
+
             if platform == 'android':
                 self.stop_service()
                 self.start_service()
 
-
         def delete(*a):
             def f(n):
                 if n and n == name:
-                    hardline.delUserDatabase(None, n)
+                    hardline.delDatabase(None, n)
                     if platform == 'android':
                         self.stop_service()
                         self.start_service()
-                    self.goToServices()
+                    self.goToStreams()
 
             self.askQuestion("Really delete?", name, f)
 
         self.streamEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="24sp",
-                    text='Service'))
-
+                                              text='Service'))
 
         self.streamEditPanel.add_widget(
             self.settingButton(c, "Sync", "syncKey"))
 
         self.streamEditPanel.add_widget(
             self.settingButton(c, "Sync", "writePassword"))
-        
+
         self.streamEditPanel.add_widget(
             self.settingButton(c, "Sync", "server"))
 
         btn1 = Button(text='Save Changes',
-                    size_hint=(1, None), font_size="14sp")
+                      size_hint=(1, None), font_size="14sp")
 
         btn1.bind(on_press=save)
         self.streamEditPanel.add_widget(btn1)
 
         btn2 = Button(text='Delete this stream',
-                    size_hint=(1, None), font_size="14sp")
+                      size_hint=(1, None), font_size="14sp")
 
         btn2.bind(on_press=delete)
         self.streamEditPanel.add_widget(btn2)
@@ -416,7 +501,8 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
                       text='WARNING: Running a local service may use a lot of data and battery.\nChanges may require service restart.')
 
         labelw = Label(size_hint=(1, None), halign="center",
-                      text='WARNING 2: This app currently prefers the external SD card for almost everything including the keys.')
+                       text='WARNING 2: This app currently prefers the external SD card for almost everything including the keys.')
+
         def goMain(*a):
             self.screenManager.current = "Main"
         btn1.bind(on_press=goMain)
@@ -434,7 +520,7 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
         self.localServicesListBoxScroll = ScrollView(size_hint=(1, 1))
 
         self.localServicesListBox = BoxLayout(
-            orientation='vertical', size_hint=(1, None),spacing=10)
+            orientation='vertical', size_hint=(1, None), spacing=10)
         self.localServicesListBox.bind(
             minimum_height=self.localServicesListBox.setter('height'))
 
@@ -517,9 +603,9 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
 
         def save(*a):
             print("SAVE BUTTON WAS PRESSED")
-            #On android this is the bg service's job
+            # On android this is the bg service's job
             hardline.makeUserService(None, name, c['Info'].get("title", 'Untitled'), service=c['Service'].get("service", ""),
-                                 port=c['Service'].get("port", ""), cacheInfo=c['Cache'],noStart=(platform == 'android'))
+                                     port=c['Service'].get("port", ""), cacheInfo=c['Cache'], noStart=(platform == 'android'))
             if platform == 'android':
                 self.stop_service()
                 self.start_service()
@@ -538,8 +624,7 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
             self.askQuestion("Really delete?", name, f)
 
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="24sp",
-                       text='Service'))
-
+                                                    text='Service'))
 
         self.localServiceEditPanel.add_widget(
             self.settingButton(c, "Service", "service"))
@@ -549,10 +634,9 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
             self.settingButton(c, "Info", "title"))
 
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="24sp",
-                       text='Cache'))
+                                                    text='Cache'))
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), font_size="14sp",
-                       text='Cache mode only works for static content'))
-
+                                                    text='Cache mode only works for static content'))
 
         self.localServiceEditPanel.add_widget(
             self.settingButton(c, "Cache", "directory"))
@@ -561,46 +645,45 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
             self.settingButton(c, "Cache", "maxAge"))
 
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), font_size="14sp",
-                       text='Try to refresh after maxAge seconds(default 1 week)'))
+                                                    text='Try to refresh after maxAge seconds(default 1 week)'))
 
         self.localServiceEditPanel.add_widget(
-            self.settingButton(c, "Cache", "maxSize",'256'))
+            self.settingButton(c, "Cache", "maxSize", '256'))
 
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
-                       text='Max size to use for the cache in MB'))
+                                                    text='Max size to use for the cache in MB'))
 
         self.localServiceEditPanel.add_widget(
-            self.settingButton(c, "Cache", "downloadRateLimit",'1200'))
+            self.settingButton(c, "Cache", "downloadRateLimit", '1200'))
 
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
-                       text='Max MB per hour to download'))
+                                                    text='Max MB per hour to download'))
 
         self.localServiceEditPanel.add_widget(
-            self.settingButton(c, "Cache", "dynamicContent",'no'))
+            self.settingButton(c, "Cache", "dynamicContent", 'no'))
 
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
-                       text='Allow executing code in protected @mako files in the cache dir. yes to enable. Do not use with untrusted @mako'))
+                                                    text='Allow executing code in protected @mako files in the cache dir. yes to enable. Do not use with untrusted @mako'))
 
         self.localServiceEditPanel.add_widget(
-            self.settingButton(c, "Cache", "allowListing",'no'))
+            self.settingButton(c, "Cache", "allowListing", 'no'))
 
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
-                       text='Allow directory listing of cached content'))
+                                                    text='Allow directory listing of cached content'))
 
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
-                       text='Directory names are subfolders within the HardlineP2P cache folder,\nand can also be used to share\nstatic files by leaving the service blank.'))    
+                                                    text='Directory names are subfolders within the HardlineP2P cache folder,\nand can also be used to share\nstatic files by leaving the service blank.'))
 
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="24sp",
-                       text='Access Settings'))
+                                                    text='Access Settings'))
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
-                       text='Cache mode only works for static content'))
+                                                    text='Cache mode only works for static content'))
 
         self.localServiceEditPanel.add_widget(
-            self.settingButton(c, "Access", "useDHT",'yes'))
+            self.settingButton(c, "Access", "useDHT", 'yes'))
 
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), font_size="14sp",
-                       text='DHT Discovery uses a proxy server on Android. \nDisabling this saves bandwidth but makes access from outside your network\nunreliable.'))
-
+                                                    text='DHT Discovery uses a proxy server on Android. \nDisabling this saves bandwidth but makes access from outside your network\nunreliable.'))
 
         btn1 = Button(text='Save Changes',
                       size_hint=(1, None), font_size="14sp")
@@ -668,7 +751,7 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
 
         try:
             import hardline
-            hardline.discoveryPeer.search('',n=5)
+            hardline.discoveryPeer.search('', n=5)
             time.sleep(0.5)
             for i in hardline.getAllDiscoveries():
                 for j in self.makeButtonForPeer(i):
@@ -689,12 +772,9 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
             self.openInBrowser("http://"+info['hash']+".localhost:7009")
         btn.bind(on_press=f)
 
-        return(btn,Label(text="Hosted By: "+info.get("from_ip", ""), font_size="14sp",size_hint=(1, None)),
+        return(btn, Label(text="Hosted By: "+info.get("from_ip", ""), font_size="14sp", size_hint=(1, None)),
 
-        Label(text="ID: "+info['hash'], font_size="14sp",size_hint=(1, None)))
-
-
-
+               Label(text="ID: "+info['hash'], font_size="14sp", size_hint=(1, None)))
 
 
 if __name__ == '__main__':

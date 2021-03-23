@@ -1360,13 +1360,12 @@ def loadUserDatabases(serviceDir, only=None):
             if only:
                 if not i == only+".db":
                     continue
-
             try:
                 userDatabases[i].close()
             except KeyError:
                 pass
             try:
-                userDatabases[i] = drayerdb.DocumentDatabase(i)                
+                userDatabases[i] = drayerdb.DocumentDatabase(os.path.join(serviceDir,i))                
             except:
                 print(traceback.format_exc())
 

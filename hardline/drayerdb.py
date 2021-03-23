@@ -595,15 +595,18 @@ class DocumentDatabase():
         self.threadLocal.conn.commit()
 
     def saveConfig(self):
-        with open(self.filename+".conf", 'w') as configfile:
+        with open(self.filename+".ini", 'w') as configfile:
             self.config.write(configfile)
 
     def __enter__(self):
+        self.dbConnect()
         self.threadLocal.conn.__enter__
         return self
 
     def __exit__(self, *a):
+        self.dbConnect()
         self.threadLocal.conn.__exit__
+
 
         ts = int((time.time())*10**6)
 
@@ -657,9 +660,17 @@ class DocumentDatabase():
         return doc['id']
 
     def getDocumentByID(self, key):
+        self.dbConnect()
         cur = self.threadLocal.conn.cursor()
         cur.execute(
             "SELECT json from document WHERE json_extract(json,'$.id')=?", (key,))
         x = cur.fetchone()
         if x:
-            return x[0]
+            return json.loads(x[0])
+
+    def getDocumentsByType(self, key, startPoint=0, limit=100):
+        self.dbConnect()
+        cur = self.threadLocal.conn.cursor()
+        cur.execute(
+            "SELECT json from document WHERE json_extract(json,'$.type')=? AND json_extract(json,'$.time')>? ORDER BY json_extract(json,'$.time') asc LIMIT 100", (key,startPoint))
+        return [json.loads(i[0]) for i in cur]
