@@ -1370,11 +1370,13 @@ def loadUserDatabases(serviceDir, only=None):
             except:
                 print(traceback.format_exc())
 
-def makeUserDatabase(dir, name, conf=None):
+def makeUserDatabase(dir, name):
     dir=dir or directories.drayerDB_root
 
     "Load services from a configuration directory.  Only to  only reload one."
     try:
-        os.makedirs(serviceDir)
+        os.makedirs(dir)
     except:
         pass
+    if not name in userDatabases:
+        userDatabases[name]=drayerdb.DocumentDatabase(os.path.join(dir,name+'.db'))

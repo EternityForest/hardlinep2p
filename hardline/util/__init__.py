@@ -191,7 +191,7 @@ class LPDPeer():
         del self.activeHashes[doublehash] 
         
     
-    def calcRollingCode(hash):
+    def calcRollingCode(self,hash):
          # Password isn't part of discovery at all
         hash = hash.split("-")[-1]
 

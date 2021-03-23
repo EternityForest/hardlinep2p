@@ -25,7 +25,7 @@ import traceback
 import os
 import sys
 
-from hardline import uihelpers
+from hardline import makeUserDatabase, uihelpers, drayerdb
 
 class ServiceApp(MDApp,uihelpers.AppHelpers):
 
@@ -76,6 +76,8 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
         sm.add_widget(self.makeLocalServiceEditPage())
         sm.add_widget(self.makeLocalServicesPage())
         sm.add_widget(self.makeGlobalSettingsPage())
+        sm.add_widget(self.makeStreamsPage())
+        sm.add_widget(self.makeStreamEditPage())
 
         self.theme_cls.primary_palette = "Green"
 
@@ -92,6 +94,16 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
         label = Label(size_hint=(1, 6), halign="center", 
                       text='HardlineP2P: The open source way to find\n and connect to servers\nwith no fees or registration')
         layout.add_widget(label)
+
+
+        btn1 = Button(text='My Streams',
+                      size_hint=(1, None), font_size="14sp")
+        label2 = Label(size_hint=(1, None), halign="center",
+                       text='Notetaking, microblogging, and more!')
+        layout.add_widget(btn1)
+        layout.add_widget(label2)
+
+        btn1.bind(on_press=self.goToStreams)
 
         btn1 = Button(text='Discover Services',
                       size_hint=(1, None), font_size="14sp")
@@ -220,6 +232,174 @@ class ServiceApp(MDApp,uihelpers.AppHelpers):
         layout.add_widget(label4)
 
         return page
+
+    def makeStreamsPage(self):
+        screen = Screen(name='Streams')
+        self.servicesScreen = screen
+
+        layout = BoxLayout(orientation='vertical', spacing=10)
+        screen.add_widget(layout)
+
+        btn1 = Button(text='Back to main page',
+                      size_hint=(1, None), font_size="14sp")
+
+        def goMain(*a):
+            self.screenManager.current = "Main"
+        btn1.bind(on_press=goMain)
+        layout.add_widget(btn1)
+
+        btn2 = Button(text='Create a Stream',
+                      size_hint=(1, None), font_size="14sp")
+
+        btn2.bind(on_press=self.promptAddStream)
+        layout.add_widget(btn2)
+
+        self.streamsListBoxScroll = ScrollView(size_hint=(1, 1))
+
+        self.streamsListBox = BoxLayout(
+            orientation='vertical', size_hint=(1, None),spacing=10)
+        self.streamsListBox.bind(
+            minimum_height=self.streamsListBox.setter('height'))
+
+        self.streamsListBoxScroll.add_widget(self.streamsListBox)
+
+        layout.add_widget(self.streamsListBoxScroll)
+
+        return screen
+
+
+    def goToStreams(self, *a):
+        "Go to a page wherein we can list user-modifiable services."
+        self.localServicesListBox.clear_widgets()
+
+        try:
+            import hardline
+            s = hardline.userDatabases
+            time.sleep(0.5)
+            for i in s:
+                self.localServicesListBox.add_widget(
+                    self.makeButtonForStream(i))
+
+        except Exception:
+            print(traceback.format_exc())
+
+        self.screenManager.current = "Streams"
+
+    def makeButtonForStream(self, name):
+        "Make a button that, when pressed, edits the stream in the title"
+
+        btn = Button(text=name,
+                     font_size="14", size_hint=(1, None))
+
+        def f(*a):
+            self.editStream(name)
+        btn.bind(on_press=f)
+        return btn
+
+    def promptAddStream(self, *a, **k):
+        def f(v):
+            if v:
+                hardline.makeUserDatabase(None,v)
+                self.editStream(v)
+                
+        self.askQuestion("New Stream Name?", cb=f)
+
+    def makeStreamEditPage(self):
+
+        screen = Screen(name='EditStream')
+        self.servicesScreen = screen
+
+        layout = BoxLayout(orientation='vertical', spacing=10)
+        screen.add_widget(layout)
+        self.streamEditorName = Label(size_hint=(
+            1, None), halign="center", text="??????????")
+        btn1 = Button(text='Back to main page',
+                      size_hint=(1, None), font_size="14sp")
+
+        def goMain(*a):
+            self.screenManager.current = "Main"
+        btn1.bind(on_press=goMain)
+        layout.add_widget(btn1)
+
+        self.streamEditPanelScroll = ScrollView(size_hint=(1, 1))
+
+        self.streamEditPanel = BoxLayout(
+            orientation='vertical', size_hint=(1, None))
+        self.streamEditPanel.bind(
+            minimum_height=self.streamEditPanel.setter('height'))
+
+        self.streamEditPanelScroll.add_widget(self.streamEditPanel)
+
+        layout.add_widget(self.streamEditPanelScroll)
+
+        return screen
+
+
+    def editStream(self, name):
+        db = hardline.userDatabases[name]
+        c = db.config
+        try:
+            c.add_section("Service")
+        except:
+            pass
+        try:
+            c.add_section("Info")
+        except:
+            pass
+
+        self.streamEditPanel.clear_widgets()
+
+        self.streamEditorName.text = name
+
+        def save(*a):
+            print("SAVE BUTTON WAS PRESSED")
+            #On android this is the bg service's job
+            db.saveConfig()
+            
+            if platform == 'android':
+                self.stop_service()
+                self.start_service()
+
+
+        def delete(*a):
+            def f(n):
+                if n and n == name:
+                    hardline.delUserDatabase(None, n)
+                    if platform == 'android':
+                        self.stop_service()
+                        self.start_service()
+                    self.goToServices()
+
+            self.askQuestion("Really delete?", name, f)
+
+        self.streamEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="24sp",
+                    text='Service'))
+
+
+        self.streamEditPanel.add_widget(
+            self.settingButton(c, "Sync", "syncKey"))
+
+        self.streamEditPanel.add_widget(
+            self.settingButton(c, "Sync", "writePassword"))
+        
+        self.streamEditPanel.add_widget(
+            self.settingButton(c, "Sync", "server"))
+
+        btn1 = Button(text='Save Changes',
+                    size_hint=(1, None), font_size="14sp")
+
+        btn1.bind(on_press=save)
+        self.streamEditPanel.add_widget(btn1)
+
+        btn2 = Button(text='Delete this stream',
+                    size_hint=(1, None), font_size="14sp")
+
+        btn2.bind(on_press=delete)
+        self.streamEditPanel.add_widget(btn2)
+
+        self.screenManager.current = "EditStream"
+
+
 
     def makeLocalServicesPage(self):
 

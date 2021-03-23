@@ -159,17 +159,7 @@ class DocumentDatabase():
 
         self.dbConnect()
 
-        # If a db is deleted and recreated at the same file path, this means we have a chance of
-        # detecting that in the remote node by making the localNodeVK different.
-
-        # The point of this is to uniquiely identify a DB instance so that we always know what records we have or don't have.
-        self.nodeIDSeed = self.getMeta("nodeIDSeed")
-        if not self.nodeIDSeed:
-            self.nodeIDSeed = os.urandom(24).hex()
-
-        # Deterministically generate a keypair that we will use to sign all correspondance
-        self.localNodeVK, self.localNodeSK = libnacl.crypto_sign_seed_keypair(
-            libnacl.crypto_generichash((os.path.basename(filename)+self.nodeIDSeed()).encode("utf8"), readNodeID()))
+       
 
         self.config = configparser.ConfigParser()
 
@@ -225,6 +215,20 @@ class DocumentDatabase():
             END;
             """
         )
+
+
+        # If a db is deleted and recreated at the same file path, this means we have a chance of
+        # detecting that in the remote node by making the localNodeVK different.
+
+        # The point of this is to uniquiely identify a DB instance so that we always know what records we have or don't have.
+        self.nodeIDSeed = self.getMeta("nodeIDSeed")
+        if not self.nodeIDSeed:
+            self.nodeIDSeed = os.urandom(24).hex()
+
+        # Deterministically generate a keypair that we will use to sign all correspondance
+        self.localNodeVK, self.localNodeSK = libnacl.crypto_sign_seed_keypair(
+            libnacl.crypto_generichash((os.path.basename(filename)+self.nodeIDSeed).encode("utf8"), readNodeID()))
+
 
         if not keypair:
             if 'sync' not in self.config:
