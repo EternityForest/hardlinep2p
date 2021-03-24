@@ -666,11 +666,15 @@ class DocumentDatabase():
             "SELECT json from document WHERE json_extract(json,'$.id')=?", (key,))
         x = cur.fetchone()
         if x:
-            return json.loads(x[0])
+            x= json.loads(x[0])
+            if x.get("type",'')=='null':
+                return None
+            return x
 
     def getDocumentsByType(self, key, startPoint=0, limit=100):
         self.dbConnect()
         cur = self.threadLocal.conn.cursor()
         cur.execute(
-            "SELECT json from document WHERE json_extract(json,'$.type')=? AND json_extract(json,'$.time')>? ORDER BY json_extract(json,'$.time') asc LIMIT 100", (key,startPoint))
-        return [json.loads(i[0]) for i in cur]
+            "SELECT json from document WHERE json_extract(json,'$.type')=? AND json_extract(json,'$.time')>? ORDER BY json_extract(json,'$.time') desc LIMIT 100", (key,startPoint))
+        
+        return list(reversed([i for i in [json.loads(i[0]) for i in cur] if not i.get('type','')=='null']))

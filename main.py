@@ -12,7 +12,9 @@ from kivymd.uix.button import MDFlatButton
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.label import MDLabel as Label
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.textinput import TextInput
 
+from kivymd.uix.card import MDCard
 
 from kivymd.uix.boxlayout import MDBoxLayout as BoxLayout
 import threading
@@ -315,7 +317,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         self.streamEditPanelScroll = ScrollView(size_hint=(1, 1))
 
         self.streamEditPanel = BoxLayout(
-            orientation='vertical', size_hint=(1, None))
+            orientation='vertical',adaptive_height= True )
         self.streamEditPanel.bind(
             minimum_height=self.streamEditPanel.setter('height'))
 
@@ -330,7 +332,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
     def gotoStreamPosts(self, stream):
         self.streamEditPanel.clear_widgets()
         self.streamEditPanel.add_widget(Label(size_hint=(
-            1, None), halign="center", text=stream))
+            1, None), halign="center", text="Posts for "+stream))
 
 
 
@@ -342,28 +344,95 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         btn1.bind(on_press=back)
         self.streamEditPanel.add_widget(btn1)
 
+        newtitle = MDTextField(text='',mode='fill', font_size='22sp')
 
-        newp = MDTextField(text='')
+        newp = MDTextField(text='',mode='rectangle', multiline=True)
 
         def post(*a):
             if newp.text:
                 with hardline.userDatabases[stream]:
-                    hardline.userDatabases[stream].setDocument({'body': newp.text,'type':'post'})
+                    hardline.userDatabases[stream].setDocument({'body': newp.text,'title':newtitle.text,'type':'post'})
+                    hardline.userDatabases[stream].commit()
                 self.gotoStreamPosts(stream)
 
         btn1 = Button(text='Post!',
                       size_hint=(1, None), font_size="14sp")
         btn1.bind(on_release=post)
 
+        self.streamEditPanel.add_widget(newtitle)
+
         self.streamEditPanel.add_widget(newp)
         self.streamEditPanel.add_widget(btn1)
 
         s = hardline.userDatabases[stream]
         p = s.getDocumentsByType("post")
-        for i in p:
-            self.streamEditPanel.add_widget(Label(text=i.get('body',"?????"), size_hint=(1,None)))
+        for i in reversed(p):
+            self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
         self.screenManager.current = "EditStream"
 
+    def makePostWidget(self,stream, post):
+        def f(*a):
+            self.gotoStreamPost(stream,post['id'])
+
+        l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
+        l.add_widget(Button(text=post.get('title',"?????"), size_hint=(1,None), on_release=f))
+        l.add_widget(Label(text=post.get('body',"?????")[:140], size_hint=(1,None), font_size='22sp',halign='left'))
+
+        return l
+
+    def gotoStreamPost(self, stream,postID):
+        "Editor/viewer for ONE specific post"
+        self.streamEditPanel.clear_widgets()
+        self.streamEditPanel.add_widget(Label(size_hint=(
+            1, None), halign="center", text="Editing post in "+stream))
+
+        def back(*a):
+            self.gotoStreamPosts(stream)
+        btn1 = Button(text='Back',
+                size_hint=(1, None), font_size="14sp")
+
+        btn1.bind(on_press=back)
+        self.streamEditPanel.add_widget(btn1)
+
+        document = hardline.userDatabases[stream].getDocumentByID(postID)
+
+        newtitle = MDTextField(text=document.get("title",''),mode='fill', font_size='22sp')
+
+        newp = MDTextField(text=document.get("body",''),mode='rectangle', multiline=True)
+
+        date = Label(size_hint=(1,None), text="Last edited on: "+time.strftime('%Y %b %d (%a) @ %r',time.localtime(document.get('time',0)/10**6)))
+
+        def post(*a):
+            with hardline.userDatabases[stream]:
+                hardline.userDatabases[stream].setDocument({'title':newtitle.text, 'body': newp.text,'type':'post','id':postID})
+                hardline.userDatabases[stream].commit()
+            self.gotoStreamPosts(stream)
+
+        btn1 = Button(text='Post!',
+                      size_hint=(1, None), font_size="14sp")
+        btn1.bind(on_release=post)
+
+        self.streamEditPanel.add_widget(date)
+
+        self.streamEditPanel.add_widget(newtitle)
+        self.streamEditPanel.add_widget(newp)
+        self.streamEditPanel.add_widget(btn1)
+
+        def delete(*a):
+            def reallyDelete(v):
+                if v==postID:
+                    with hardline.userDatabases[stream]:
+                        hardline.userDatabases[stream].setDocument({'type':'null','id':postID})
+                    self.gotoStreamPosts(stream)
+            self.askQuestion("Delete post permanently on all nodes?", postID, reallyDelete)
+
+        btn1 = Button(text='Delete',
+                      size_hint=(1, None), font_size="14sp")
+        btn1.bind(on_release=delete)
+
+        self.streamEditPanel.add_widget(btn1)
+  
+        self.screenManager.current = "EditStream"
 
 
     #Reuse the same panel for editStream, the main hub for accessing the stream,
