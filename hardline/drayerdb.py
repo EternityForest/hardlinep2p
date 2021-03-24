@@ -180,9 +180,9 @@ class DocumentDatabase():
         self.threadLocal.conn.execute('''CREATE TABLE IF NOT EXISTS peers
              (peerID text primary key, lastArrival integer, info text)''')
 
-        # To keep indexing simple and universal, it only works on three properties.  _tags, _description and _body.
+        # To keep indexing simple and universal, it only works on four standard properties. tags, title, descripion, body
         self.threadLocal.conn.execute('''
-             CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5(tags, description, body, content='')''')
+             CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5(tags, title, description, body, content='')''')
 
         self.threadLocal.conn.execute(
             '''CREATE INDEX IF NOT EXISTS document_parent ON document(json_extract(json,"$.parent")) WHERE json_extract(json,"$.parent") IS NOT null ''')
@@ -198,20 +198,20 @@ class DocumentDatabase():
         self.threadLocal.conn.execute(
             """
             CREATE TRIGGER IF NOT EXISTS search_index AFTER INSERT ON document BEGIN
-            INSERT INTO search(rowid, tags, description, body) VALUES (new.rowid, IFNULL(json_extract(new.json,"$.tags"), ""), IFNULL(json_extract(new.json,"$.description"), ""), IFNULL(json_extract(new.json,"$.body"), ""));
+            INSERT INTO search(rowid, tags,title, description, body) VALUES (new.rowid, IFNULL(json_extract(new.json,"$.tags"), ""), IFNULL(json_extract(new.json,"$.title"), ""), IFNULL(json_extract(new.json,"$.description"), "") , IFNULL(json_extract(new.json,"$.body"), ""));
             END;
             """)
 
         self.threadLocal.conn.execute(
             """   CREATE TRIGGER IF NOT EXISTS search_delete AFTER DELETE ON document BEGIN
-            INSERT INTO search(search, rowid, tags, description, body) VALUES ('delete', old.rowid, IFNULL(json_extract(old.json,"$.tags"), ""), IFNULL(json_extract(old.json,"$.description"), ""), IFNULL(json_extract(old.json,"$.body"), ""));
+            INSERT INTO search(search, rowid, tags, title,description, body) VALUES ('delete', old.rowid, IFNULL(json_extract(old.json,"$.tags"), ""), IFNULL(json_extract(old.json,"$.title"), ""), IFNULL(json_extract(old.json,"$.description"), ""), IFNULL(json_extract(old.json,"$.body"), ""));
             END;""")
 
         self.threadLocal.conn.execute(
             """
             CREATE TRIGGER IF NOT EXISTS search_update AFTER UPDATE ON document BEGIN
-            INSERT INTO search(search, rowid, tags, description, body) VALUES ('delete', old.rowid, IFNULL(json_extract(old.json,"$.tags"), ""), IFNULL(json_extract(old.json,"$.description"), ""), IFNULL(json_extract(old.json,"$.body"), ""));
-            INSERT INTO search(rowid, tags, description, body) VALUES (new.rowid, IFNULL(json_extract(new.json,"$.tags"), ""), IFNULL(json_extract(new.json,"$.description"), ""), IFNULL(json_extract(new.json,"$.body"), ""));
+            INSERT INTO search(search, rowid, tags, title,description, body) VALUES ('delete', old.rowid, IFNULL(json_extract(old.json,"$.tags"), ""),IFNULL(json_extract(old.json,"$.title"), ""), IFNULL(json_extract(old.json,"$.description"), ""), IFNULL(json_extract(old.json,"$.body"), ""));
+            INSERT INTO search(rowid, tags, title,description, body) VALUES (new.rowid, IFNULL(json_extract(new.json,"$.tags"), ""), IFNULL(json_extract(new.json,"$.title"), ""), IFNULL(json_extract(new.json,"$.description"), ""), IFNULL(json_extract(new.json,"$.body"), ""));
             END;
             """
         )
@@ -640,14 +640,14 @@ class DocumentDatabase():
                 # is enough for other nodes to know this shouldn't exist anymore.
                 if doc['type'] == "null":
                     self.threadLocal.conn.execute(
-                        "DELETE FROM document WHERE json_extract(json,'$.id')=?", (doc['id'],))
+                        "DELETE FROM document WHERE json_extract(json,'$.parent')=?", (doc['id'],))
 
                 return doc['id']
             else:
                 return doc['id']
 
         self.threadLocal.conn.execute(
-            "INSERT INTO document VALUES (null,?,?,?)", (d, signature, ''))
+            "INSERT INTO document VALUES (null,?,?,?)", (d, signature,''))
         self.lastChange = time.time()
 
         for i in self.subscribers:
@@ -671,10 +671,30 @@ class DocumentDatabase():
                 return None
             return x
 
-    def getDocumentsByType(self, key, startPoint=0, limit=100):
+    def getDocumentsByType(self, key, startTime=0, endTime=10**18, limit=100):
         self.dbConnect()
         cur = self.threadLocal.conn.cursor()
         cur.execute(
-            "SELECT json from document WHERE json_extract(json,'$.type')=? AND json_extract(json,'$.time')>? ORDER BY json_extract(json,'$.time') desc LIMIT 100", (key,startPoint))
+            "SELECT json from document WHERE json_extract(json,'$.type')=? AND json_extract(json,'$.time')>=? AND json_extract(json,'$.time')<=? ORDER BY json_extract(json,'$.time') desc LIMIT ?", (key,startTime,endTime, limit))
         
         return list(reversed([i for i in [json.loads(i[0]) for i in cur] if not i.get('type','')=='null']))
+
+    
+    def searchDocuments(self, key, startTime=0, limit=100):
+        self.dbConnect()
+        cur = self.threadLocal.conn.cursor()
+        l = []
+        r=[]
+        with self:
+            cur.execute(
+                "SELECT rowid from search WHERE tags MATCH ? or title MATCH ? or body MATCH ? or description MATCH ? LIMIT ?", (key,key,key,limit))
+            for i in cur:
+                l.append[i[0]]
+
+            for i in l:
+                cur.execute("SELECT json FROM document WHERE rowid=?",(i,))
+                x = cur.fetchone()
+                if x:
+                    r.append(x)
+            
+        return list(reversed([i for i in [json.loads(i[0]) for i in r] if not i.get('type','')=='null']))

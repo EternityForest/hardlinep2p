@@ -1,6 +1,8 @@
 # This is the kivy android app.  Maybe ignore it on ither platforms, the code the support them is only for testing.
 
 import configparser
+
+from kivy.uix.widget import Widget
 import hardline
 import service
 from typing import Text
@@ -13,6 +15,7 @@ from kivymd.uix.textfield import MDTextField
 from kivymd.uix.label import MDLabel as Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
+from kivymd.uix.toolbar import MDToolbar
 
 from kivymd.uix.card import MDCard
 
@@ -28,7 +31,9 @@ import os
 import sys
 
 from hardline import makeUserDatabase, uihelpers, drayerdb
+from kivymd.uix.picker import MDDatePicker
 
+import datetime
 
 class ServiceApp(MDApp, uihelpers.AppHelpers):
 
@@ -94,8 +99,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         layout = BoxLayout(orientation='vertical', spacing=10)
         mainScreen.add_widget(layout)
-        label = Label(size_hint=(1, 6), halign="center",
-                      text='HardlineP2P: The open source way to find\n and connect to servers\nwith no fees or registration')
+        label = MDToolbar(title="HardlineP2P")
         layout.add_widget(label)
 
         btn1 = Button(text='My Streams',
@@ -167,6 +171,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         btn1 = Button(text='Back to main page',
                       size_hint=(1, None), font_size="14sp")
 
+
         def goMain(*a):
             self.screenManager.current = "Main"
         btn1.bind(on_press=goMain)
@@ -187,10 +192,9 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
     def makeSettingsPage(self):
         page = Screen(name='Settings')
 
-        layout = BoxLayout(orientation='vertical', spacing=10)
+        layout = BoxLayout(orientation='vertical')
         page.add_widget(layout)
-        label = Label(size_hint=(1, 6), halign="center",
-                      text='HardlineP2P Settings')
+        label = MDToolbar(title="Settings and Tools")
         layout.add_widget(label)
 
         btn = Button(text='Back to main page',
@@ -232,6 +236,8 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         layout.add_widget(btn4)
         layout.add_widget(label4)
 
+        layout.add_widget(Widget())
+
         return page
 
     def makeStreamsPage(self):
@@ -244,6 +250,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         btn1 = Button(text='Back to main page',
                       size_hint=(1, None), font_size="14sp")
 
+        layout.add_widget(MDToolbar(title="My Streams"))
         def goMain(*a):
             self.screenManager.current = "Main"
         btn1.bind(on_press=goMain)
@@ -317,7 +324,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         self.streamEditPanelScroll = ScrollView(size_hint=(1, 1))
 
         self.streamEditPanel = BoxLayout(
-            orientation='vertical',adaptive_height= True )
+            orientation='vertical',adaptive_height= True, spacing=5)
         self.streamEditPanel.bind(
             minimum_height=self.streamEditPanel.setter('height'))
 
@@ -329,15 +336,13 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
 
 
-    def gotoStreamPosts(self, stream):
+    def gotoNewStreamPost(self, stream):
         self.streamEditPanel.clear_widgets()
-        self.streamEditPanel.add_widget(Label(size_hint=(
-            1, None), halign="center", text="Posts for "+stream))
-
-
+        self.streamEditPanel.add_widget(MDToolbar(title="New Post for "+stream))
 
         def back(*a):
             self.editStream(stream)
+
         btn1 = Button(text='Back',
                 size_hint=(1, None), font_size="14sp")
 
@@ -361,11 +366,95 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         self.streamEditPanel.add_widget(newtitle)
 
+        self.streamEditPanel.add_widget(MDToolbar(title="Post Body"))
+
         self.streamEditPanel.add_widget(newp)
         self.streamEditPanel.add_widget(btn1)
 
+
+    def gotoStreamPosts(self, stream, startTime=0, endTime=0):
+        self.streamEditPanel.clear_widgets()
+        self.streamEditPanel.add_widget(MDToolbar(title="Feed for "+stream))
+
+
+
+        def back(*a):
+            self.editStream(stream)
+        btn1 = Button(text='Back',
+                size_hint=(1, None), font_size="14sp")
+
+        btn1.bind(on_press=back)
+        self.streamEditPanel.add_widget(btn1)
+
+
+        def write(*a):
+            self.gotoNewStreamPost(stream)
+        btn1 = Button(text='Write a post',
+                size_hint=(1, None), font_size="14sp")
+
+        btn1.bind(on_press=write)
+        self.streamEditPanel.add_widget(btn1)
+        
         s = hardline.userDatabases[stream]
-        p = s.getDocumentsByType("post")
+        p = s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=100)
+        if p:
+            newest=p[-1]['time']
+            oldest=p[0]['time']
+        else:
+            newest=endTime
+            oldest=startTime
+
+        #The calender interactions are based on the real oldest post in the set
+
+        #Let the user see older posts by picking a start date to stat showing from.
+        startdate = Button(text='Starting:'+time.strftime('%Y %b %d (%a)',time.localtime(oldest/10**6)),
+                      size_hint=(1, None), font_size="14sp")
+
+      
+        def f(*a):
+            if oldest:
+                d=time.localtime((oldest)/10**6)
+            else:
+                d=time.localtime()
+
+            from kivymd.uix.picker import MDDatePicker
+
+            def onAccept(date):
+                t= datetime.datetime.combine(date,datetime.datetime.min.time()).timestamp()*10**6
+                self.gotoStreamPosts(stream, t)            
+            d =MDDatePicker(onAccept,year=d.tm_year, month=d.tm_mon, day=d.tm_mday)
+
+            d.open()
+
+        startdate.bind(on_release=f)
+
+
+
+        #Thids button advances to the next newer page of posts.
+        newer = Button(text='Next Page Newer',
+                      size_hint=(1, None), font_size="14sp")
+        def f2(*a):
+            self.gotoStreamPosts(stream, newest)            
+
+        newer.bind(on_release=f2)
+
+        #Thids button advances to the next newer page of posts.
+        older = Button(text='Next Page Older',
+                      size_hint=(1, None), font_size="14sp")
+        def f3(*a):
+            self.gotoStreamPosts(stream, endTime=oldest)            
+
+        older.bind(on_release=f3)
+
+
+        self.streamEditPanel.add_widget(startdate)
+        self.streamEditPanel.add_widget(newer)
+        self.streamEditPanel.add_widget(older)
+
+        self.streamEditPanel.add_widget(MDToolbar(title="Posts"))
+
+
+       
         for i in reversed(p):
             self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
         self.screenManager.current = "EditStream"
@@ -375,7 +464,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
             self.gotoStreamPost(stream,post['id'])
 
         l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
-        l.add_widget(Button(text=post.get('title',"?????"), size_hint=(1,None), on_release=f))
+        l.add_widget(Button(text=post.get('title',"?????") + " "+time.strftime('%Y %b %d (%a)',time.localtime(post.get('time',0)/10**6)), size_hint=(1,None), on_release=f))
         l.add_widget(Label(text=post.get('body',"?????")[:140], size_hint=(1,None), font_size='22sp',halign='left'))
 
         return l
@@ -423,6 +512,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                 if v==postID:
                     with hardline.userDatabases[stream]:
                         hardline.userDatabases[stream].setDocument({'type':'null','id':postID})
+                        hardline.userDatabases[stream].commit()
                     self.gotoStreamPosts(stream)
             self.askQuestion("Delete post permanently on all nodes?", postID, reallyDelete)
 
