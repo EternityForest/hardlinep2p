@@ -104,8 +104,11 @@ title="My Awesome Service"
 #The root page will just be /cachedir/@http. /foo/bar will be /cachedir/foo/bar@http, but /foo/bar/ with 
 # a trailing slash is /cachedir/foo/bar/@http
 
+#Caches do not support POST or cookies. When HTML files are smaller than 1MB and not served with chunked encoding or a download related content disposition,
+#Any embedded videos, audio, css links, and scripts that reference an absolute domain will be transparently converted to /cache_external_resource/path
+#links instead, allowing us to modern sites that use a ton of subdomains.
 
-#Cache services act like any other service.
+#Cache services act like any other service with regards to remote access and the like.
 
 [Cache]
 directory="Leave this as an empty string for no cache"

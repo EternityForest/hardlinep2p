@@ -825,7 +825,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
             logging.info("SAVE BUTTON WAS PRESSED")
             # On android this is the bg service's job
             hardline.makeUserService(None, name, c['Info'].get("title", 'Untitled'), service=c['Service'].get("service", ""),
-                                     port=c['Service'].get("port", ""), cacheInfo=c['Cache'], noStart=(platform == 'android'))
+                                     port=c['Service'].get("port", ""), cacheInfo=c['Cache'], noStart=(platform == 'android'), useDHT=c['Access'].get("useDHT", "yes"))
             if platform == 'android':
                 self.stop_service()
                 self.start_service()

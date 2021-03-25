@@ -386,7 +386,6 @@ def writeWanInfoToDatabase(infohash, hosts):
     # The device can tell us how to later find it even when we leave the WAN
     # TODO: People can give us fake values, which we will then save. Solution: digitally sign.
     if hosts:
-        logger.info("Got WAN connection info from server")
         with dbLock:
             # Todo don't just reopen a new connection like this
             discoveryDB = getDB()
@@ -417,7 +416,8 @@ class InstanceTracker():
 
 connections = weakref.WeakValueDictionary()
 
-
+class Closed(Exception):
+    pass
 class Service():
     def __init__(self, cert, destination, port, info={'title': ''}, friendlyName=None, cacheSettings={},useDHT=True):
         self.certfile = cert
@@ -472,11 +472,11 @@ class Service():
             else:
                 dest = destination
             yes = ('yes','true','on','Yes','True','On','TRUE')
-            self.cachingProxy = CachingProxy(dest, proxyDir, maxAge=cacheSettings.get("maxAge"), 
-            maxSize=cacheSettings.get("maxSize"),
-            downloadRateLimit=cacheSettings.get("downloadRateLimit"), 
-            allowListing=cacheSettings.get("allowListing") in yes,
-            dynamicContent=cacheSettings.get("dynamicContent") in yes)
+            self.cachingProxy = CachingProxy(dest, proxyDir, maxAge=cacheSettings.get("maxAge",None), 
+            maxSize=int(cacheSettings.get("maxSize",'4096'))*1024*1024,
+            downloadRateLimit=cacheSettings.get("downloadRateLimit",'1200'), 
+            allowListing=cacheSettings.get("allowListing",'') in yes,
+            dynamicContent=cacheSettings.get("dynamicContent",'') in yes)
 
             for i in range(0, 10):
                 if self.cachingProxy.port:
@@ -651,15 +651,25 @@ class Service():
                             if d:
                                 conn.send(d)
                             else:
-                                raise ValueError(
+                                raise Closed(
                                     "Zero length read, probably closed")
                         else:
                             d = i.recv(4096)
                             if d:
                                 sock.send(d)
                             else:
-                                raise ValueError(
+                                raise Closed(
                                     "Zero length read, probably closed")
+                    except Closed:
+                        try:
+                            sock.close()
+                        except:
+                            pass
+                        try:
+                            conn.close()
+                        except:
+                            pass
+                        return
                     except:
                         logger.info(traceback.format_exc())
 
@@ -886,15 +896,25 @@ def server_thread(sock):
                         if d:
                             conn.send(d)
                         else:
-                            raise ValueError(
+                            raise Closed(
                                 "Zero length read, probably closed")
                     else:
                         d = i.recv(4096)
                         if d:
                             sock.send(d)
                         else:
-                            raise ValueError(
+                            raise Closed(
                                 "Zero length read, probably closed")
+                except Closed:
+                    try:
+                        sock.close()
+                    except:
+                        pass
+                    try:
+                        conn.close()
+                    except:
+                        pass
+                    return
                 except:
                     logger.info(traceback.format_exc())
 
@@ -1158,10 +1178,13 @@ def start(localport=None):
             # Whichever one has data, shove it down the other one
             for i in r:
                 if i == bindsocket:
-                    handleClient(i.accept()[0])
+                    x=i.accept()
+                    logger.info("Incoming client connection from "+str(x[1]))
+                    handleClient(x[0])
                 else:
-                    if services:
+                    if services:                        
                         x = i.accept()
+                        logger.info("Incoming P2P connection from "+str(x[1]))
                         handleP2PClient(x[0],x[1])
                     else:
                         i.accept()[0].close()
