@@ -106,7 +106,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
     def makeMainScreen(self):
         mainScreen = Screen(name='Main')
 
-        layout = BoxLayout(orientation='vertical', spacing=10)
+        layout = BoxLayout(orientation='vertical', spacing=10,size_hint=(1,1))
         mainScreen.add_widget(layout)
         label = MDToolbar(title="HardlineP2P")
         layout.add_widget(label)
@@ -438,6 +438,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         self.streamEditPanel.add_widget(MDToolbar(title="Feed for "+stream))
 
 
+        topbar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
 
         def back(*a):
             self.editStream(stream)
@@ -445,7 +446,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                 size_hint=(1, None), font_size="14sp")
 
         btn1.bind(on_press=back)
-        self.streamEditPanel.add_widget(btn1)
+        topbar.add_widget(btn1)
 
 
         def write(*a):
@@ -454,7 +455,9 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                 size_hint=(1, None), font_size="14sp")
 
         btn1.bind(on_press=write)
-        self.streamEditPanel.add_widget(btn1)
+        topbar.add_widget(btn1)
+
+        self.streamEditPanel.add_widget(topbar)
         
         s = hardline.userDatabases[stream]
         p = s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=100)
@@ -468,8 +471,8 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         #The calender interactions are based on the real oldest post in the set
 
         #Let the user see older posts by picking a start date to stat showing from.
-        startdate = Button(text='Starting:'+time.strftime('%Y %b %d (%a)',time.localtime(oldest/10**6)),
-                      size_hint=(1, None), font_size="14sp")
+        startdate = Button(text=time.strftime('%Y %b %d (%a)',time.localtime(oldest/10**6)),
+                      size_hint=(0.28, None), font_size="14sp")
 
       
         def f(*a):
@@ -491,26 +494,30 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
 
 
+        pagebuttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
+
         #Thids button advances to the next newer page of posts.
-        newer = Button(text='Next Page Newer',
-                      size_hint=(1, None), font_size="14sp")
+        newer = Button(text='Newer',
+                      size_hint=(0.28, None), font_size="14sp")
         def f2(*a):
             self.gotoStreamPosts(stream, newest)            
 
         newer.bind(on_release=f2)
 
         #Thids button advances to the next newer page of posts.
-        older = Button(text='Next Page Older',
-                      size_hint=(1, None), font_size="14sp")
+        older = Button(text='Older',
+                      size_hint=(0.28, None), font_size="14sp")
         def f3(*a):
             self.gotoStreamPosts(stream, endTime=oldest)            
 
         older.bind(on_release=f3)
 
+        pagebuttons.add_widget(older)
+        pagebuttons.add_widget(startdate)
+        pagebuttons.add_widget(newer)
 
-        self.streamEditPanel.add_widget(startdate)
-        self.streamEditPanel.add_widget(newer)
-        self.streamEditPanel.add_widget(older)
+
+        self.streamEditPanel.add_widget(pagebuttons)
 
         self.streamEditPanel.add_widget(MDToolbar(title="Posts"))
 
