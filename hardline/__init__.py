@@ -39,8 +39,8 @@ drayerdb.nodeIDSecretPath = os.path.join(directories.drayerDB_root, "nodeIDSecre
 services = weakref.WeakValueDictionary()
 
 socket.setdefaulttimeout(5)
-
-
+import logging
+logger=logging.getLogger("hardline")
 
 def createWifiChecker():
     """Detects if we are on something like WiFi, and if we have sufficient battery power to keep going.
@@ -94,7 +94,7 @@ ExternalAddrs = ['']
 
 
 from . import directories
-print("Peers DB: "+directories.DB_PATH)
+logger.info("Peers DB: "+directories.DB_PATH)
 discoveryDB = sqlite3.connect(directories.DB_PATH)
 c = discoveryDB.cursor()
 
@@ -154,7 +154,7 @@ try:
     import netifaces
 except:
     netifaces = None
-    print("Did not find netifaces, mesh-awareness disabled")
+    logger.info("Did not find netifaces, mesh-awareness disabled")
 
 
 def getWanHostsString():
@@ -272,7 +272,7 @@ class DiscoveryCache():
             lines = []
             # Prioritized DHT proxies list
             for i in getDHTProxies():
-                print("Trying DHT Proxy request to: "+i+k)
+                logger.info("Trying DHT Proxy request to: "+i+k)
                 try:
                     r = requests.get(i+k, timeout=20, stream=True)
                     for j in r.iter_lines():
@@ -281,8 +281,8 @@ class DiscoveryCache():
                             break
                     break
                 except:
-                    print(traceback.format_exc())
-                    print("DHT Proxy request to: "+i+" failed for"+k)
+                    logger.info(traceback.format_exc())
+                    logger.info("DHT Proxy request to: "+i+" failed for"+k)
 
             if lines:
                 # This only tries one item, which is a little too easy to DoS, but that's also part of the inherent problem with DHTs.
@@ -299,7 +299,7 @@ class DiscoveryCache():
         try:
             discoveryPeer.search(self.infohash)
         except:
-            print(traceback.format_exc())
+            logger.info(traceback.format_exc())
 
     def get(self, invalidate=False):
 
@@ -386,7 +386,7 @@ def writeWanInfoToDatabase(infohash, hosts):
     # The device can tell us how to later find it even when we leave the WAN
     # TODO: People can give us fake values, which we will then save. Solution: digitally sign.
     if hosts:
-        print("Got WAN connection info from server")
+        logger.info("Got WAN connection info from server")
         with dbLock:
             # Todo don't just reopen a new connection like this
             discoveryDB = getDB()
@@ -400,12 +400,12 @@ def writeWanInfoToDatabase(infohash, hosts):
                     if d == hosts:
                         return
                 except:
-                    print(traceback.format_exc())
-                print("Writing updated info to DB")
+                    logger.info(traceback.format_exc())
+                logger.info("Writing updated info to DB")
                 cur.execute("update peers set info=? where serviceid=?",
                             (json.dumps({"WANHosts": hosts}), infohash))
             else:
-                print("Writing ne host info to DB")
+                logger.info("Writing ne host info to DB")
                 cur.execute("insert into peers values (?,?)",
                             (infohash, json.dumps({"WANHosts": hosts})))
             discoveryDB.commit()
@@ -532,8 +532,8 @@ class Service():
                     dhtContainer[0].put(dht.InfoHash.get(rollingCode.hex()),
                              dht.Value(getWanHostsString().encode()))
             except Exception:
-                print("Could not use local DHT node")
-                print(traceback.format_exc())
+                logger.info("Could not use local DHT node")
+                logger.info(traceback.format_exc())
             return
 
         # Using a DHT proxy we can host a site without actually using the DHT directly.
@@ -549,7 +549,7 @@ class Service():
                 r.raise_for_status()
                 break
             except Exception:
-                print(traceback.format_exc())
+                logger.info(traceback.format_exc())
 
     def handleConnection(self, sock):
         "Handle incoming encrypted connection from another hardline instance.  The root server code has alreadt recieved the SNI and has dispatched it to us"
@@ -661,9 +661,9 @@ class Service():
                                 raise ValueError(
                                     "Zero length read, probably closed")
                     except:
-                        print(traceback.format_exc())
+                        logger.info(traceback.format_exc())
 
-                        print("socket closing")
+                        logger.info("socket closing")
                         try:
                             sock.close()
                         except:
@@ -792,31 +792,31 @@ def server_thread(sock):
             for host in hosts:
                 try:
                     connectingTo = host
-                    print("trying", host)
+                    logger.info("trying"+ str(host))
                     conn = connect(host)
                     break
                 except:
-                    print(traceback.format_exc())
+                    logger.info(traceback.format_exc())
             else:
                 # Retry discovery, this time refresh so we don't get old cached lan values
                 for host in discover(fullservice.decode(), refresh=True):
                     try:
                         connectingTo = host
-                        print("trying", host)
+                        logger.info("trying"+str(host))
                         conn = connect(host)
                         break
                     except:
-                        print(traceback.format_exc())
+                        logger.info(traceback.format_exc())
                 else:
                     # Last resort we try using the DHT
                     for host in dhtDiscover(service):
                         try:
-                            print("trying", host)
+                            logger.info("trying"+ str(host))
                             connectingTo = host
                             conn = connect(host)
                             break
                         except:
-                            print(traceback.format_exc())
+                            logger.info(traceback.format_exc())
                     else:
                         raise RuntimeError(
                             "All saved host options and dht options failed:"+str(hosts))
@@ -896,7 +896,7 @@ def server_thread(sock):
                             raise ValueError(
                                 "Zero length read, probably closed")
                 except:
-                    print(traceback.format_exc())
+                    logger.info(traceback.format_exc())
 
                     try:
                         sock.close()
@@ -970,7 +970,7 @@ def taskloop():
                 ExternalAddrs[0] = a[0]
                 success = True
         except:
-            print(traceback.format_exc())
+            logger.info(traceback.format_exc())
 
         # If we can't get a UPNP listing we have to rely on a manual port mapping.
         if not success:
@@ -985,7 +985,7 @@ def taskloop():
                         ExternalAddrs[0] = r.text
                         success = True
                     except:
-                        print(traceback.format_exc())
+                        logger.info(traceback.format_exc())
 
                 if not success:
                     ExternalAddrs[0] = ''
@@ -995,7 +995,7 @@ def taskloop():
                 if lanStat[0]:
                     services[i].dhtPublish()
         except:
-            print(traceback.format_exc())
+            logger.info(traceback.format_exc())
 
         time.sleep(8*60)
 
@@ -1032,7 +1032,7 @@ def tryDHTConnect():
         import opendht as dht
     except:
         dht = None
-        print("Unable to import openDHT.  If you would like to use this feature, install dhtnode if you are on debian.")
+        logger.info("Unable to import openDHT.  If you would like to use this feature, install dhtnode if you are on debian.")
 
     if dht:
         try:
@@ -1044,7 +1044,7 @@ def tryDHTConnect():
             node.bootstrap("bootstrap.jami.net", "4222")
             dhtContainer[0] = node
         except:
-            print(traceback.format_exc())
+            logger.info(traceback.format_exc())
 
 def start(localport=None):
     global  portMapping, running, exited, cached_localport
@@ -1060,12 +1060,12 @@ def start(localport=None):
     
         import kivy.utils
         if kivy.utils.platform == 'android' and services:
-            print("Getting multicast lock")
+            logger.info("Getting multicast lock")
             from . import androidtools
             androidtools.getLocksForBackgroundOperation()
 
     except ImportError:
-        print("ERR, ignore this unless running on android")
+        logger.info("ERR, ignore this unless running on android")
 
     try:
         # This is the server context we use for localhost coms
@@ -1085,7 +1085,7 @@ def start(localport=None):
                         raise
     except Exception:
         bindsocket = None
-        print("Failed to start localhost gateway.  Perhaps another Hardline instance is running.  Continuing as server only")
+        logger.info("Failed to start localhost gateway.  Perhaps another Hardline instance is running.  Continuing as server only")
 
     # This is the server context we use for the remote coms, accepting incoming ssl connections from other instances and proxying them into
     # local services
@@ -1128,11 +1128,11 @@ def start(localport=None):
                 break
             except:
                 WANPortContainer[0] += 1
-                print(traceback.format_exc())
-                print("Failed to register port mapping, retrying")
+                logger.info(traceback.format_exc())
+                logger.info("Failed to register port mapping, retrying")
         else:
             # Default to the p2p port
-            print("Failed to register port mapping, you will need to manually configure.")
+            logger.info("Failed to register port mapping, you will need to manually configure.")
             WANPortContainer[0]=LocalP2PPortContainer[0]
 
     toScan = [p2p_bindsocket]
@@ -1150,7 +1150,7 @@ def start(localport=None):
                 lanStat[0] = isOnLan()
                 lastCheckedLan=time.time()
             except:
-                print(traceback.format_exc())
+                logger.info(traceback.format_exc())
 
         r, w, x = select.select(toScan, [], [], 1)
         try:
@@ -1184,7 +1184,7 @@ def closeServices(only=None):
                     continue
             i.close()
         except:
-            print(traceback.format_exc())
+            logger.info(traceback.format_exc())
 
 
 userServices = {}
@@ -1201,12 +1201,11 @@ def loadUserServices(serviceDir, only=None):
     except:
         pass
 
-    print("Loading Services from ", serviceDir)
+    logger.info("Loading Services from "+serviceDir)
 
     if os.path.exists(serviceDir):
         x = os.listdir(serviceDir)
         for i in x:
-            print("File",i)
             if not i.endswith(".ini"):
                 continue
             if only:
@@ -1241,32 +1240,34 @@ def loadUserServices(serviceDir, only=None):
                 certFile = os.path.join(serviceDir, i+".cert")
                 if service.get('certfile',''):
                     certFile=service['certfile']
-                print("Loading Service")
+                logger.info("Loading Service")
 
                 useDHT = (access.get("useDHT",'yes') or 'yes').lower() in ('yes','true','enable','on')
 
                 # Take friendly name from filename
                 s = Service(certFile, service['service'], int(
                     service.get('port', '80') or 80), {'title': title}, friendlyName=i[:-4], cacheSettings=cache, useDHT=useDHT)
-                print("Serving a service from "+service['service'])
+                logger.info("Serving a service from "+service['service'])
 
                 userServices[i] = s
             except:
-                print(traceback.format_exc())
+                logger.info(traceback.format_exc())
 
 
-def makeUserService(dir, name, title="A service", service="localhost", port='80',  certfile=None, cacheInfo={}, noStart=False):
+def makeUserService(dir, name, title="A service", service="localhost", port='80',  certfile=None, cacheInfo={}, noStart=False,useDHT='yes'):
     dir=dir or directories.user_services_dir
 
     try:
         if not os.path.exists(dir):
             os.makedirs(dir)
     except:
-        print(traceback.format_exception())
+        logger.info(traceback.format_exception())
     c = configparser.ConfigParser()
     c.add_section("Service")
     c.add_section("Info")
     c.add_section("Cache")
+    c.add_section("Access")
+
 
     file = os.path.join(dir, name+'.ini')
 
@@ -1278,6 +1279,8 @@ def makeUserService(dir, name, title="A service", service="localhost", port='80'
 
     info = c['Info']
     info['title'] = title
+
+    c['Access']['useDHT']=useDHT
 
     for i in cacheInfo:
         c['Cache'][i] = cacheInfo[i]
@@ -1319,7 +1322,7 @@ def listServices(serviceDir):
                 config.read(os.path.join(serviceDir, i))
                 services[i[:-4]] = config
             except:
-                print(traceback.format_exc())
+                logger.info(traceback.format_exc())
 
     return services
 
@@ -1349,12 +1352,12 @@ def loadUserDatabases(serviceDir, only=None):
     except:
         pass
 
-    print("Loading Databases from ", serviceDir)
+    logger.info("Loading Databases from "+ serviceDir)
 
     if os.path.exists(serviceDir):
         x = os.listdir(serviceDir)
         for i in x:
-            print("File",i)
+            logger.info("File"+i)
             if not i.endswith(".db"):
                 continue
             if only:
@@ -1367,7 +1370,7 @@ def loadUserDatabases(serviceDir, only=None):
             try:
                 userDatabases[i] = drayerdb.DocumentDatabase(os.path.join(serviceDir,i))                
             except:
-                print(traceback.format_exc())
+                logger.info(traceback.format_exc())
 
 def makeUserDatabase(dir, name):
     dir=dir or directories.drayerDB_root

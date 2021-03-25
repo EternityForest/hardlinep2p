@@ -1,4 +1,4 @@
-import os, shutil, sys,traceback
+import os, shutil, sys,traceback,logging
 try:
     from android.storage import app_storage_path
     settings_path = app_storage_path()
@@ -19,14 +19,14 @@ try:
     Environment = autoclass('android.os.Environment')
 
     internalDir = context.getExternalFilesDir(None).getAbsolutePath()
-    print("Internal App Dir", internalDir)
+    logging.info("Internal App Dir", internalDir)
     r = internalDir
 
     for i in context.getExternalFilesDirs(None):
-        print("Found storage dir:",i)
+        logging.info("Found storage dir:",i)
         p = i.getAbsolutePath()
         if p.startswith("/sdcard") or p.startswith("/storage/sdcard0/") or (p.startswith("/storage/") and not p.startswith("/storage/emulated/")):
-            print("Found External SD")
+            logging.info("Found External SD")
             r= p
             break
 
@@ -37,21 +37,21 @@ try:
     #First time copy-over to new SD card from internal storage.
     import shutil
     if not os.path.exists(proxy_cache_root) and os.path.exists(os.path.join(internalDir, "proxycache")):
-        print("Copying proxy cache to external SD")
+        logging.info("Copying proxy cache to external SD")
         shutil.copytree(os.path.join(internalDir, "proxycache"), proxy_cache_root)
 
     if not os.path.exists(user_services_dir) and os.path.exists(os.path.join(internalDir, "services")):
-        print("Copying service files to external SD")
+        logging.info("Copying service files to external SD")
         shutil.copytree(os.path.join(internalDir, "services"), user_services_dir)
 
     if not os.path.exists(drayerDB_root) and os.path.exists(os.path.join(internalDir, "drayerdb")):
-        print("Copying service files to external SD")
+        logging.info("Copying service files to external SD")
         shutil.copytree(os.path.join(internalDir, "drayerdb"), drayerDB_root)
 
-    print(user_services_dir)
+    logging.info(user_services_dir)
 
 except:
-    print(traceback.format_exc())
+    logging.info(traceback.format_exc())
     user_services_dir = os.path.expanduser('~/.hardlinep2p/services/')
     proxy_cache_root = os.path.expanduser('~/.hardlinep2p/proxycache/')
 

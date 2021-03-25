@@ -281,7 +281,7 @@ class DocumentDatabase():
                     backoff = 1
             except:
                 logging.exception("Error in DB Client")
-                print(traceback.format_exc())
+                logging.info(traceback.format_exc())
 
             backoff *= 2
             backoff = max(backoff, 5*60)
@@ -355,10 +355,10 @@ class DocumentDatabase():
                 name = input("What's your name? ")
 
                 await websocket.send(name)
-                print(f"> {name}")
+                logging.info(f"> {name}")
 
                 greeting = await websocket.recv()
-                print(f"< {greeting}")
+                logging.info(f"< {greeting}")
 
         asyncio.create_task(f)
 
@@ -453,7 +453,7 @@ class DocumentDatabase():
                 for i in cur:
                     if not 'records' in r:
                         r['records'] = []
-                    print(i)
+                    logging.info(i)
                     r['records'].append([i[0], ''])
 
                     sessionObject.lastResyncFlushTime = max(
@@ -655,7 +655,7 @@ class DocumentDatabase():
                 asyncio.get_event_loop().run_until_complete(
                     self.subscribers[i].socket.send(self.getUpdatesForSession(self.subscribers[i])))
             except:
-                print(traceback.format_exc())
+                logging.info(traceback.format_exc())
 
         return doc['id']
 

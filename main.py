@@ -1,5 +1,9 @@
 # This is the kivy android app.  Maybe ignore it on ither platforms, the code the support them is only for testing.
 
+from kivy.logger import Logger
+import logging
+logging.Logger.manager.root = Logger
+
 import configparser
 
 from kivy.uix.widget import Widget
@@ -34,6 +38,10 @@ from hardline import makeUserDatabase, uihelpers, drayerdb
 from kivymd.uix.picker import MDDatePicker
 
 import datetime
+
+
+from kivy.logger import Logger, LOG_LEVELS
+Logger.setLevel(LOG_LEVELS["info"])
 
 class ServiceApp(MDApp, uihelpers.AppHelpers):
 
@@ -88,6 +96,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         sm.add_widget(self.makeGlobalSettingsPage())
         sm.add_widget(self.makeStreamsPage())
         sm.add_widget(self.makeStreamEditPage())
+        sm.add_widget(self.makeLogsPage())
 
         self.theme_cls.primary_palette = "Green"
 
@@ -205,12 +214,19 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         btn.bind(on_press=goMain)
         layout.add_widget(btn)
 
+
+        log = Button(text='System Logs',
+                      size_hint=(1, None), font_size="14sp")
+
         btn1 = Button(text='Local Services',
                       size_hint=(1, None), font_size="14sp")
         label1 = Label(size_hint=(1, None), halign="center",
                        text='Share a local webservice with the world')
 
+        log.bind(on_release=self.gotoLogs)
         btn1.bind(on_press=self.goToLocalServices)
+        layout.add_widget(log)
+
         layout.add_widget(btn1)
         layout.add_widget(label1)
 
@@ -288,7 +304,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                     self.makeButtonForStream(i))
 
         except Exception:
-            print(traceback.format_exc())
+            logging.info(traceback.format_exc())
 
         self.screenManager.current = "Streams"
 
@@ -310,6 +326,51 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                 self.editStream(v)
 
         self.askQuestion("New Stream Name?", cb=f)
+
+
+
+
+    def makeLogsPage(self):
+        screen = Screen(name='Logs')
+        self.servicesScreen = screen
+
+        layout = BoxLayout(orientation='vertical', spacing=10)
+        screen.add_widget(layout)
+
+        btn1 = Button(text='Back',
+                      size_hint=(1, None), font_size="14sp")
+
+        layout.add_widget(MDToolbar(title="System Logs"))
+        def goMain(*a):
+            self.screenManager.current = "Settings"
+        btn1.bind(on_press=goMain)
+        layout.add_widget(btn1)
+
+
+        self.logsListBoxScroll = ScrollView(size_hint=(1, 1))
+
+        self.logsListBox = BoxLayout(
+            orientation='vertical', size_hint=(1, None), spacing=10)
+        self.logsListBox.bind(
+            minimum_height=self.logsListBox.setter('height'))
+
+        self.logsListBoxScroll.add_widget(self.logsListBox)
+
+        layout.add_widget(self.logsListBoxScroll)
+
+        return screen
+
+    def gotoLogs(self,*a):
+        self.logsListBox.clear_widgets()
+        try:
+            from kivy.logger import LoggerHistory
+            for i in LoggerHistory.history:
+                self.logsListBox.add_widget(Label(text=str(i.getMessage()), size_hint=(1,None)))
+
+            self.screenManager.current = "Logs"
+        except Exception as e:
+            logging.info(traceback.format_exc())
+
 
     def makeStreamEditPage(self):
         "Prettu much just an empty page filled in by the specific goto functions"
@@ -598,7 +659,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
       
 
         def save(*a):
-            print("SAVE BUTTON WAS PRESSED")
+            logging.info("SAVE BUTTON WAS PRESSED")
             # On android this is the bg service's job
             db.saveConfig()
 
@@ -709,7 +770,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                     self.makeButtonForLocalService(i, s[i]))
 
         except Exception:
-            print(traceback.format_exc())
+            logging.info(traceback.format_exc())
 
         self.screenManager.current = "LocalServices"
 
@@ -761,7 +822,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         self.localServiceEditorName.text = name
 
         def save(*a):
-            print("SAVE BUTTON WAS PRESSED")
+            logging.info("SAVE BUTTON WAS PRESSED")
             # On android this is the bg service's job
             hardline.makeUserService(None, name, c['Info'].get("title", 'Untitled'), service=c['Service'].get("service", ""),
                                      port=c['Service'].get("port", ""), cacheInfo=c['Cache'], noStart=(platform == 'android'))
@@ -917,7 +978,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                     self.discoveryListbox.add_widget(j)
 
         except Exception:
-            print(traceback.format_exc())
+            logging.info(traceback.format_exc())
 
         self.screenManager.current = "Discovery"
 
