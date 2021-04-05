@@ -1,0 +1,254 @@
+from .hardline import *
+# "User Services" are configurable services stored in files, asw opposed to those defined in code
+import os,configparser
+
+from .cidict import CaseInsensitiveDict
+
+def loadUserServices(serviceDir, only=None):
+    serviceDir = serviceDir or directories.user_services_dir
+
+    "Load services from a configuration directory.  Only to  only reload one."
+    try:
+        os.makedirs(serviceDir)
+    except:
+        pass
+
+    logger.info("Loading Services from "+serviceDir)
+
+    if os.path.exists(serviceDir):
+        x = os.listdir(serviceDir)
+        for i in x:
+            if not i.endswith(".ini"):
+                continue
+            if only:
+                if not i == only+".ini":
+                    continue
+            try:
+                config = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
+                config.read(os.path.join(serviceDir, i))
+
+                if "Info" in config.sections():
+                    title = config['Info'].get("title", 'untitled')
+                else:
+                    title = 'untitled'
+
+                if "Cache" in config.sections():
+                    cache = config['Cache']
+                else:
+                    cache = {}
+
+                if "Access" in config.sections():
+                    access = config['Access']
+                else:
+                    access = {}
+
+                service = config['Service']
+
+                # Close any existing service by that same friendly local name
+                closeServices(i[:-4])
+
+                certFile = os.path.join(serviceDir, i+".cert")
+                if service.get('certfile', ''):
+                    certFile = service['certfile']
+                logger.info("Loading Service")
+
+                useDHT = (access.get("useDHT", 'yes') or 'yes').lower() in (
+                    'yes', 'true', 'enable', 'on')
+
+                # Take friendly name from filename
+                s = Service(certFile, service['service'], int(
+                    service.get('port', '80') or 80), {'title': title}, friendlyName=i[:-4], cacheSettings=cache, useDHT=useDHT)
+                logger.info("Serving a service from "+service['service'])
+
+                userServices[i] = s
+            except:
+                logger.info(traceback.format_exc())
+
+
+def makeUserService(dir, name, title="A service", service="localhost", port='80',  certfile=None, cacheInfo={}, noStart=False, useDHT='yes'):
+    dir = dir or directories.user_services_dir
+
+    try:
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+    except:
+        logger.info(traceback.format_exception())
+    c = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
+    c.add_section("Service")
+    c.add_section("Info")
+    c.add_section("Cache")
+    c.add_section("Access")
+
+    file = os.path.join(dir, name+'.ini')
+
+    sinfo = c['Service']
+    sinfo['port'] = str(port)
+    sinfo['service'] = service
+    # Default gets used
+    sinfo['certfile'] = ""
+
+    info = c['Info']
+    info['title'] = title
+
+    c['Access']['useDHT'] = useDHT
+
+    for i in cacheInfo:
+        c['Cache'][i] = cacheInfo[i]
+
+    with open(file, "w") as f:
+        c.write(f)
+
+    if not noStart:
+        loadUserServices(dir, name)
+
+
+def delUserService(dir, name):
+    dir = dir or directories.user_services_dir
+
+    file = os.path.join(dir, name+'.ini')
+
+    if os.path.exists(dir):
+        for n in os.listdir(dir):
+            i = os.path.join(dir, n)
+            if file and i.startswith(file):
+                os.remove(i)
+    closeServices(name)
+
+
+def listServices(serviceDir):
+    serviceDir = serviceDir or directories.user_services_dir
+    try:
+        os.makedirs(serviceDir)
+    except:
+        pass
+
+    services = {}
+    if os.path.exists(serviceDir):
+        for i in os.listdir(serviceDir):
+            if not i.endswith(".ini"):
+                continue
+            try:
+                config = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
+                config.read(os.path.join(serviceDir, i))
+                services[i[:-4]] = config
+            except:
+                logger.info(traceback.format_exc())
+
+    return services
+
+
+userDatabases = {}
+
+
+def delDatabase(dir, name):
+    dir = dir or directories.drayerDB_root
+
+    file = os.path.join(dir, name+'.db')
+
+    if os.path.exists(dir):
+        for n in os.listdir(dir):
+            i = os.path.join(dir, n)
+            if file and i.startswith(file):
+                os.remove(i)
+    del userDatabases[name]
+
+
+def loadUserDatabases(serviceDir, only=None):
+    serviceDir = serviceDir or directories.drayerDB_root
+
+    "Load services from a configuration directory.  Only to  only reload one."
+    try:
+        os.makedirs(serviceDir)
+    except:
+        pass
+
+    logger.info("Loading Databases from " + serviceDir)
+
+    if os.path.exists(serviceDir):
+        x = os.listdir(serviceDir)
+        for i in x:
+            logger.info("File"+i)
+            if not i.endswith(".db"):
+                continue
+            if only:
+                if not i == only+".db":
+                    continue
+            try:
+                userDatabases[i].close()
+            except KeyError:
+                pass
+            try:
+                userDatabases[i] = drayerdb.DocumentDatabase(
+                    os.path.join(serviceDir, i))
+            except:
+                logger.info(traceback.format_exc())
+
+
+def makeUserDatabase(dir, name):
+    dir = dir or directories.drayerDB_root
+
+    "Load services from a configuration directory.  Only to  only reload one."
+    try:
+        os.makedirs(dir)
+    except:
+        pass
+    if not name in userDatabases:
+        userDatabases[name] = drayerdb.DocumentDatabase(
+            os.path.join(dir, name+'.db'))
+
+
+def closeServices(only=None):
+    "Only lets us only close one,  by it's friendly name"
+    for i in list(services.values()):
+        try:
+            if only:
+                if not i.friendlyName == only:
+                    continue
+            i.close()
+        except:
+            logger.info(traceback.format_exc())
+
+
+userServices = {}
+
+
+
+from . import drayerdb
+
+ddbservice = [0]
+
+def loadDrayerServerConfig():
+    "Get drayer server config from the global config file."
+    drayerdb.stopServer()
+    if ddbservice[0]:
+        ddbservice[0].close()
+
+    globalConfig = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
+    globalConfig.read(globalSettingsPath)
+    if not "DrayerDB" in globalConfig:
+        globalConfig.add_section("DrayerDB")
+
+    title = globalConfig['DrayerDB'].get('serverName','').strip()
+
+    import getpass
+        
+    if title:
+        #Start the drayerDB server on a random port.
+        for i in range(0,1000):
+            r = int(random.random()*10000)
+            try:
+                drayerdb.startServer(r+i)
+                drayerServerPort = r
+                break
+            except:
+               logging.exception("Can't start drayer server on this port, may retry")
+        
+        try:
+            os.makedirs(directories.builtinServicesRoot)
+        except:
+            pass
+           
+        ddbservice[0] = Service(os.path.join(directories.builtinServicesRoot,"drayerDB.cert"), 'localhost',drayerServerPort, info={'title':title})
+       
+
+    

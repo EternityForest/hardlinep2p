@@ -254,7 +254,7 @@ class CachingProxy():
                                         if os.path.isfile(cache_filename):
                                             with open(cache_filename, "rb") as cached:
                                                 self.send_response(200)
-                                                if header_filename and os.path.exists(header_filename):
+                                                if header_filename and os.path.isfile(header_filename):
                                                     with open(header_filename) as f:
                                                         h = json.loads(
                                                             f.read())
@@ -399,7 +399,7 @@ class CachingProxy():
                                          (time.time(), stat.st_mtime))
 
                             self.send_response(200)
-                            if header_filename and os.path.exists(header_filename):
+                            if header_filename and os.path.isfile(header_filename):
                                 with open(header_filename) as f:
                                     h = json.loads(f.read())
                                 for i in h:

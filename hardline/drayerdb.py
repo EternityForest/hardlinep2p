@@ -4,6 +4,7 @@
 
 # There is one table called Document
 
+from hashlib import blake2b
 import logging
 import shutil
 import websockets
@@ -53,6 +54,9 @@ import uuid
 import time
 import struct
 
+from websockets import server
+
+from .cidict import CaseInsensitiveDict
 
 databaseBySyncKeyHash = weakref.WeakValueDictionary()
 
@@ -99,22 +103,69 @@ async def DBAPI(websocket, path):
 
 start_server = None
 
+serverLocalPorts = [0]
+
+slock = threading.RLock()
 
 def stopServer():
     global start_server
     if start_server:
-        start_server.close()
+        try:
+            start_server.close()
+        except:
+            logging.exception()
+        start_server=None
 
-
+wsloop = None
 def startServer(port):
-    global start_server
+    if not port:
+        port = int((random.random()*10000)+10000)
+    global start_server,wsloop
     stopServer()
-    start_server = websockets.serve(DBAPI, "localhost", port)
-    asyncio.get_event_loop().run_until_complete(start_server)
+
+    #Icky hack, detect and restore the current event loop.
+    #We want to make a custom loop just for the server so we have to set it as the main one.
+    try:
+        l = asyncio.get_event_loop()
+    except:
+        l=None
+
+    wsloop = asyncio.new_event_loop()
+    asyncio.set_event_loop(wsloop)
+    s = websockets.serve(DBAPI, "localhost", port)
+    serverLocalPorts[0] = port
+
+    async def f():
+        with slock:
+            global start_server
+            with slock:
+                start_server = await s
+            await start_server.wait_closed()
+            #Stop when the server is closed.
+            asyncio.get_event_loop().stop()
+        
+    def f2():
+        #Pass off the loop to the new thread, we won't touch it after this
+        asyncio.set_event_loop(wsloop)
+        asyncio.get_event_loop().run_until_complete(f())
+    
+
     # DB will eventually handle consistency by itself.
     t = threading.Thread(
-        target=asyncio.get_event_loop().run_forever, daemon=True)
+        target=f2, daemon=True)
     t.start()
+
+    for i in range(1000):
+        if not start_server:
+            time.sleep(0.01)
+        else:
+            break
+    if not start_server.sockets:
+        raise RuntimeError("Server not running")
+    #Terrible stuff here. We are going to try to restore the event loop.
+
+    if l:
+        asyncio.set_event_loop(l)
     time.sleep(3)
 
 
@@ -140,7 +191,7 @@ def readNodeID():
 # unauthorized messageds cannot contain new records or updates to them.
 # Authorized messages must be signed with the stream's current private key.
 MESSAGE_TYPE_AUTHORIZED = 1
-MESSAGE_TYPE_READONLY = 2
+MESSAGE_TYPE_NORMAL = 2
 
 
 class DocumentDatabase():
@@ -159,62 +210,68 @@ class DocumentDatabase():
 
         self.dbConnect()
 
+        self.inTransaction=0
        
 
-        self.config = configparser.ConfigParser()
+        self.config = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
 
         if os.path.exists(filename+".ini"):
             self.config.read(filename+".ini")
 
         self.threadLocal.conn.row_factory = sqlite3.Row
-        # self.threadLocal.conn.execute("PRAGMA wal_checkpoint=FULL")
-        self.threadLocal.conn.execute("PRAGMA secure_delete = off")
+        with self:
+            # self.threadLocal.conn.execute("PRAGMA wal_checkpoint=FULL")
+            self.threadLocal.conn.execute("PRAGMA secure_delete = off")
 
-        # Yep, we're really just gonna use it as a document store like this.
-        self.threadLocal.conn.execute(
-            '''CREATE TABLE IF NOT EXISTS document (rowid integer primary key, json text, signature text, localinfo text)''')
+            # Yep, we're really just gonna use it as a document store like this.
+            self.threadLocal.conn.execute(
+                '''CREATE TABLE IF NOT EXISTS document (rowid integer primary key, json text, signature text, arrival integer, localinfo text)''')
 
-        self.threadLocal.conn.execute('''CREATE TABLE IF NOT EXISTS meta
-             (key text primary key, value  text)''')
+            self.threadLocal.conn.execute('''CREATE TABLE IF NOT EXISTS meta
+                (key text primary key, value  text)''')
 
-        self.threadLocal.conn.execute('''CREATE TABLE IF NOT EXISTS peers
-             (peerID text primary key, lastArrival integer, info text)''')
+            self.threadLocal.conn.execute('''CREATE TABLE IF NOT EXISTS peers
+                (peerID text primary key, lastArrival integer, horizon integer, info text)''')
 
-        # To keep indexing simple and universal, it only works on four standard properties. tags, title, descripion, body
-        self.threadLocal.conn.execute('''
-             CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5(tags, title, description, body, content='')''')
+            # To keep indexing simple and universal, it only works on four standard properties. tags, title, descripion, body
+            self.threadLocal.conn.execute('''
+                CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5(tags, title, description, body, content='')''')
 
-        self.threadLocal.conn.execute(
-            '''CREATE INDEX IF NOT EXISTS document_parent ON document(json_extract(json,"$.parent")) WHERE json_extract(json,"$.parent") IS NOT null ''')
-        self.threadLocal.conn.execute(
-            '''CREATE INDEX IF NOT EXISTS document_link ON document(json_extract(json,"$.link")) WHERE json_extract(json,"$.link") IS NOT null''')
-        self.threadLocal.conn.execute(
-            '''CREATE INDEX IF NOT EXISTS document_name ON document(json_extract(json,"$.name"))''')
-        self.threadLocal.conn.execute(
-            '''CREATE INDEX IF NOT EXISTS document_id ON document(json_extract(json,"$.id"))''')
-        self.threadLocal.conn.execute(
-            '''CREATE INDEX IF NOT EXISTS document_type ON document(json_extract(json,"$.type"))''')
+            self.threadLocal.conn.execute(
+                '''CREATE INDEX IF NOT EXISTS document_parent ON document(json_extract(json,"$.parent")) WHERE json_extract(json,"$.parent") IS NOT null ''')
+            self.threadLocal.conn.execute(
+                '''CREATE INDEX IF NOT EXISTS document_link ON document(json_extract(json,"$.link")) WHERE json_extract(json,"$.link") IS NOT null''')
+            self.threadLocal.conn.execute(
+                '''CREATE INDEX IF NOT EXISTS document_name ON document(json_extract(json,"$.name"))''')
+            self.threadLocal.conn.execute(
+                '''CREATE INDEX IF NOT EXISTS document_id ON document(json_extract(json,"$.id"))''')
+            self.threadLocal.conn.execute(
+                '''CREATE INDEX IF NOT EXISTS document_type ON document(json_extract(json,"$.type"))''')
+            self.threadLocal.conn.execute(
+                '''CREATE INDEX IF NOT EXISTS document_arrival ON document(arrival)''')
 
-        self.threadLocal.conn.execute(
-            """
-            CREATE TRIGGER IF NOT EXISTS search_index AFTER INSERT ON document BEGIN
-            INSERT INTO search(rowid, tags,title, description, body) VALUES (new.rowid, IFNULL(json_extract(new.json,"$.tags"), ""), IFNULL(json_extract(new.json,"$.title"), ""), IFNULL(json_extract(new.json,"$.description"), "") , IFNULL(json_extract(new.json,"$.body"), ""));
-            END;
-            """)
+            self.threadLocal.conn.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS search_index AFTER INSERT ON document BEGIN
+                INSERT INTO search(rowid, tags,title, description, body) VALUES (new.rowid, IFNULL(json_extract(new.json,"$.tags"), ""), IFNULL(json_extract(new.json,"$.title"), ""), IFNULL(json_extract(new.json,"$.description"), "") , IFNULL(json_extract(new.json,"$.body"), ""));
+                END;
+                """)
 
-        self.threadLocal.conn.execute(
-            """   CREATE TRIGGER IF NOT EXISTS search_delete AFTER DELETE ON document BEGIN
-            INSERT INTO search(search, rowid, tags, title,description, body) VALUES ('delete', old.rowid, IFNULL(json_extract(old.json,"$.tags"), ""), IFNULL(json_extract(old.json,"$.title"), ""), IFNULL(json_extract(old.json,"$.description"), ""), IFNULL(json_extract(old.json,"$.body"), ""));
-            END;""")
+            self.threadLocal.conn.execute(
+                """   CREATE TRIGGER IF NOT EXISTS search_delete AFTER DELETE ON document BEGIN
+                INSERT INTO search(search, rowid, tags, title,description, body) VALUES ('delete', old.rowid, IFNULL(json_extract(old.json,"$.tags"), ""), IFNULL(json_extract(old.json,"$.title"), ""), IFNULL(json_extract(old.json,"$.description"), ""), IFNULL(json_extract(old.json,"$.body"), ""));
+                END;""")
 
-        self.threadLocal.conn.execute(
-            """
-            CREATE TRIGGER IF NOT EXISTS search_update AFTER UPDATE ON document BEGIN
-            INSERT INTO search(search, rowid, tags, title,description, body) VALUES ('delete', old.rowid, IFNULL(json_extract(old.json,"$.tags"), ""),IFNULL(json_extract(old.json,"$.title"), ""), IFNULL(json_extract(old.json,"$.description"), ""), IFNULL(json_extract(old.json,"$.body"), ""));
-            INSERT INTO search(rowid, tags, title,description, body) VALUES (new.rowid, IFNULL(json_extract(new.json,"$.tags"), ""), IFNULL(json_extract(new.json,"$.title"), ""), IFNULL(json_extract(new.json,"$.description"), ""), IFNULL(json_extract(new.json,"$.body"), ""));
-            END;
-            """
-        )
+            self.threadLocal.conn.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS search_update AFTER UPDATE ON document BEGIN
+                INSERT INTO search(search, rowid, tags, title,description, body) VALUES ('delete', old.rowid, IFNULL(json_extract(old.json,"$.tags"), ""),IFNULL(json_extract(old.json,"$.title"), ""), IFNULL(json_extract(old.json,"$.description"), ""), IFNULL(json_extract(old.json,"$.body"), ""));
+                INSERT INTO search(rowid, tags, title,description, body) VALUES (new.rowid, IFNULL(json_extract(new.json,"$.tags"), ""), IFNULL(json_extract(new.json,"$.title"), ""), IFNULL(json_extract(new.json,"$.description"), ""), IFNULL(json_extract(new.json,"$.body"), ""));
+                END;
+                """
+            )
+
+
 
 
         # If a db is deleted and recreated at the same file path, this means we have a chance of
@@ -224,44 +281,49 @@ class DocumentDatabase():
         self.nodeIDSeed = self.getMeta("nodeIDSeed")
         if not self.nodeIDSeed:
             self.nodeIDSeed = os.urandom(24).hex()
+            self.setMeta("nodeIDSeed",self.nodeIDSeed)
 
-        # Deterministically generate a keypair that we will use to sign all correspondance
-        self.localNodeVK, self.localNodeSK = libnacl.crypto_sign_seed_keypair(
-            libnacl.crypto_generichash((os.path.basename(filename)+self.nodeIDSeed).encode("utf8"), readNodeID()))
-
+        
 
         if not keypair:
-            if 'sync' not in self.config:
+            if 'Sync' not in self.config:
                 vk, sk = libnacl.crypto_sign_keypair()
-                self.config.add_section('sync')
-                self.config.set('sync', 'syncKey',
+                self.config.add_section('Sync')
+                self.config.set('Sync', 'syncKey',
                                 base64.b64encode(vk).decode('utf8'))
-                self.config.set('sync', 'writePassword',
+                self.config.set('Sync', 'writePassword',
                                 base64.b64encode(sk).decode('utf8'))
                 self.saveConfig()
 
-            self.syncKey = self.config.get('sync', 'syncKey', fallback=None)
+            self.syncKey = self.config.get('Sync', 'syncKey', fallback=None)
             self.writePassword = self.config.get(
-                'sync', 'writePassword', fallback='')
+                'Sync', 'writePassword', fallback='')
 
         else:
-            self.syncKey = keypair[0]
-            self.writePassword = keypair[1]
+            self.syncKey = base64.b64encode(keypair[0]).decode()
+            self.writePassword = base64.b64encode(keypair[1]).decode()
+        
+        # Deterministically generate a keypair that we will use to sign all correspondance
+        # writePassword has to be a part of it because nodes that have it are special and we want it
+        #to be harder to fake one, plus adding one should effectively make it a new node so we know
+        #to check things we couldn't trust before.
+        self.localNodeVK, self.localNodeSK = libnacl.crypto_sign_seed_keypair(
+            libnacl.crypto_generichash((os.path.basename(filename)+self.nodeIDSeed+self.writePassword).encode("utf8"), readNodeID()))
 
-        self.serverURL = self.config.get('sync', 'server', fallback=None)
 
         if self.syncKey and servable:
             databaseBySyncKeyHash[libnacl.crypto_generichash(
                 libnacl.crypto_generichash(base64.b64decode(self.syncKey)))[:16]] = self
-
-        self.useSyncServer(self.serverURL)
+        self.serverURL=None
+        self.syncFailBackoff =1
+        self.useSyncServer(self.config.get('Sync', 'server', fallback=None))
 
     def useSyncServer(self, server, permanent=False):
         with self.lock:
             if server == self.serverURL:
                 return
             if permanent:
-                self.config.set('sync', 'serverURL', server)
+                self.config.set('Sync', 'serverURL', server)
 
             self.serverURL = server
             if not server:
@@ -273,19 +335,24 @@ class DocumentDatabase():
     def serverManagerThread(self):
         oldServerURL = self.serverURL
         loop = asyncio.new_event_loop()
-        backoff = 1
+
 
         while oldServerURL == self.serverURL:
             try:
                 if loop.run_until_complete(self.openSessionAsClient()):
-                    backoff = 1
+                    self.syncFailBackoff = 1
             except:
                 logging.exception("Error in DB Client")
                 logging.info(traceback.format_exc())
 
-            backoff *= 2
-            backoff = max(backoff, 5*60)
-            time.sleep(backoff)
+            self.syncFailBackoff *= 2
+            self.syncFailBackoff = min(self.syncFailBackoff, 5*60)
+
+            #Small increments so we can interrupt it
+            for i in range(5*60):
+                if i> self.syncFailBackoff:
+                    break
+                time.sleep(1)
 
         loop.stop()
         loop.close()
@@ -317,7 +384,7 @@ class DocumentDatabase():
                             r = {}
                             cur = self.threadLocal.conn.cursor()
                             cur.execute(
-                                "SELECT lastArrival FROM peers WHERE peerID=?", (session.remoteNodeID,))
+                                "SELECT lastArrival FROM peers WHERE peerID=?", (base64.b64encode(session.remoteNodeID),))
 
                             c = cur.fetchone()
                             if c:
@@ -361,6 +428,23 @@ class DocumentDatabase():
                 logging.info(f"< {greeting}")
 
         asyncio.create_task(f)
+
+    def _checkIfNeedsResign(self,i):
+        "Check if we need to redo the sig on a record,sig pair because the key has changed.  Return sig, old sig if no correction needed"
+        if not base64.b64decode(i[1])[24:].startswith(kdg):
+            if self.writePassword:
+                mdg = libnacl.crypto_generichash(i[0].encode())[:24]
+                kdg = libnacl.crypto_generichash(base64.b64decode(self.syncKey))[:8]
+                sig = libnacl.crypto_sign_detached(mdg, base64.b64decode(self.writePassword))
+                signature = base64.b64encode(mdg+kdg+sig).decode()
+                id = json.loads(i[0])['id']
+                c2 = self.threadLocal.conn.execute('UPDATE document SET signature=? WHERE json_extract(json,"$.id")=?',(signature,id))
+
+                return signature
+            else:
+                raise RuntimeError("Record needs resign but no key to do so is present")
+
+        return i[1]
 
     def handleBinaryAPICall(self, a, sessionObject=None):
         # Process one incoming binary API message.  If part of a sesson, using a sesson objert enables certain features.
@@ -416,68 +500,105 @@ class DocumentDatabase():
         if innerMessageType == MESSAGE_TYPE_AUTHORIZED:
             # Now finally we decrypt the inner message.  By making this the inner,
             # We can perhaps have anonymizing servers that repackage it without knowing the write password.
+
             d = libnacl.crypto_sign_open(d, base64.b64decode(self.syncKey))
-        elif innerMessageType == MESSAGE_TYPE_READONLY:
-            # These don't have the extra inner encryption.
+        elif innerMessageType == MESSAGE_TYPE_NORMAL:
+            # These don't have the extra inner encryption and are currently the only type used for everything
             pass
 
         d = json.loads(d)
 
         r = {'records': []}
 
-        if sessionObject and not sessionObject.alreadyDidInitialSync:
-            cur = self.threadLocal.conn.cursor()
-            cur.execute(
-                "SELECT lastArrival FROM peers WHERE peerID=?", (remoteNodeID,))
+        cur = self.threadLocal.conn.cursor()
+        cur.execute(
+            "SELECT lastArrival,horizon FROM peers WHERE peerID=?", (base64.b64encode(remoteNodeID).decode(),))
 
-            c = cur.fetchone()
-            if c:
-                c = c[0]
-            else:
-                c = 0
+        peerinfo = cur.fetchone()
+        #How far back do we have knowledge of ther peer's records
+        peerHorizon = time.time()*1000000
+        isNewPeer = False
+        if peerinfo:
+            c = peerinfo[0]               
+            peerHorizon=peerinfo[1]
+        else:
+            isNewPeer=True
+            c = 0
+
+        if sessionObject and not sessionObject.alreadyDidInitialSync:
+           
             # No falsy value allowed, that would mean don't get new arrivals
             r['getNewArrivals'] = c or 1
             sessionObject.alreadyDidInitialSync = True
 
-        # Can't send records if we don't have the send key
-        if self.writePassword:
-            if "getNewArrivals" in d:
-                cur = self.threadLocal.conn.cursor()
-                # Avoid dumping way too much at once
-                cur.execute(
-                    "SELECT json,signature FROM document WHERE json_extract(json,'$.arrival')>? LIMIT 100", (d['getNewArrivals'],))
 
-                # Declares that there are no records left out in between this time and the first time we actually send
-                r['recordsStartFrom'] = d['getNewArrivals']
+        if "getNewArrivals" in d:
+            kdg = libnacl.crypto_generichash(base64.b64decode(self.syncKey))[:8]
+            cur = self.threadLocal.conn.cursor()
+            # Avoid dumping way too much at once
+            cur.execute(
+                "SELECT json,signature,arrival FROM document WHERE arrival>? LIMIT 100", (d['getNewArrivals'],))
 
-                for i in cur:
-                    if not 'records' in r:
-                        r['records'] = []
-                    logging.info(i)
-                    r['records'].append([i[0], ''])
+            # Declares that there are no records left out in between this time and the first time we actually send
+            r['recordsStartFrom'] = d['getNewArrivals']
 
-                    sessionObject.lastResyncFlushTime = max(
-                        sessionObject.lastResyncFlushTime, json.loads(i[0])['arrival'])
+            needCommit =False
 
-        if innerMessageType == MESSAGE_TYPE_AUTHORIZED:
-            if "records" in d and d['records']:
+            for i in cur:
+                sig = i[1]
+                #Detect if the record was signed with an old key and needs to be resigned
+                if not base64.b64decode(i[1])[24:].startswith(kdg):
+                    if self.writePassword:
+                        sig = self._checkIfNeedsResign(i)
+                        needCommit=True
+                    else:
+                        #Can't send stuff sent with old keys if we can't re sign, they will have to get from a source that can.
+                        continue
+                else:
+                    signature = i[1]
+
+                if not 'records' in r:
+                    r['records'] = []
+                logging.info(i)
+                r['records'].append([i[0],sig,i[2]])
+
+                sessionObject.lastResyncFlushTime = max(
+                    sessionObject.lastResyncFlushTime, i[2])
+            
+            if needCommit:
+                self.commit()
+
+        needUpdatePeerTimestamp = False
+        if "records" in d and d['records']:
+            with self:
                 for i in d['records']:
+                
+                    self.setDocument(i[0],i[1])
+                    r['getNewArrivals'] = latest = i[2]
+                    needUpdatePeerTimestamp = True
 
-                    # The client side trusts the server(Because the user has presumably explicitly configured the server),
-                    # and only requires the correct sync key.
-                    # The server side does not trust the client to write, unless it has the write password.
+                if needUpdatePeerTimestamp:
+                    # Set a flag saying that
+                    cur = self.threadLocal.conn.cursor()
 
-                    self.setDocument(i[0])
-                    r['getNewArrivals'] = latest = json.loads(i[0])['arrival']
+                    if not isNewPeer:
+                        # If the recorded lastArrival is less than the incoming recordsStartFrom, it would mean that there is a gap in which records
+                        # That we don't know about could be hiding.   Don't update the timestamp in that case, as the chain is broken.
+                        # We can still accept new records, but we will need to request everything all over again starting at the breakpoint to fix this.
+                        cur.execute("UPDATE peers SET lastArrival=? WHERE peerID=? AND lastArrival !=? AND lastArrival>=?",
+                                    (latest,base64.b64encode(remoteNodeID).decode(), latest, d["recordsStartFrom"]))
 
-                # Set a flag saying that
-                cur = self.threadLocal.conn.cursor()
-                # If the recorded lastArrival is less than the incoming recordsStartFrom, it would mean that there is a gap in which records
-                # That we don't know about could be hiding.   Don't update the timestamp in that case, as the chain is broken.
-                # We can still accept new records, but we will need to request everything all over again starting at the breakpoint to fix this.
-                cur.execute("UPDATE peers SET lastArrival=? WHERE peerID=? AND lastArrival !=? AND lastArrival>=?",
-                            (latest, remoteNodeID, latest, d["recordsStartFrom"]))
-                self.threadLocal.conn.commit()
+                        #Now we do the same thing, but for the horizon.  If the tip of the new block pf records is later than or equal to the current
+                        #horizon, we have a complete chain and we can set the horizon to recordsStartFrom, knowing that we have all records up to that point.
+                        cur.execute("UPDATE peers SET horizon=? WHERE peerID=? AND horizon !=? AND horizon<=?",
+                                    (d["recordsStartFrom"],base64.b64encode(remoteNodeID).decode(), d["recordsStartFrom"],  latest))
+                    else:
+                        # If the recorded lastArrival is less than the incoming recordsStartFrom, it would mean that there is a gap in which records
+                        # That we don't know about could be hiding.   Don't update the timestamp in that case, as the chain is broken.
+                        # We can still accept new records, but we will need to request everything all over again starting at the breakpoint to fix this.
+                        cur.execute("INSERT INTO peers VALUES(?,?,?,?)",
+                                    (base64.b64encode(remoteNodeID).decode(), latest, d["recordsStartFrom"],'{}'))
+
 
         return self.encodeMessage(r)
 
@@ -488,7 +609,7 @@ class DocumentDatabase():
             cur = self.threadLocal.conn.cursor()
             # Avoid dumping way too much at once
             cur.execute(
-                "SELECT json,signature FROM document WHERE json_extract(json,'$.arrival')>? LIMIT 100", (session.lastResyncFlushTime,))
+                "SELECT json,signature,arrival FROM document WHERE arrival>? LIMIT 100", (session.lastResyncFlushTime,))
 
             # Let the client know that there are no records left out in between the start of this message and the end of what they have
             r['recordsStartFrom'] = session.lastResyncFlushTime
@@ -496,10 +617,10 @@ class DocumentDatabase():
             for i in cur:
                 if not 'records' in r:
                     r['records'] = []
-                r['records'].append([i[0], base64.b64encode(i[1]).decode()])
+                r['records'].append([i[0], i[1]])
 
                 session.lastResyncFlushTime = max(
-                    session.lastResyncFlushTime, json.loads(i[0])['arrival'])
+                    session.lastResyncFlushTime, i[2])
 
             # We can of course just send nothing if there are no changes to flush.
             if r:
@@ -507,7 +628,7 @@ class DocumentDatabase():
 
     def createBinaryWriteCall(self, r, sig=None):
         "Creates a binary command representing a request to insert a record."
-        p = self.config.get('sync', 'writePassword', fallback=None)
+        p = self.config.get('Sync', 'writePassword', fallback=None)
         if not p:
             if not sig:
                 raise RuntimeError(
@@ -534,11 +655,15 @@ class DocumentDatabase():
 
         timeAsBytes = struct.pack("<Q", int(time.time()*1000000))
 
-        if self.writePassword:
-            data = bytes([1]) + libnacl.crypto_sign(r,
-                                                    base64.b64decode(self.writePassword))
-        else:
-            data = bytes([2]) + r
+
+        #Currently we do not use the special authorized messages, relying on record-level sigs only.
+        # if self.writePassword:
+        #     data = bytes([MESSAGE_TYPE_AUTHORIZED]) + libnacl.crypto_sign(r,
+        #                                             base64.b64decode(self.writePassword))
+        # else:
+        #     data = bytes([MESSAGE_TYPE_NORMAL]) + r
+
+        data = bytes([MESSAGE_TYPE_NORMAL]) + r
 
         signed = libnacl.crypto_sign(timeAsBytes+data, self.localNodeSK)
         data = self.localNodeVK+signed
@@ -549,7 +674,7 @@ class DocumentDatabase():
 
     def createBinaryWriteCall(self, r, sig=None):
         "Creates a binary command representing arequest to insert a record."
-        p = self.config.get('sync', 'writePassword', fallback=None)
+        p = self.config.get('Sync', 'writePassword', fallback=None)
         if not p:
             if not sig:
                 raise RuntimeError(
@@ -573,6 +698,7 @@ class DocumentDatabase():
     def setMeta(self, key, value):
         self.threadLocal.conn.execute(
             "INSERT INTO meta VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=?", (key, value, value))
+        self.commit()
 
     def getPeerSyncTime(self, key):
         cur = self.threadLocal.conn.cursor()
@@ -597,43 +723,83 @@ class DocumentDatabase():
     def saveConfig(self):
         with open(self.filename+".ini", 'w') as configfile:
             self.config.write(configfile)
+        self.syncFailBackoff=1
 
     def __enter__(self):
         self.dbConnect()
-        self.threadLocal.conn.__enter__
+        self.threadLocal.conn.__enter__()
         return self
 
     def __exit__(self, *a):
-        self.dbConnect()
-        self.threadLocal.conn.__exit__
-
+        self.threadLocal.conn.__exit__(*a)
 
         ts = int((time.time())*10**6)
 
-    def setDocument(self, doc):
+    def setDocument(self, doc, signature=None):
+        "Two modes: Locally generate a signature, or use the existing sig data"
+        arrival = time.time()*1000000
+
+        if signature:
+            libnacl.crypto_generichash(doc)[:24]
+            kdg = libnacl.crypto_generichash(base64.b64decode(self.syncKey))[:8]
+            sig = base64.b64decode(signature)
+            mdg = sig[:24]
+            sig = sig[24:]
+            recievedKeyDigest = sig[:8]
+            sig = sig[8:]
+
+            recievedMessageDigest = libnacl.crypto_generichash(doc)[:24]
+            if not recievedMessageDigest==mdg:
+                raise ValueError("Bad message digest in supplied record")
+            if not kdg==recievedKeyDigest:
+                raise ValueError("This message was signed with the wrong key")
+
+            libnacl.crypto_sign_verify_detached(sig,mdg, base64.b64decode(self.syncKey))
+            d= doc
+        
+        else:
+            if not self.writePassword:
+                raise RuntimeError("Cannot modify records without the writePassword")
+            #Handling a locally created document
+            
+            doc['time'] = doc.get('time', time.time()*1000000)
+            
+            doc['id'] = doc.get('id', str(uuid.uuid4()))
+            doc['name'] = doc.get('name', doc['id'])
+            doc['type'] = doc.get('type', '')
+
+            d = jsonEncode(doc)
+
+            # This is a bit of a tricky part here.  We want to allow repeaters that
+            # do not have full write privilidges in the future. So We sign with the
+            # write password.  However that key is not permanently linked to
+            # the database.  It could change, which would mean that older signed records
+            # would not be accepted.  However, this is unavoidable really.  If the key
+            # is compromised, it is essential that we obviously don't accept new records that were signed
+            # with it.
+            mdg = libnacl.crypto_generichash(d)[:24]
+
+
+            #Only 8 bytes because it's not meant to be cryptographically strong, just a hint
+            #to aid lookup of the real key
+            kdg = libnacl.crypto_generichash(base64.b64decode(self.syncKey))[:8]
+            sig = libnacl.crypto_sign_detached(mdg, base64.b64decode(self.writePassword))
+            signature = base64.b64encode(mdg+kdg+sig).decode()
+
         if isinstance(doc, str):
             doc = json.loads(doc)
-
-        doc['time'] = doc.get('time', time.time()*1000000)
-        doc['arrival'] = doc.get('arrival', time.time()*1000000)
-        doc['id'] = doc.get('id', str(uuid.uuid4()))
-        doc['name'] = doc.get('name', doc['id'])
-        doc['type'] = doc.get('type', '')
 
         # If a UUID has been supplied, we want to erase any old record bearing that name.
         cur = self.threadLocal.conn.cursor()
         cur.execute(
             'SELECT json_extract(json,"$.time") FROM document WHERE  json_extract(json,"$.id")=?', (doc['id'],))
-        x = cur.fetchone()
+        oldVersion = cur.fetchone()
 
-        d = jsonEncode(doc)
-        signature = ''
-
-        if x:
+        if oldVersion:
             # Check that record we are trying to insert is newer, else ignore
-            if x[0] < doc['time']:
+            if oldVersion[0] < doc['time']:
                 self.threadLocal.conn.execute(
-                    "UPDATE document SET json=?, signature=? WHERE json_extract(json,'$.id')=?", (d, signature,  doc['id']))
+                    "UPDATE document SET json=?, signature=?,arrival=? WHERE json_extract(json,'$.id')=?", (d, signature,  arrival, doc['id']))
 
                 # If we are marking this as deleted, we can ditch everything that depends on it.
                 # We don't even have to just set them as deleted, we can relly delete them, the deleted parent record
@@ -642,22 +808,32 @@ class DocumentDatabase():
                     self.threadLocal.conn.execute(
                         "DELETE FROM document WHERE json_extract(json,'$.parent')=?", (doc['id'],))
 
+                self.onRecordChange(doc,signature)
+
                 return doc['id']
             else:
                 return doc['id']
 
         self.threadLocal.conn.execute(
-            "INSERT INTO document VALUES (null,?,?,?)", (d, signature,''))
+            "INSERT INTO document VALUES (null,?,?,?,?)", (d, signature,arrival,signature))
+        self.onRecordChange(doc,signature)
+
         self.lastChange = time.time()
 
         for i in self.subscribers:
             try:
-                asyncio.get_event_loop().run_until_complete(
-                    self.subscribers[i].socket.send(self.getUpdatesForSession(self.subscribers[i])))
+                x = self.getUpdatesForSession(self.subscribers[i])
+                if x:
+                
+                    asyncio.run_coroutine_threadsafe(
+                        self.subscribers[i].socket.send(x),wsloop)
             except:
                 logging.info(traceback.format_exc())
 
         return doc['id']
+
+    def onRecordChange(self,record, signature):
+        pass
 
     def getDocumentByID(self, key):
         self.dbConnect()
@@ -698,3 +874,31 @@ class DocumentDatabase():
                     r.append(x)
             
         return list(reversed([i for i in [json.loads(i[0]) for i in r] if not i.get('type','')=='null']))
+
+
+if __name__=="__main__":
+
+    kp = libnacl.crypto_sign_seed_keypair(b'TEST'*int(32/4))
+    db1 = DocumentDatabase("test1.db",keypair=kp)
+    db2 = DocumentDatabase("test2.db",keypair=kp,servable=False)
+
+    startServer(7004)
+    with db1:
+        db1.setDocument({'body':"From Db1"})
+    with db2:
+        db2.setDocument({'body':"From Db2"})
+
+    db2.useSyncServer("ws://localhost:7004")
+
+    with db1:
+        db1.setDocument({'body':"From Db1 after connect"})
+    with db2:
+        db2.setDocument({'body':"From Db2  after connect"})
+        
+
+    time.sleep(2)
+    db1.commit()
+    db2.commit()
+
+    time.sleep(2000)
+

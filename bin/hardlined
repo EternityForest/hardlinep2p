@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 import hardline
+import hardline.daemonconfig
+
 import traceback
 import configparser
 import os
@@ -32,6 +34,6 @@ if __name__ == "__main__":
 
     services = []
     if os.path.exists(args['servicedir']):
-        hardline.loadUserServices(args['servicedir'])
+        hardline.daemonconfig.loadUserServices(args['servicedir'])
 
     hardline.start(int(args['localport']))

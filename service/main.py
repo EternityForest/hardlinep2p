@@ -6,6 +6,7 @@ import hardline
 
 loadedServices = hardline.loadUserServices(
                     hardline.user_services_dir)
-db= hardline.loadUserDatabases(None)
+hardline.loadDrayerServerConfig()
 # This is the android service
 hardline.start(7009)
+db= hardline.loadUserDatabases(None)

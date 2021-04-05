@@ -34,11 +34,12 @@ import traceback
 import os
 import sys
 
-from hardline import makeUserDatabase, uihelpers, drayerdb
+from hardline import makeUserDatabase, uihelpers, drayerdb, cidict
 from kivymd.uix.picker import MDDatePicker
 
 import datetime
 
+from hardline.cidict import CaseInsensitiveDict
 
 from kivy.logger import Logger, LOG_LEVELS
 Logger.setLevel(LOG_LEVELS["info"])
@@ -71,6 +72,10 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
                 loadedServices = hardline.loadUserServices(
                     None)
+
+                hardline.loadDrayerServerConfig()
+
+
                 db = hardline.loadUserDatabases(
                     None)
                 hardline.start(7009)
@@ -142,7 +147,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         self.screenManager.current = "Settings"
 
     def goToGlobalSettings(self, *a):
-        globalConfig = configparser.ConfigParser()
+        globalConfig = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
         globalConfig.read(hardline.globalSettingsPath)
         self.localSettingsBox.clear_widgets()
 
@@ -158,12 +163,25 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         self.localSettingsBox.add_widget(
             self.settingButton(globalConfig, "DHTProxy", 'server3'))
 
+        self.localSettingsBox.add_widget(Label(size_hint=(1, 6), halign="center",
+                                               text='Stream Server'))
+        self.localSettingsBox.add_widget(Label(size_hint=(1, None),
+                                              text='To allow others to sync to this node as a DrayerDB Stream server, set a server title to expose a service'))
+        
+        self.localSettingsBox.add_widget(
+            self.settingButton(globalConfig, "DrayerDB", 'serverName'))
+
         btn1 = Button(text='Save',
                       size_hint=(1, None), font_size="14sp")
 
         def save(*a):
             with open(hardline.globalSettingsPath, 'w') as f:
                 globalConfig.write(f)
+            if platform == 'android':
+                self.stop_service()
+                self.start_service()
+            else:
+                hardline.loadDrayerServerConfig()
 
             self.screenManager.current = "Main"
 
@@ -641,14 +659,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
     def editStreamSettings(self, name):
         db = hardline.userDatabases[name]
         c = db.config
-        try:
-            c.add_section("Service")
-        except:
-            pass
-        try:
-            c.add_section("Info")
-        except:
-            pass
+
 
         self.streamEditPanel.clear_widgets()
 
@@ -813,7 +824,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
     def editLocalService(self, name, c=None):
         if not c:
-            c = configparser.ConfigParser()
+            c = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
 
         try:
             c.add_section("Service")

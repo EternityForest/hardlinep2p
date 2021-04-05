@@ -33,6 +33,7 @@ try:
     user_services_dir = os.path.join(r, "services")
     proxy_cache_root = os.path.join(r, "proxycache")
     drayerDB_root = os.path.join(r, "drayerdb")
+    builtinServicesRoot = os.path.join(r, "builtinservices")
 
     #First time copy-over to new SD card from internal storage.
     import shutil
@@ -48,12 +49,16 @@ try:
         logging.info("Copying service files to external SD")
         shutil.copytree(os.path.join(internalDir, "drayerdb"), drayerDB_root)
 
-    logging.info(user_services_dir)
+    if not os.path.exists(builtinServicesRoot) and os.path.exists(os.path.join(internalDir, "builtinservices")):
+        logging.info("Copying service files to external SD")
+        shutil.copytree(os.path.join(internalDir, "builtinservices"), builtinServicesRoot)
 
 except:
     logging.info(traceback.format_exc())
     user_services_dir = os.path.expanduser('~/.hardlinep2p/services/')
     proxy_cache_root = os.path.expanduser('~/.hardlinep2p/proxycache/')
+    builtinServicesRoot =  os.path.expanduser('~/.hardlinep2p/builtinservices/')
+
 
 
 
