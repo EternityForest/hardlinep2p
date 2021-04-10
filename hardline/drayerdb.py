@@ -22,30 +22,6 @@ import struct
 import uuid
 import traceback
 
-# from scullery import messagebus
-
-# class DocumentView():
-#     def __init__(self,database,uuid):
-#         self.database = database
-#         self.uuid = uuid
-
-#     def __getitem__(self,key):
-
-#         #Look for a prop record first, then look for an actual key in that document's table
-#         cur = self.database.conn.cursor()
-#         cur.execute("SELECT document FROM document WHERE parent=? AND type=? AND name=?", (self.uuid,".prop",key))
-#         x= curr.fetchone()
-#         if x:
-#             return x[0]
-
-
-#         cur = self.database.conn.cursor()
-#         cur.execute("SELECT (document,type) FROM document WHERE uuid=?", (self.uuid,))
-#         x= curr.fetchone()
-#         if x:
-#             if key in x[0]:
-#                 return x[0][key]
-
 import socket
 import re
 import threading
@@ -72,6 +48,9 @@ class Session():
 
         # We don't actually know who the other end is till we get a message.
         self.remoteNodeID = None
+
+        #Just used as a match flag for the DB to avoid loops
+        self.b64NodeID = 'UNKNOWN'
 
 
 async def DBAPI(websocket, path):
@@ -117,7 +96,8 @@ def stopServer():
         start_server=None
 
 wsloop = None
-def startServer(port):
+
+def startServer(port,bindTo='localhost'):
     if not port:
         port = int((random.random()*10000)+10000)
     global start_server,wsloop
@@ -132,7 +112,7 @@ def startServer(port):
 
     wsloop = asyncio.new_event_loop()
     asyncio.set_event_loop(wsloop)
-    s = websockets.serve(DBAPI, "localhost", port)
+    s = websockets.serve(DBAPI, bindTo, port)
     serverLocalPorts[0] = port
 
     async def f():
@@ -195,7 +175,7 @@ MESSAGE_TYPE_NORMAL = 2
 
 
 class DocumentDatabase():
-    def __init__(self, filename, keypair=None, servable=True):
+    def __init__(self, filename, keypair=None, servable=True,forceProxy=None):
 
         self.filename = os.path.abspath(filename)
         self.threadLocal = threading.local()
@@ -222,10 +202,11 @@ class DocumentDatabase():
         with self:
             # self.threadLocal.conn.execute("PRAGMA wal_checkpoint=FULL")
             self.threadLocal.conn.execute("PRAGMA secure_delete = off")
+            self.threadLocal.conn.execute("PRAGMA journal_mode=WAL;")
 
             # Yep, we're really just gonna use it as a document store like this.
             self.threadLocal.conn.execute(
-                '''CREATE TABLE IF NOT EXISTS document (rowid integer primary key, json text, signature text, arrival integer, localinfo text)''')
+                '''CREATE TABLE IF NOT EXISTS document (rowid integer primary key, json text, signature text, arrival integer, receivedFrom text, localinfo text)''')
 
             self.threadLocal.conn.execute('''CREATE TABLE IF NOT EXISTS meta
                 (key text primary key, value  text)''')
@@ -310,13 +291,41 @@ class DocumentDatabase():
         self.localNodeVK, self.localNodeSK = libnacl.crypto_sign_seed_keypair(
             libnacl.crypto_generichash((os.path.basename(filename)+self.nodeIDSeed+self.writePassword).encode("utf8"), readNodeID()))
 
+        if self.config['Sync'].get("serve",'').strip():
+            servable= self.config['Sync'].get("serve").lower() in ("true",'yes','on','enable')
 
         if self.syncKey and servable:
             databaseBySyncKeyHash[libnacl.crypto_generichash(
                 libnacl.crypto_generichash(base64.b64decode(self.syncKey)))[:16]] = self
         self.serverURL=None
         self.syncFailBackoff =1
-        self.useSyncServer(self.config.get('Sync', 'server', fallback=None))
+
+        self.onRecordChangeLock = threading.RLock()
+
+
+        #Get the most recently arrived message, so we are able to rescan for any direct changes
+        cur = self.threadLocal.conn.cursor()
+        # Avoid dumping way too much at once
+        cur.execute(
+            "SELECT arrival FROM document ORDER BY arrival DESC LIMIT 1")
+        x = cur.fetchone()
+        if x:
+            self.lastDidOnRecordChange = x[0]
+        else:
+           self.lastDidOnRecordChange=0
+
+
+
+        self.useSyncServer(forceProxy or self.config.get('Sync', 'server', fallback=None))
+
+    def scanForDirectChanges():
+        "Check the DB for any records that have been changed, but which "
+        cur = self.threadLocal.conn.cursor()
+        # Avoid dumping way too much at once
+        cur.execute(
+            "SELECT json,signature,arrival FROM document WHERE arrival>?", (self.lastDidOnRecordChange,))
+        for i in cur:
+            self._onRecordChange(json.loads(i[0]),i[1],i[2])
 
     def useSyncServer(self, server, permanent=False):
         with self.lock:
@@ -475,6 +484,10 @@ class DocumentDatabase():
         if sessionObject and sessionObject.remoteNodeID:
             if not remoteNodeID == sessionObject.remoteNodeID:
                 raise RuntimeError("Remote ID changed in same session")
+            
+        sessionObject.remoteNodeID=remoteNodeID
+        sessionObject.b64remoteNodeID= base64.b64encode(remoteNodeID).decode()
+
         d = d[32:]
 
         # Verify that it is from who it claims to be from
@@ -510,94 +523,104 @@ class DocumentDatabase():
 
         r = {'records': []}
 
-        cur = self.threadLocal.conn.cursor()
-        cur.execute(
-            "SELECT lastArrival,horizon FROM peers WHERE peerID=?", (base64.b64encode(remoteNodeID).decode(),))
+        b64remoteNodeID= base64.b64encode(remoteNodeID).decode()
 
-        peerinfo = cur.fetchone()
-        #How far back do we have knowledge of ther peer's records
-        peerHorizon = time.time()*1000000
-        isNewPeer = False
-        if peerinfo:
-            c = peerinfo[0]               
-            peerHorizon=peerinfo[1]
-        else:
-            isNewPeer=True
-            c = 0
-
-        if sessionObject and not sessionObject.alreadyDidInitialSync:
-           
-            # No falsy value allowed, that would mean don't get new arrivals
-            r['getNewArrivals'] = c or 1
-            sessionObject.alreadyDidInitialSync = True
-
-
-        if "getNewArrivals" in d:
-            kdg = libnacl.crypto_generichash(base64.b64decode(self.syncKey))[:8]
+        #It is an explicitly supported use case to have both the client and the server of a connection share the same database, for use in IPC.
+        #In this scenario, it is useless to send ir request old records, as the can't get out of sync, there is only one DB.
+        if not remoteNodeID== self.localNodeVK:
             cur = self.threadLocal.conn.cursor()
-            # Avoid dumping way too much at once
             cur.execute(
-                "SELECT json,signature,arrival FROM document WHERE arrival>? LIMIT 100", (d['getNewArrivals'],))
+                "SELECT lastArrival,horizon FROM peers WHERE peerID=?", (b64remoteNodeID,))
 
-            # Declares that there are no records left out in between this time and the first time we actually send
-            r['recordsStartFrom'] = d['getNewArrivals']
+            peerinfo = cur.fetchone()
+            #How far back do we have knowledge of ther peer's records
+            peerHorizon = time.time()*1000000
+            isNewPeer = False
+            if peerinfo:
+                c = peerinfo[0]               
+                peerHorizon=peerinfo[1]
+            else:
+                isNewPeer=True
+                c = 0
 
-            needCommit =False
-
-            for i in cur:
-                sig = i[1]
-                #Detect if the record was signed with an old key and needs to be resigned
-                if not base64.b64decode(i[1])[24:].startswith(kdg):
-                    if self.writePassword:
-                        sig = self._checkIfNeedsResign(i)
-                        needCommit=True
-                    else:
-                        #Can't send stuff sent with old keys if we can't re sign, they will have to get from a source that can.
-                        continue
-                else:
-                    signature = i[1]
-
-                if not 'records' in r:
-                    r['records'] = []
-                logging.info(i)
-                r['records'].append([i[0],sig,i[2]])
-
-                sessionObject.lastResyncFlushTime = max(
-                    sessionObject.lastResyncFlushTime, i[2])
+            if sessionObject and not sessionObject.alreadyDidInitialSync:
             
-            if needCommit:
-                self.commit()
+                # No falsy value allowed, that would mean don't get new arrivals
+                r['getNewArrivals'] = c or 1
+                sessionObject.alreadyDidInitialSync = True
+
+
+            if "getNewArrivals" in d:
+                kdg = libnacl.crypto_generichash(base64.b64decode(self.syncKey))[:8]
+                cur = self.threadLocal.conn.cursor()
+                # Avoid dumping way too much at once
+                cur.execute(
+                    "SELECT json,signature,arrival FROM document WHERE arrival>? AND receivedFrom!=? LIMIT 100", (d['getNewArrivals'],b64remoteNodeID))
+
+                # Declares that there are no records left out in between this time and the first time we actually send
+                r['recordsStartFrom'] = d['getNewArrivals']
+
+                needCommit =False
+
+                for i in cur:
+                    sig = i[1]
+                    #Detect if the record was signed with an old key and needs to be resigned
+                    if not base64.b64decode(i[1])[24:].startswith(kdg):
+                        if self.writePassword:
+                            sig = self._checkIfNeedsResign(i)
+                            needCommit=True
+                        else:
+                            #Can't send stuff sent with old keys if we can't re sign, they will have to get from a source that can.
+                            continue
+                    else:
+                        signature = i[1]
+
+                    if not 'records' in r:
+                        r['records'] = []
+                    logging.info(i)
+                    r['records'].append([i[0],sig,i[2]])
+
+                    sessionObject.lastResyncFlushTime = max(
+                        sessionObject.lastResyncFlushTime, i[2])
+                
+                if needCommit:
+                    self.commit()
 
         needUpdatePeerTimestamp = False
         if "records" in d and d['records']:
-            with self:
+            #If we ARE the same database as the remote node, we already have the record they are telling us about, we just need to do the notification
+            if not remoteNodeID== self.localNodeVK:
+                with self:
+                    for i in d['records']:
+                    
+                        self.setDocument(i[0],i[1],receivedFrom= b64remoteNodeID)
+                        r['getNewArrivals'] = latest = i[2]
+                        needUpdatePeerTimestamp = True
+
+                    if needUpdatePeerTimestamp:
+                        # Set a flag saying that
+                        cur = self.threadLocal.conn.cursor()
+
+                        if not isNewPeer:
+                            # If the recorded lastArrival is less than the incoming recordsStartFrom, it would mean that there is a gap in which records
+                            # That we don't know about could be hiding.   Don't update the timestamp in that case, as the chain is broken.
+                            # We can still accept new records, but we will need to request everything all over again starting at the breakpoint to fix this.
+                            cur.execute("UPDATE peers SET lastArrival=? WHERE peerID=? AND lastArrival !=? AND lastArrival>=?",
+                                        (latest,base64.b64encode(remoteNodeID).decode(), latest, d["recordsStartFrom"]))
+
+                            #Now we do the same thing, but for the horizon.  If the tip of the new block pf records is later than or equal to the current
+                            #horizon, we have a complete chain and we can set the horizon to recordsStartFrom, knowing that we have all records up to that point.
+                            cur.execute("UPDATE peers SET horizon=? WHERE peerID=? AND horizon !=? AND horizon<=?",
+                                        (d["recordsStartFrom"],base64.b64encode(remoteNodeID).decode(), d["recordsStartFrom"],  latest))
+                        else:
+                            # If the recorded lastArrival is less than the incoming recordsStartFrom, it would mean that there is a gap in which records
+                            # That we don't know about could be hiding.   Don't update the timestamp in that case, as the chain is broken.
+                            # We can still accept new records, but we will need to request everything all over again starting at the breakpoint to fix this.
+                            cur.execute("INSERT INTO peers VALUES(?,?,?,?)",
+                                        (base64.b64encode(remoteNodeID).decode(), latest, d["recordsStartFrom"],'{}'))
+            else:
                 for i in d['records']:
-                
-                    self.setDocument(i[0],i[1])
-                    r['getNewArrivals'] = latest = i[2]
-                    needUpdatePeerTimestamp = True
-
-                if needUpdatePeerTimestamp:
-                    # Set a flag saying that
-                    cur = self.threadLocal.conn.cursor()
-
-                    if not isNewPeer:
-                        # If the recorded lastArrival is less than the incoming recordsStartFrom, it would mean that there is a gap in which records
-                        # That we don't know about could be hiding.   Don't update the timestamp in that case, as the chain is broken.
-                        # We can still accept new records, but we will need to request everything all over again starting at the breakpoint to fix this.
-                        cur.execute("UPDATE peers SET lastArrival=? WHERE peerID=? AND lastArrival !=? AND lastArrival>=?",
-                                    (latest,base64.b64encode(remoteNodeID).decode(), latest, d["recordsStartFrom"]))
-
-                        #Now we do the same thing, but for the horizon.  If the tip of the new block pf records is later than or equal to the current
-                        #horizon, we have a complete chain and we can set the horizon to recordsStartFrom, knowing that we have all records up to that point.
-                        cur.execute("UPDATE peers SET horizon=? WHERE peerID=? AND horizon !=? AND horizon<=?",
-                                    (d["recordsStartFrom"],base64.b64encode(remoteNodeID).decode(), d["recordsStartFrom"],  latest))
-                    else:
-                        # If the recorded lastArrival is less than the incoming recordsStartFrom, it would mean that there is a gap in which records
-                        # That we don't know about could be hiding.   Don't update the timestamp in that case, as the chain is broken.
-                        # We can still accept new records, but we will need to request everything all over again starting at the breakpoint to fix this.
-                        cur.execute("INSERT INTO peers VALUES(?,?,?,?)",
-                                    (base64.b64encode(remoteNodeID).decode(), latest, d["recordsStartFrom"],'{}'))
+                    self.setDocument(i[0],i[1],receivedFrom= b64remoteNodeID)
 
 
         return self.encodeMessage(r)
@@ -609,7 +632,7 @@ class DocumentDatabase():
             cur = self.threadLocal.conn.cursor()
             # Avoid dumping way too much at once
             cur.execute(
-                "SELECT json,signature,arrival FROM document WHERE arrival>? LIMIT 100", (session.lastResyncFlushTime,))
+                "SELECT json,signature,arrival FROM document WHERE arrival>? AND receivedFrom!=? LIMIT 100", (session.lastResyncFlushTime,session.b64remoteNodeID))
 
             # Let the client know that there are no records left out in between the start of this message and the end of what they have
             r['recordsStartFrom'] = session.lastResyncFlushTime
@@ -735,9 +758,23 @@ class DocumentDatabase():
 
         ts = int((time.time())*10**6)
 
-    def setDocument(self, doc, signature=None):
+    def setDocument(self, doc, signature=None,receivedFrom = ''):
         "Two modes: Locally generate a signature, or use the existing sig data"
-        arrival = time.time()*1000000
+
+        if isinstance(doc, str):
+            docObj = json.loads(doc)
+        else:
+            docObj = doc
+
+        if 'id' in docObj:
+            # If a UUID has been supplied, we want to erase any old record bearing that name.
+            cur = self.threadLocal.conn.cursor()
+            cur.execute(
+                'SELECT json_extract(json,"$.time") FROM document WHERE  json_extract(json,"$.id")=?', (docObj['id'],))
+            oldVersion = cur.fetchone()
+        else:
+            oldVersion=None
+
 
         if signature:
             libnacl.crypto_generichash(doc)[:24]
@@ -762,13 +799,12 @@ class DocumentDatabase():
                 raise RuntimeError("Cannot modify records without the writePassword")
             #Handling a locally created document
             
-            doc['time'] = doc.get('time', time.time()*1000000)
-            
-            doc['id'] = doc.get('id', str(uuid.uuid4()))
-            doc['name'] = doc.get('name', doc['id'])
-            doc['type'] = doc.get('type', '')
+            docObj['time'] = docObj.get('time', time.time()*1000000)
+            docObj['id'] = docObj.get('id', str(uuid.uuid4()))
+            docObj['name'] = docObj.get('name', docObj['id'])
+            docObj['type'] = docObj.get('type', '')
 
-            d = jsonEncode(doc)
+            d = jsonEncode(docObj)
 
             # This is a bit of a tricky part here.  We want to allow repeaters that
             # do not have full write privilidges in the future. So We sign with the
@@ -786,37 +822,35 @@ class DocumentDatabase():
             sig = libnacl.crypto_sign_detached(mdg, base64.b64decode(self.writePassword))
             signature = base64.b64encode(mdg+kdg+sig).decode()
 
-        if isinstance(doc, str):
-            doc = json.loads(doc)
+       
 
-        # If a UUID has been supplied, we want to erase any old record bearing that name.
-        cur = self.threadLocal.conn.cursor()
-        cur.execute(
-            'SELECT json_extract(json,"$.time") FROM document WHERE  json_extract(json,"$.id")=?', (doc['id'],))
-        oldVersion = cur.fetchone()
+        #Don't insert messages recieved from self that we already have
+        if not receivedFrom == base64.b64encode(self.localNodeVK).decode():
+            #Arrival 
+            if oldVersion:
+                # Check that record we are trying to insert is newer, else ignore
+                if oldVersion[0] < docObj['time']:
+                    c = self.threadLocal.conn.execute(
+                        "UPDATE document SET json=?, signature=?,arrival=(IFNULL((SELECT arrival FROM document ORDER BY arrival DESC LIMIT 1),1)+1), receivedFrom=? WHERE json_extract(json,'$.id')=?", (d, signature,receivedFrom, docObj['id']))
 
-        if oldVersion:
-            # Check that record we are trying to insert is newer, else ignore
-            if oldVersion[0] < doc['time']:
-                self.threadLocal.conn.execute(
-                    "UPDATE document SET json=?, signature=?,arrival=? WHERE json_extract(json,'$.id')=?", (d, signature,  arrival, doc['id']))
-
-                # If we are marking this as deleted, we can ditch everything that depends on it.
-                # We don't even have to just set them as deleted, we can relly delete them, the deleted parent record
-                # is enough for other nodes to know this shouldn't exist anymore.
-                if doc['type'] == "null":
-                    self.threadLocal.conn.execute(
-                        "DELETE FROM document WHERE json_extract(json,'$.parent')=?", (doc['id'],))
-
-                self.onRecordChange(doc,signature)
-
-                return doc['id']
+                    # If we are marking this as deleted, we can ditch everything that depends on it.
+                    # We don't even have to just set them as deleted, we can relly delete them, the deleted parent record
+                    # is enough for other nodes to know this shouldn't exist anymore.
+                    if docObj['type'] == "null":
+                        self.threadLocal.conn.execute(
+                            "DELETE FROM document WHERE json_extract(json,'$.parent')=?", (docObj['id'],))
+                else:
+                    return docObj['id']
             else:
-                return doc['id']
 
-        self.threadLocal.conn.execute(
-            "INSERT INTO document VALUES (null,?,?,?,?)", (d, signature,arrival,signature))
-        self.onRecordChange(doc,signature)
+                c = self.threadLocal.conn.execute(
+                    "INSERT INTO document VALUES (null,?,?,(IFNULL((SELECT arrival FROM document ORDER BY arrival DESC LIMIT 1),1)+1),?,?)", (d, signature,receivedFrom,'{}'))
+
+        #We don't have RETURNING yet, so we just read back the thing we just wrote to see what the DB set it's arrival to
+        c = self.threadLocal.conn.execute("SELECT json, signature, arrival FROM document WHERE json_extract(json,'$.id')=?",(docObj['id'],)).fetchone()
+        docObj = json.loads(c[0])
+        self._onRecordChange(docObj, c[1],c[2])
+
 
         self.lastChange = time.time()
 
@@ -830,7 +864,16 @@ class DocumentDatabase():
             except:
                 logging.info(traceback.format_exc())
 
-        return doc['id']
+        return docObj['id']
+
+    def _onRecordChange(self,record, signature, arrival):
+        #Ensure once and only once, at least within a session.
+        #Also lets us keep track of what we have already called the function for so that we can
+        #scan the DB, in case we are using the DB itself as the sync engine.
+        with self.onRecordChangeLock:
+            if arrival > self.lastDidOnRecordChange: 
+                self.onRecordChange(record, signature)
+            self.lastDidOnRecordChange = arrival
 
     def onRecordChange(self,record, signature):
         pass

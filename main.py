@@ -44,6 +44,14 @@ from hardline.cidict import CaseInsensitiveDict
 from kivy.logger import Logger, LOG_LEVELS
 Logger.setLevel(LOG_LEVELS["info"])
 
+#On android the service that will actually be handling these databases is in the background in a totally separate
+#process.  So we open an SECOND drayer database object for each, with the same physical storage, using the first as the server.
+#just for use in the foreground app.
+
+#Because of this, two connections to the same DB file is a completetely supported use case that drayerDB has optimizations for.
+if platform=='android':
+    hardline.loadUserDatabases(None,forceProxy='127.0.0.1:7004')
+
 class ServiceApp(MDApp, uihelpers.AppHelpers):
 
     def stop_service(self, foo=None):
@@ -697,7 +705,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
             self.askQuestion("Really delete?", name, f)
 
         self.streamEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="24sp",
-                                              text='Service'))
+                                              text='Sync'))
 
         self.streamEditPanel.add_widget(
             self.settingButton(c, "Sync", "syncKey"))
@@ -705,8 +713,27 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         self.streamEditPanel.add_widget(
             self.settingButton(c, "Sync", "writePassword"))
 
+        self.streamEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="14sp",
+                                              text='Keys have a special format, you cannot freely set your own.'))
+
         self.streamEditPanel.add_widget(
             self.settingButton(c, "Sync", "server"))
+
+        self.streamEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="14sp",
+                                              text='Do not include the http:// '))
+
+        self.streamEditPanel.add_widget(
+            self.settingButton(c, "Sync", "serve",'yes'))
+
+
+        self.streamEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="14sp",
+                                              text='Set serve=no to forbid clients to sync'))
+
+        self.streamEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="24sp",
+                                              text='Application'))
+
+        self.streamEditPanel.add_widget(
+            self.settingButton(c, "Application", "notifications",'no'))
 
         btn1 = Button(text='Save Changes',
                       size_hint=(1, None), font_size="14sp")

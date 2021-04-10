@@ -1106,7 +1106,7 @@ def start(localport=None):
                     ports.append(bindsocket)
                     break
                 except OSError:
-                    if i < 9:
+                    if i < 15:
                         time.sleep(1)
                     else:
                         raise

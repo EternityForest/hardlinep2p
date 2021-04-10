@@ -1,8 +1,11 @@
 from .hardline import *
 # "User Services" are configurable services stored in files, asw opposed to those defined in code
-import os,configparser
+import os
+import configparser
+from . import drayerdb
 
 from .cidict import CaseInsensitiveDict
+
 
 def loadUserServices(serviceDir, only=None):
     serviceDir = serviceDir or directories.user_services_dir
@@ -24,7 +27,8 @@ def loadUserServices(serviceDir, only=None):
                 if not i == only+".ini":
                     continue
             try:
-                config = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
+                config = configparser.ConfigParser(
+                    dict_type=CaseInsensitiveDict)
                 config.read(os.path.join(serviceDir, i))
 
                 if "Info" in config.sections():
@@ -128,7 +132,8 @@ def listServices(serviceDir):
             if not i.endswith(".ini"):
                 continue
             try:
-                config = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
+                config = configparser.ConfigParser(
+                    dict_type=CaseInsensitiveDict)
                 config.read(os.path.join(serviceDir, i))
                 services[i[:-4]] = config
             except:
@@ -153,7 +158,35 @@ def delDatabase(dir, name):
     del userDatabases[name]
 
 
-def loadUserDatabases(serviceDir, only=None):
+defaultDBClass = drayerdb.DocumentDatabase
+
+
+lastnotehorizon = 0
+notesremaining = 12
+
+
+class defaultDBClass(drayerdb.DocumentDatabase):
+    def onRecordChange(self, record, signature):
+
+        global lastnotehorizon, notesremaining
+        elapsed = time.time()-lastnotehorizon
+        notesremaining = min(12, notesremaining + elapsed/10)
+        if notesremaining >= 1:
+            if record.get("type") in ['post', 'notification']:
+                if 'Application' in self.config:
+                    if self.config["Application"].get("notifications", 'no').lower() in ('yes', 'true', 'on', 'enable'):
+                        try:
+                            from plyer import notification
+                            notification.notify(title=record.get('title', 'Untitled')[
+                                                :48], message="New post in "+os.path.basename(self.filename), ticker='')
+                        except:
+                            logger.exception("Could not do the notification")
+                        notesremaining -= 1
+
+        return super().onRecordChange(record, signature)
+
+
+def loadUserDatabases(serviceDir, only=None, forceProxy=None):
     serviceDir = serviceDir or directories.drayerDB_root
 
     "Load services from a configuration directory.  Only to  only reload one."
@@ -178,8 +211,8 @@ def loadUserDatabases(serviceDir, only=None):
             except KeyError:
                 pass
             try:
-                userDatabases[i] = drayerdb.DocumentDatabase(
-                    os.path.join(serviceDir, i))
+                userDatabases[i] = defaultDBClass(
+                    os.path.join(serviceDir, i), forceProxy=forceProxy)
             except:
                 logger.info(traceback.format_exc())
 
@@ -193,7 +226,7 @@ def makeUserDatabase(dir, name):
     except:
         pass
     if not name in userDatabases:
-        userDatabases[name] = drayerdb.DocumentDatabase(
+        userDatabases[name] = defaultDBClass(
             os.path.join(dir, name+'.db'))
 
 
@@ -212,10 +245,8 @@ def closeServices(only=None):
 userServices = {}
 
 
-
-from . import drayerdb
-
 ddbservice = [0]
+
 
 def loadDrayerServerConfig():
     "Get drayer server config from the global config file."
@@ -228,27 +259,27 @@ def loadDrayerServerConfig():
     if not "DrayerDB" in globalConfig:
         globalConfig.add_section("DrayerDB")
 
-    title = globalConfig['DrayerDB'].get('serverName','').strip()
+    title = globalConfig['DrayerDB'].get('serverName', '').strip()
 
     import getpass
-        
+
+    # Start the drayerDB server on a random port.
+    # Only expose to localhost unless we expose with a service
+    for i in range(0, 1000):
+        r = 7004+i
+        try:
+            drayerdb.startServer(r+i, bindTo='127.0.0.1')
+            drayerServerPort = r
+            break
+        except:
+            logging.exception(
+                "Can't start drayer server on this port, may retry")
+
     if title:
-        #Start the drayerDB server on a random port.
-        for i in range(0,1000):
-            r = int(random.random()*10000)
-            try:
-                drayerdb.startServer(r+i)
-                drayerServerPort = r
-                break
-            except:
-               logging.exception("Can't start drayer server on this port, may retry")
-        
         try:
             os.makedirs(directories.builtinServicesRoot)
         except:
             pass
-           
-        ddbservice[0] = Service(os.path.join(directories.builtinServicesRoot,"drayerDB.cert"), 'localhost',drayerServerPort, info={'title':title})
-       
 
-    
+        ddbservice[0] = Service(os.path.join(directories.builtinServicesRoot,
+                                             "drayerDB.cert"), 'localhost', drayerServerPort, info={'title': title})
