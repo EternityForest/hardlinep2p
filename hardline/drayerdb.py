@@ -4,6 +4,7 @@
 
 # There is one table called Document
 
+from enum import auto
 from hashlib import blake2b
 import logging
 import shutil
@@ -58,18 +59,22 @@ async def DBAPI(websocket, path):
     try:
         a = await websocket.recv()
 
-        databaseBySyncKeyHash[a[:16]].dbConnect()
+        databaseBySyncKeyHash[a[1:17]].dbConnect()
 
-        await websocket.send(databaseBySyncKeyHash[a[:16]].handleBinaryAPICall(a, session))
-        session.socket = websocket
-        databaseBySyncKeyHash[a[:16]].subscribers[time.time()] = session
+        await websocket.send(databaseBySyncKeyHash[a[1:17]].handleBinaryAPICall(a, session))
+        
+        def f(x):
+            asyncio.run_coroutine_threadsafe(websocket.send(x),wsloop)
 
-        db = databaseBySyncKeyHash[a[:16]]
+        session.send = f
+        databaseBySyncKeyHash[a[1:17]].subscribers[time.time()] = session
+
+        db = databaseBySyncKeyHash[a[1:17]]
 
         while not websocket.closed:
             try:
                 a = await asyncio.wait_for(websocket.recv(), timeout=5)
-                await websocket.send(databaseBySyncKeyHash[a[:16]].handleBinaryAPICall(a, session))
+                await websocket.send(databaseBySyncKeyHash[a[1:17]].handleBinaryAPICall(a, session))
             except (TimeoutError, asyncio.TimeoutError):
                 pass
 
@@ -168,10 +173,6 @@ def readNodeID():
         return base64.b64decode(f.read().strip())
 
 
-# unauthorized messageds cannot contain new records or updates to them.
-# Authorized messages must be signed with the stream's current private key.
-MESSAGE_TYPE_AUTHORIZED = 1
-MESSAGE_TYPE_NORMAL = 2
 
 
 class DocumentDatabase():
@@ -264,7 +265,12 @@ class DocumentDatabase():
             self.nodeIDSeed = os.urandom(24).hex()
             self.setMeta("nodeIDSeed",self.nodeIDSeed)
 
+        if 'Database' not in self.config:
+            self.config.add_section('Database')
         
+        #How many days to keep records that are marked as temporary 
+        self.autocleanDays = float(self.config['Database'].get('autocleanDays','0'))
+
 
         if not keypair:
             if 'Sync' not in self.config:
@@ -341,6 +347,31 @@ class DocumentDatabase():
             t = threading.Thread(target=self.serverManagerThread, daemon=True)
             t.start()
 
+    def cleanOldEphemeralData(self, horizon):
+        k ={}
+        torm =[]
+
+        for i in self.threadLocal.conn.execute('SELECT json FROM document ORDER BY json_extract(json,"$.time") DESC'):
+            i= json.loads(i)
+            if 'autoclean' in i:
+                if not i:
+                    if i.get('time',horizon)<horizon:
+                        torm.append(i['id'])
+                else:
+                    #If autoclean specifies a channel, we want to retain the 
+                    if (i['autoclean'] and i.get('parent','')) in k:
+                        torm.append(i['id'])
+                    else:
+                        k[(i['autoclean'] and i.get('parent',''))] = True
+            
+            #If we are trying to track more than 100k different keys we may fill all RAM.
+            if len(k)>100000:
+                for i in k:
+                    x =i
+                del x[x]
+            if len(torm)>100000:
+                break
+
     def serverManagerThread(self):
         oldServerURL = self.serverURL
         loop = asyncio.new_event_loop()
@@ -386,7 +417,9 @@ class DocumentDatabase():
                 while not websocket.closed:
                     try:
                         a = await asyncio.wait_for(websocket.recv(), timeout=5)
-                        await websocket.send(self.handleBinaryAPICall(a, session))
+                        r = self.handleBinaryAPICall(a, session)
+                        if r:
+                            await websocket.send(r)
 
                         # The initial request happens after we know who they are
                         if session.remoteNodeID and not session.alreadyDidInitialSync:
@@ -458,6 +491,11 @@ class DocumentDatabase():
     def handleBinaryAPICall(self, a, sessionObject=None):
         # Process one incoming binary API message.  If part of a sesson, using a sesson objert enables certain features.
 
+        #Message type byte is reserved for a future use
+        if not a[0]==1:
+            return
+        a = a[1:]
+
         # Get the key hint
         k = a[:16]
         a = a[16:]
@@ -507,18 +545,7 @@ class DocumentDatabase():
         # Get the data
         d = a[8:]
 
-        innerMessageType = d[0]
-        d = d[1:]
-
-        if innerMessageType == MESSAGE_TYPE_AUTHORIZED:
-            # Now finally we decrypt the inner message.  By making this the inner,
-            # We can perhaps have anonymizing servers that repackage it without knowing the write password.
-
-            d = libnacl.crypto_sign_open(d, base64.b64decode(self.syncKey))
-        elif innerMessageType == MESSAGE_TYPE_NORMAL:
-            # These don't have the extra inner encryption and are currently the only type used for everything
-            pass
-
+       
         d = json.loads(d)
 
         r = {'records': []}
@@ -678,22 +705,15 @@ class DocumentDatabase():
 
         timeAsBytes = struct.pack("<Q", int(time.time()*1000000))
 
-
-        #Currently we do not use the special authorized messages, relying on record-level sigs only.
-        # if self.writePassword:
-        #     data = bytes([MESSAGE_TYPE_AUTHORIZED]) + libnacl.crypto_sign(r,
-        #                                             base64.b64decode(self.writePassword))
-        # else:
-        #     data = bytes([MESSAGE_TYPE_NORMAL]) + r
-
-        data = bytes([MESSAGE_TYPE_NORMAL]) + r
+        data =  r
 
         signed = libnacl.crypto_sign(timeAsBytes+data, self.localNodeSK)
         data = self.localNodeVK+signed
 
         r = libnacl.crypto_secretbox(data, timeAsBytes+b'\0'*16, symKey)
 
-        return keyHint + timeAsBytes + r
+        #Reserved first byte for the format
+        return bytes([1])+ keyHint + timeAsBytes + r
 
     def createBinaryWriteCall(self, r, sig=None):
         "Creates a binary command representing arequest to insert a record."
@@ -770,10 +790,35 @@ class DocumentDatabase():
             # If a UUID has been supplied, we want to erase any old record bearing that name.
             cur = self.threadLocal.conn.cursor()
             cur.execute(
-                'SELECT json_extract(json,"$.time") FROM document WHERE  json_extract(json,"$.id")=?', (docObj['id'],))
-            oldVersion = cur.fetchone()
+                'SELECT json, json_extract(json,"$.time") FROM document WHERE  json_extract(json,"$.id")=?', (docObj['id'],))
+            x = cur.fetchone()
+            if x:
+                oldVersionData, oldVersion = x
+                oldVersionData=json.loads(oldVersionData)
+            else:
+                oldVersion=None
         else:
             oldVersion=None
+
+
+        #Adding this property could cause all kinds of sync confusion with records that don't actually get deleted on remote nodes.
+        #Might be a bit of a problem.
+        if 'autoclean' in docObj:
+            if not 'autoclean' in oldVersionData:
+                #Silently ignore this error record, it would mess everything up
+                if receivedFrom:
+                    return
+                else:
+                    raise ValueError("You can't add the autoclean property to an existing record")
+            
+            if not docObj['autoclean']==oldVersionData['autoclean']:
+                #Silently ignore this error record, it would mess everything up
+                if receivedFrom:
+                    return
+                else:
+                    raise ValueError("You can't change the autoclean value of an existing record.")
+                
+    
 
 
         if signature:
@@ -829,7 +874,7 @@ class DocumentDatabase():
             #Arrival 
             if oldVersion:
                 # Check that record we are trying to insert is newer, else ignore
-                if oldVersion[0] < docObj['time']:
+                if oldVersion < docObj['time']:
                     c = self.threadLocal.conn.execute(
                         "UPDATE document SET json=?, signature=?,arrival=(IFNULL((SELECT arrival FROM document ORDER BY arrival DESC LIMIT 1),1)+1), receivedFrom=? WHERE json_extract(json,'$.id')=?", (d, signature,receivedFrom, docObj['id']))
 
@@ -858,11 +903,17 @@ class DocumentDatabase():
             try:
                 x = self.getUpdatesForSession(self.subscribers[i])
                 if x:
-                
-                    asyncio.run_coroutine_threadsafe(
-                        self.subscribers[i].socket.send(x),wsloop)
+                    self.subscribers[i].send(x)
             except:
                 logging.info(traceback.format_exc())
+
+        if 'autoclean' in docObj:
+            #Don't do it every time that would waste CPU
+            if random.random()<0.01:
+                if self.autocleanHorizon:
+                    #Clear any records sharing the same autoclean channel which are older than both this record and the horizon.
+                    horizon = min(docObj['time'], (time.time()-(self.autocleanDays*3600*24))*1000000)
+                    c = self.threadLocal.conn.execute("DELETE FROM document WHERE json_extract(json,'$.autoclean')=? AND ifnull(json_extract(json,'$.parent'),'')=? AND json_extract(json,'$.time')<?",(docObj['autoclean'],docObj.get('parent',''), horizon )).fetchone()
 
         return docObj['id']
 
@@ -890,11 +941,19 @@ class DocumentDatabase():
                 return None
             return x
 
-    def getDocumentsByType(self, key, startTime=0, endTime=10**18, limit=100):
+    def getDocumentsByType(self, key, startTime=0, endTime=10**18, limit=100,parent=None):
+        if isinstance(parent,str):
+            pass
+        else:
+            parent=parent['id']
         self.dbConnect()
         cur = self.threadLocal.conn.cursor()
-        cur.execute(
-            "SELECT json from document WHERE json_extract(json,'$.type')=? AND json_extract(json,'$.time')>=? AND json_extract(json,'$.time')<=? ORDER BY json_extract(json,'$.time') desc LIMIT ?", (key,startTime,endTime, limit))
+        if parent is None:
+            cur.execute(
+                "SELECT json from document WHERE json_extract(json,'$.type')=? AND json_extract(json,'$.time')>=? AND json_extract(json,'$.time')<=? ORDER BY json_extract(json,'$.time') desc LIMIT ?", (key,startTime,endTime, limit))
+        else:
+            cur.execute(
+                "SELECT json from document WHERE json_extract(json,'$.type')=? AND json_extract(json,'$.time')>=? AND ifnull(json_extract(json,'$.parent'),'')=? AND json_extract(json,'$.time')<=? ORDER BY json_extract(json,'$.time') desc LIMIT ?", (key,startTime,parent,endTime, limit))
         
         return list(reversed([i for i in [json.loads(i[0]) for i in cur] if not i.get('type','')=='null']))
 

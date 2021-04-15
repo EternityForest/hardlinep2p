@@ -113,6 +113,8 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         self.theme_cls.primary_palette = "Green"
 
+        self.backStack = []
+
         self.screenManager = sm
         return sm
 
@@ -197,20 +199,32 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         self.localSettingsBox.add_widget(btn1)
         self.screenManager.current = "GlobalSettings"
 
+    def makeBackButton(self):
+        btn1 = Button(text='Back',
+                size_hint=(1, None), font_size="14sp")
+
+        def back(*a):
+            #Get rid of the first one representing the current page
+            if self.backStack:
+                self.backStack.pop()
+
+            #Go to the previous page, if that page left an instruction for how to get back to it
+            if self.backStack:
+                self.backStack.pop()()
+            else:
+                self.screenManager.current = "Main"
+            
+        btn1.bind(on_press=back)
+        return btn1
+
     def makeGlobalSettingsPage(self):
 
         screen = Screen(name='GlobalSettings')
         layout = BoxLayout(orientation='vertical', spacing=10)
         screen.add_widget(layout)
 
-        btn1 = Button(text='Back to main page',
-                      size_hint=(1, None), font_size="14sp")
-
-
-        def goMain(*a):
-            self.screenManager.current = "Main"
-        btn1.bind(on_press=goMain)
-        layout.add_widget(btn1)
+  
+        layout.add_widget(self.makeBackButton())
 
         self.localSettingsScroll = ScrollView(size_hint=(1, 1))
         self.localSettingsBox = BoxLayout(
@@ -232,13 +246,8 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         label = MDToolbar(title="Settings and Tools")
         layout.add_widget(label)
 
-        btn = Button(text='Back to main page',
-                     size_hint=(1, None), font_size="14sp")
+        layout.add_widget(self.makeBackButton())
 
-        def goMain(*a):
-            self.screenManager.current = "Main"
-        btn.bind(on_press=goMain)
-        layout.add_widget(btn)
 
 
         log = Button(text='System Logs',
@@ -289,14 +298,13 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         layout = BoxLayout(orientation='vertical', spacing=10)
         screen.add_widget(layout)
 
-        btn1 = Button(text='Back to main page',
-                      size_hint=(1, None), font_size="14sp")
+
 
         layout.add_widget(MDToolbar(title="My Streams"))
         def goMain(*a):
             self.screenManager.current = "Main"
-        btn1.bind(on_press=goMain)
-        layout.add_widget(btn1)
+
+        layout.add_widget(self.makeBackButton())
 
         btn2 = Button(text='Create a Stream',
                       size_hint=(1, None), font_size="14sp")
@@ -320,6 +328,11 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
     def goToStreams(self, *a):
         "Go to a page wherein we can list user-modifiable services."
         self.streamsListBox.clear_widgets()
+
+        def goHere():
+            self.screenManager.current = "Streams"
+        self.backStack.append(goHere)
+        self.backStack=self.backStack[-50:]
 
         try:
             import hardline
@@ -363,14 +376,10 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         layout = BoxLayout(orientation='vertical', spacing=10)
         screen.add_widget(layout)
 
-        btn1 = Button(text='Back',
-                      size_hint=(1, None), font_size="14sp")
 
         layout.add_widget(MDToolbar(title="System Logs"))
-        def goMain(*a):
-            self.screenManager.current = "Settings"
-        btn1.bind(on_press=goMain)
-        layout.add_widget(btn1)
+
+        layout.add_widget(self.makeBackButton())
 
 
         self.logsListBoxScroll = ScrollView(size_hint=(1, 1))
@@ -423,18 +432,16 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
 
 
-    def gotoNewStreamPost(self, stream):
+    def gotoNewStreamPost(self, stream,parent=''):
         self.streamEditPanel.clear_widgets()
         self.streamEditPanel.add_widget(MDToolbar(title="New Post for "+stream))
 
-        def back(*a):
-            self.editStream(stream)
-
-        btn1 = Button(text='Back',
-                size_hint=(1, None), font_size="14sp")
-
-        btn1.bind(on_press=back)
-        self.streamEditPanel.add_widget(btn1)
+        self.streamEditPanel.add_widget(self.makeBackButton())
+        
+        def goHere():
+            self.gotoStreamPost(stream,parent)
+        self.backStack.append(goHere)
+        self.backStack = self.backStack[-50:]
 
         newtitle = MDTextField(text='',mode='fill', font_size='22sp')
 
@@ -443,7 +450,10 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         def post(*a):
             if newp.text:
                 with hardline.userDatabases[stream]:
-                    hardline.userDatabases[stream].setDocument({'body': newp.text,'title':newtitle.text,'type':'post'})
+                    d = {'body': newp.text,'title':newtitle.text,'type':'post'}
+                    if parent:
+                        d['parent']=parent
+                    hardline.userDatabases[stream].setDocument(d)
                     hardline.userDatabases[stream].commit()
                 self.gotoStreamPosts(stream)
 
@@ -459,34 +469,40 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         self.streamEditPanel.add_widget(btn1)
 
 
-    def gotoStreamPosts(self, stream, startTime=0, endTime=0):
+    def gotoStreamPosts(self, stream, startTime=0, endTime=0, parent=''):
+        "Handles both top level stream posts and comments"
         self.streamEditPanel.clear_widgets()
-        self.streamEditPanel.add_widget(MDToolbar(title="Feed for "+stream))
-
+        s = hardline.userDatabases[stream]
+        if not parent:
+            self.streamEditPanel.add_widget(MDToolbar(title="Feed for "+stream))
+        else:
+            parentDoc=hardline.userDatabases[stream].getDocumentByID(parent)
+            self.streamEditPanel.add_widget(self.makePostWidget(stream,parentDoc))
+            self.streamEditPanel.add_widget((MDToolbar(title="Comments:")))
+            
 
         topbar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
-
-        def back(*a):
-            self.editStream(stream)
-        btn1 = Button(text='Back',
-                size_hint=(1, None), font_size="14sp")
-
-        btn1.bind(on_press=back)
-        topbar.add_widget(btn1)
+        topbar.add_widget(self.makeBackButton())
+        
+        def goHere():
+            self.gotoStreamPosts( stream, startTime, endTime, parent)
+        self.backStack.append(goHere)
+        self.backStack = self.backStack[-50:]
 
 
         def write(*a):
-            self.gotoNewStreamPost(stream)
+            self.gotoNewStreamPost(stream,parent)
         btn1 = Button(text='Write a post',
                 size_hint=(1, None), font_size="14sp")
 
         btn1.bind(on_press=write)
-        topbar.add_widget(btn1)
+        if s.writePassword:
+            topbar.add_widget(btn1)
 
         self.streamEditPanel.add_widget(topbar)
         
-        s = hardline.userDatabases[stream]
-        p = s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=100)
+        
+        p = s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=100, parent=parent)
         if p:
             newest=p[-1]['time']
             oldest=p[0]['time']
@@ -497,7 +513,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         #The calender interactions are based on the real oldest post in the set
 
         #Let the user see older posts by picking a start date to stat showing from.
-        startdate = Button(text=time.strftime('%Y %b %d (%a)',time.localtime(oldest/10**6)),
+        startdate = Button(text=time.strftime('(%a %b %d, %Y)',time.localtime(oldest/10**6)),
                       size_hint=(0.28, None), font_size="14sp")
 
       
@@ -511,7 +527,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
             def onAccept(date):
                 t= datetime.datetime.combine(date,datetime.datetime.min.time()).timestamp()*10**6
-                self.gotoStreamPosts(stream, t)            
+                self.gotoStreamPosts(stream, t,parent=parent)            
             d =MDDatePicker(onAccept,year=d.tm_year, month=d.tm_mon, day=d.tm_mday)
 
             d.open()
@@ -526,7 +542,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         newer = Button(text='Newer',
                       size_hint=(0.28, None), font_size="14sp")
         def f2(*a):
-            self.gotoStreamPosts(stream, newest)            
+            self.gotoStreamPosts(stream, newest,parent=parent)            
 
         newer.bind(on_release=f2)
 
@@ -534,7 +550,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         older = Button(text='Older',
                       size_hint=(0.28, None), font_size="14sp")
         def f3(*a):
-            self.gotoStreamPosts(stream, endTime=oldest)            
+            self.gotoStreamPosts(stream, endTime=oldest,parent=parent)            
 
         older.bind(on_release=f3)
 
@@ -558,7 +574,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
             self.gotoStreamPost(stream,post['id'])
 
         l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
-        l.add_widget(Button(text=post.get('title',"?????") + " "+time.strftime('%Y %b %d (%a)',time.localtime(post.get('time',0)/10**6)), size_hint=(1,None), on_release=f))
+        l.add_widget(Button(text=post.get('title',"?????") + " "+time.strftime('(%a %b %d, %Y)',time.localtime(post.get('time',0)/10**6)), size_hint=(1,None), on_release=f))
         l.add_widget(Label(text=post.get('body',"?????")[:140], size_hint=(1,None), font_size='22sp',halign='left'))
 
         return l
@@ -569,13 +585,12 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         self.streamEditPanel.add_widget(Label(size_hint=(
             1, None), halign="center", text="Editing post in "+stream))
 
-        def back(*a):
-            self.gotoStreamPosts(stream)
-        btn1 = Button(text='Back',
-                size_hint=(1, None), font_size="14sp")
-
-        btn1.bind(on_press=back)
-        self.streamEditPanel.add_widget(btn1)
+        self.streamEditPanel.add_widget(self.makeBackButton())
+        
+        def goHere():
+            self.gotoStreamPost(stream, postID)
+        self.backStack.append(goHere)
+        self.backStack = self.backStack[-50:]
 
         document = hardline.userDatabases[stream].getDocumentByID(postID)
 
@@ -587,11 +602,13 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         def post(*a):
             with hardline.userDatabases[stream]:
-                hardline.userDatabases[stream].setDocument({'title':newtitle.text, 'body': newp.text,'type':'post','id':postID})
+                document['title']=newtitle.text
+                document['body']=newp.text
+                hardline.userDatabases[stream].setDocument(document)
                 hardline.userDatabases[stream].commit()
             self.gotoStreamPosts(stream)
 
-        btn1 = Button(text='Post!',
+        btn1 = Button(text='Save!',
                       size_hint=(1, None), font_size="14sp")
         btn1.bind(on_release=post)
 
@@ -599,7 +616,8 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         self.streamEditPanel.add_widget(newtitle)
         self.streamEditPanel.add_widget(newp)
-        self.streamEditPanel.add_widget(btn1)
+        if hardline.userDatabases[stream].writePassword:
+            self.streamEditPanel.add_widget(btn1)
 
         def delete(*a):
             def reallyDelete(v):
@@ -614,7 +632,30 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                       size_hint=(1, None), font_size="14sp")
         btn1.bind(on_release=delete)
 
+        if hardline.userDatabases[stream].writePassword:
+            self.streamEditPanel.add_widget(btn1)
+
+
+        #This button takes you to the full comments manager
+        def goToCommentsPage(*a):
+            self.gotoStreamPosts(stream,parent=postID)
+
+        btn1 = Button(text='Go to Comments and Reports',
+                      size_hint=(1, None), font_size="14sp")
+        btn1.bind(on_release=goToCommentsPage)
         self.streamEditPanel.add_widget(btn1)
+
+
+        #This just shows you the most recent info
+        self.streamEditPanel.add_widget(Label(size_hint=(
+            1, None), halign="center", text="Recent Comments:"))
+
+        s = hardline.userDatabases[stream]
+        p = s.getDocumentsByType("post", limit=10,parent=postID)
+        for i in reversed(p):
+            self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
+
+        
   
         self.screenManager.current = "EditStream"
 
@@ -638,11 +679,13 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         self.streamEditPanel.add_widget(Label(size_hint=(
             1, None), halign="center", text=name))
 
-        btn1 = Button(text='Back',
-                      size_hint=(1, None), font_size="14sp")
+        self.streamEditPanel.add_widget(self.makeBackButton())
+        
+        def goHere():
+            self.editStream( name)
+        self.backStack.append(goHere)
+        self.backStack = self.backStack[-50:]
 
-        btn1.bind(on_press=self.goToStreams)
-        self.streamEditPanel.add_widget(btn1)
 
 
         btn2 = Button(text='View Feed',
@@ -674,13 +717,8 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         self.streamEditPanel.add_widget(Label(size_hint=(
             1, None), halign="center", text=name))
 
-        def back(*a):
-            self.editStream(name)
-        btn1 = Button(text='Back',
-                size_hint=(1, None), font_size="14sp")
-
-        btn1.bind(on_press=back)
-        self.streamEditPanel.add_widget(btn1)
+       
+        self.streamEditPanel.add_widget(self.makeBackButton())
 
       
 
@@ -708,13 +746,29 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                                               text='Sync'))
 
         self.streamEditPanel.add_widget(
-            self.settingButton(c, "Sync", "syncKey"))
+            keyBox :=self.settingButton(c, "Sync", "syncKey"))
 
         self.streamEditPanel.add_widget(
-            self.settingButton(c, "Sync", "writePassword"))
+            pBox :=self.settingButton(c, "Sync", "writePassword"))
 
-        self.streamEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="14sp",
-                                              text='Keys have a special format, you cannot freely set your own.'))
+        self.streamEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="12sp",
+                                              text='Keys have a special format, you must use the generator to change them.'))
+
+        def promptNewKeys(*a,**k):
+            def makeKeys(a):
+                if a=='yes':
+                    import libnacl,base64
+                    vk, sk = libnacl.crypto_sign_keypair()
+                    vk= base64.b64encode(vk).decode()
+                    sk= base64.b64encode(sk).decode()
+                    keyBox.text=vk
+                    pBox.text=sk
+            self.askQuestion("Overwrite with random keys?",'yes',makeKeys)
+        
+        keyButton = Button(text='Generate New Keys',
+                      size_hint=(1, None), font_size="14sp")
+        keyButton.bind(on_press=promptNewKeys)
+        self.streamEditPanel.add_widget(keyButton)
 
         self.streamEditPanel.add_widget(
             self.settingButton(c, "Sync", "server"))
@@ -759,8 +813,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         layout = BoxLayout(orientation='vertical', spacing=10)
         screen.add_widget(layout)
 
-        btn1 = Button(text='Back to main page',
-                      size_hint=(1, None), font_size="14sp")
+      
 
         label = Label(size_hint=(1, None), halign="center",
                       text='WARNING: Running a local service may use a lot of data and battery.\nChanges may require service restart.')
@@ -768,10 +821,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         labelw = Label(size_hint=(1, None), halign="center",
                        text='WARNING 2: This app currently prefers the external SD card for almost everything including the keys.')
 
-        def goMain(*a):
-            self.screenManager.current = "Main"
-        btn1.bind(on_press=goMain)
-        layout.add_widget(btn1)
+        layout.add_widget(self.makeBackButton())
 
         layout.add_widget(label)
         layout.add_widget(labelw)
@@ -828,13 +878,8 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         screen.add_widget(layout)
         self.localServiceEditorName = Label(size_hint=(
             1, None), halign="center", text="??????????")
-        btn1 = Button(text='Back to main page',
-                      size_hint=(1, None), font_size="14sp")
 
-        def goMain(*a):
-            self.screenManager.current = "Main"
-        btn1.bind(on_press=goMain)
-        layout.add_widget(btn1)
+        layout.add_widget(self.makeBackButton())
 
         self.localServiceEditPanelScroll = ScrollView(size_hint=(1, 1))
 
@@ -986,15 +1031,12 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         layout = BoxLayout(orientation='vertical', spacing=10)
         screen.add_widget(layout)
 
-        btn1 = Button(text='Back to main page',
-                      size_hint=(1, None), font_size="16sp")
+       
         label = Label(size_hint=(1, None), halign="center",
                       text='Browsing your local network.\nWarning: anyone on your network\ncan advertise a site with any title they want.')
 
-        def goMain(*a):
-            self.screenManager.current = "Main"
-        btn1.bind(on_press=goMain)
-        layout.add_widget(btn1)
+
+        layout.add_widget(self.makeBackButton())
 
         layout.add_widget(label)
 
