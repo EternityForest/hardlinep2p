@@ -12,7 +12,7 @@ import service
 from typing import Text
 from kivymd.app import MDApp
 from kivy.utils import platform
-from kivymd.uix.button import MDFillRoundFlatButton as Button
+from kivymd.uix.button import MDFillRoundFlatButton as Button, MDRoundFlatButton
 from kivymd.uix.button import MDFlatButton
 
 from kivymd.uix.textfield import MDTextField
@@ -455,6 +455,9 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                         d['parent']=parent
                     hardline.userDatabases[stream].setDocument(d)
                     hardline.userDatabases[stream].commit()
+                #Done with this, don't need it in back history
+                if self.backStack:
+                    self.backStack.pop()
                 self.gotoStreamPosts(stream)
 
         btn1 = Button(text='Post!',
@@ -469,8 +472,84 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         self.streamEditPanel.add_widget(btn1)
 
 
-    def gotoStreamPosts(self, stream, startTime=0, endTime=0, parent=''):
+
+    def makePostsListingPage(self):
+        "Generic posts listing"
+
+        screen = Screen(name='PostList')
+
+        layout = BoxLayout(orientation='vertical', spacing=10)
+        screen.add_widget(layout)
+
+
+        self.postListScroll = ScrollView(size_hint=(1, 1))
+
+        self.postListPanel = BoxLayout(
+            orientation='vertical',adaptive_height= True, spacing=5)
+        self.postListPanel.bind(
+            minimum_height=self.postListPanel.setter('height'))
+
+        self.postListPanelScroll.add_widget(self.postListPanel)
+
+        layout.add_widget(self.postListPanelScroll)
+
+        return screen
+
+
+
+
+
+    def makePostMetaDataPage(self):
+        "Prettu much just an empty page filled in by the specific goto functions"
+
+        screen = Screen(name='PostMeta')
+
+        layout = BoxLayout(orientation='vertical', spacing=10)
+        screen.add_widget(layout)
+
+
+        self.postMetaScroll = ScrollView(size_hint=(1, 1))
+
+        self.postMetaPanel = BoxLayout(
+            orientation='vertical',adaptive_height= True, spacing=5)
+        self.postMetaPanel.bind(
+            minimum_height=self.postMetaPanel.setter('height'))
+
+        self.postMetaPanelScroll.add_widget(self.postMetaPanel)
+
+        layout.add_widget(self.postMetaPanelScroll)
+
+
+        return screen
+
+
+
+
+    def gotoPostMetadata(self, stream, docID):
         "Handles both top level stream posts and comments"
+        self.postMetaPanel.clear_widgets()
+        s = hardline.userDatabases[stream].getDocumentByID(docID)
+        if not s:
+            return
+
+        self.streamEditPanel.add_widget((MDToolbar(title=s.get('title','Untitled'))))
+
+        topbar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
+        topbar.add_widget(self.makeBackButton())
+        
+        def goHere():
+            self.gotoPostMetadata( stream, docID)
+        self.backStack.append(goHere)
+        self.backStack = self.backStack[-50:]
+
+
+        
+
+
+
+
+    def gotoStreamPosts(self, stream, startTime=0, endTime=0, parent='', search=''):
+        "Handles both top level stream posts and comments, and searches.  So we can search comments if we want."
         self.streamEditPanel.clear_widgets()
         s = hardline.userDatabases[stream]
         if not parent:
@@ -483,9 +562,20 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         topbar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
         topbar.add_widget(self.makeBackButton())
-        
+
+        searchBar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
+
+        searchQuery = MDTextField(size_hint=(0.68,None),text=search)
+        searchButton = MDRoundFlatButton(text="Search", size_hint=(0.3,None))
+        searchBar.add_widget(searchQuery)
+        searchBar.add_widget(searchButton)
+
+        def doSearch(*a):
+            self.gotoStreamPosts(stream, startTime, endTime, parent,searchQuery.text.strip())
+        searchButton.bind(on_release=doSearch)
+
         def goHere():
-            self.gotoStreamPosts( stream, startTime, endTime, parent)
+            self.gotoStreamPosts( stream, startTime, endTime, parent,search)
         self.backStack.append(goHere)
         self.backStack = self.backStack[-50:]
 
@@ -501,8 +591,11 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         self.streamEditPanel.add_widget(topbar)
         
-        
-        p = s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=100, parent=parent)
+        if not search:
+            p = s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=100, parent=parent)
+        else:
+            p=s.searchDocuments(search,"post",startTime=startTime, endTime=endTime or 10**18, limit=100, parent=parent)
+
         if p:
             newest=p[-1]['time']
             oldest=p[0]['time']
@@ -560,6 +653,8 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
 
         self.streamEditPanel.add_widget(pagebuttons)
+        self.streamEditPanel.add_widget(searchBar)
+
 
         self.streamEditPanel.add_widget(MDToolbar(title="Posts"))
 
@@ -582,8 +677,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
     def gotoStreamPost(self, stream,postID):
         "Editor/viewer for ONE specific post"
         self.streamEditPanel.clear_widgets()
-        self.streamEditPanel.add_widget(Label(size_hint=(
-            1, None), halign="center", text="Editing post in "+stream))
+        self.streamEditPanel.add_widget(MDToolbar(title="Editing post in "+stream))
 
         self.streamEditPanel.add_widget(self.makeBackButton())
         
@@ -600,24 +694,37 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         date = Label(size_hint=(1,None), text="Last edited on: "+time.strftime('%Y %b %d (%a) @ %r',time.localtime(document.get('time',0)/10**6)))
 
+
         def post(*a):
             with hardline.userDatabases[stream]:
                 document['title']=newtitle.text
                 document['body']=newp.text
+                #Make sure system knows this is not an old document
+                try:
+                    del document['time']
+                except:
+                    pass
                 hardline.userDatabases[stream].setDocument(document)
                 hardline.userDatabases[stream].commit()
             self.gotoStreamPosts(stream)
 
-        btn1 = Button(text='Save!',
-                      size_hint=(1, None), font_size="14sp")
+        btn1 = Button(text='Save Changes',
+                      size_hint=(0.48, None), font_size="14sp")
         btn1.bind(on_release=post)
+
+
+        self.streamEditPanel.add_widget(newtitle)
+        self.streamEditPanel.add_widget(newp)        
+        
+        buttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
+              
+
+        if hardline.userDatabases[stream].writePassword:
+            self.streamEditPanel.add_widget(buttons)  
+            buttons.add_widget(btn1)
 
         self.streamEditPanel.add_widget(date)
 
-        self.streamEditPanel.add_widget(newtitle)
-        self.streamEditPanel.add_widget(newp)
-        if hardline.userDatabases[stream].writePassword:
-            self.streamEditPanel.add_widget(btn1)
 
         def delete(*a):
             def reallyDelete(v):
@@ -629,21 +736,18 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
             self.askQuestion("Delete post permanently on all nodes?", postID, reallyDelete)
 
         btn1 = Button(text='Delete',
-                      size_hint=(1, None), font_size="14sp")
+                      size_hint=(0.48, None), font_size="14sp")
         btn1.bind(on_release=delete)
 
         if hardline.userDatabases[stream].writePassword:
-            self.streamEditPanel.add_widget(btn1)
+            buttons.add_widget(btn1)
 
 
         #This button takes you to the full comments manager
         def goToCommentsPage(*a):
             self.gotoStreamPosts(stream,parent=postID)
 
-        btn1 = Button(text='Go to Comments and Reports',
-                      size_hint=(1, None), font_size="14sp")
-        btn1.bind(on_release=goToCommentsPage)
-        self.streamEditPanel.add_widget(btn1)
+     
 
 
         #This just shows you the most recent info
@@ -651,11 +755,14 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
             1, None), halign="center", text="Recent Comments:"))
 
         s = hardline.userDatabases[stream]
-        p = s.getDocumentsByType("post", limit=10,parent=postID)
+        p = s.getDocumentsByType("post", limit=5,parent=postID)
         for i in reversed(p):
             self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
 
-        
+        btn1 = Button(text='Go to Comments and Reports',
+                      size_hint=(1, None), font_size="14sp")
+        btn1.bind(on_release=goToCommentsPage)
+        self.streamEditPanel.add_widget(btn1)
   
         self.screenManager.current = "EditStream"
 

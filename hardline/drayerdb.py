@@ -957,25 +957,25 @@ class DocumentDatabase():
         
         return list(reversed([i for i in [json.loads(i[0]) for i in cur] if not i.get('type','')=='null']))
 
+
+
     
-    def searchDocuments(self, key, startTime=0, limit=100):
+    def searchDocuments(self, key, type,startTime=0,  endTime=10**18, limit=100,parent=None):
         self.dbConnect()
         cur = self.threadLocal.conn.cursor()
-        l = []
         r=[]
         with self:
-            cur.execute(
-                "SELECT rowid from search WHERE tags MATCH ? or title MATCH ? or body MATCH ? or description MATCH ? LIMIT ?", (key,key,key,limit))
+            if parent is None:
+                cur.execute(
+                    "SELECT json from ((select rowid as id from search WHERE search MATCH ?) INNER JOIN document ON id=rowid)  WHERE json_extract(json,'$.type')=? AND json_extract(json,'$.time')>=? AND json_extract(json,'$.time')<=? ORDER BY json_extract(json,'$.time') DESC LIMIT ?", (key,type, startTime, endTime, limit))
+            else:
+                cur.execute(
+                    "SELECT json from ((select rowid as id from search WHERE search MATCH ?) INNER JOIN document ON id=rowid)  WHERE ifnull(json_extract(json,'$.parent'),'')=? AND json_extract(json,'$.type')=? AND json_extract(json,'$.time')>=? AND json_extract(json,'$.time')<=? ORDER BY json_extract(json,'$.time') DESC LIMIT ?", (key,parent, type, startTime, endTime, limit))
             for i in cur:
-                l.append[i[0]]
+                r.append(i[0])
 
-            for i in l:
-                cur.execute("SELECT json FROM document WHERE rowid=?",(i,))
-                x = cur.fetchone()
-                if x:
-                    r.append(x)
             
-        return list(reversed([i for i in [json.loads(i[0]) for i in r] if not i.get('type','')=='null']))
+        return list(reversed([i for i in [json.loads(i) for i in r]]))
 
 
 if __name__=="__main__":
