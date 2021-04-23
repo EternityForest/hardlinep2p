@@ -5,17 +5,18 @@ import logging
 logging.Logger.manager.root = Logger
 
 import configparser
+from kivy.clock import mainthread,Clock
 
 from kivy.uix.widget import Widget
 import hardline
 import service
-from typing import Text
+from typing import Sized, Text
 from kivymd.app import MDApp
 from kivy.utils import platform
 from kivymd.uix.button import MDFillRoundFlatButton as Button, MDRoundFlatButton
 from kivymd.uix.button import MDFlatButton
 
-from kivymd.uix.textfield import MDTextField
+from kivymd.uix.textfield import MDTextFieldRect,MDTextField
 from kivymd.uix.label import MDLabel as Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
@@ -115,8 +116,31 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         self.backStack = []
 
+        #Call this to save whatever unsaved data. Also acts as a flag.
+        self.unsavedDataCallback = None
+
         self.screenManager = sm
+
+        Clock.schedule_interval(self.flushUnsaved, 60*5)
+
         return sm
+
+    #Here is our autosave
+    def on_pause(self):
+        self.flushUnsaved()
+        return True
+
+    def on_stop(self):
+        self.flushUnsaved()
+
+    def on_destroy(self):
+        self.flushUnsaved()
+
+    def flushUnsaved(self,*a):
+        if self.unsavedDataCallback:
+            self.unsavedDataCallback()
+            self.unsavedDataCallback=None
+
 
     def makeMainScreen(self):
         mainScreen = Screen(name='Main')
@@ -204,15 +228,24 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                 size_hint=(1, None), font_size="14sp")
 
         def back(*a):
-            #Get rid of the first one representing the current page
-            if self.backStack:
-                self.backStack.pop()
+            def f(d):
+                if d:
+                    self.unsavedDataCallback=False
+                    #Get rid of the first one representing the current page
+                    if self.backStack:
+                        self.backStack.pop()
 
-            #Go to the previous page, if that page left an instruction for how to get back to it
-            if self.backStack:
-                self.backStack.pop()()
+                    #Go to the previous page, if that page left an instruction for how to get back to it
+                    if self.backStack:
+                        self.backStack.pop()()
+                    else:
+                        self.screenManager.current = "Main"
+
+            #If they have an unsaved post, ask them if they really want to leave.
+            if self.unsavedDataCallback:
+                self.askQuestion("Discard unsaved data?",'yes',cb=f)
             else:
-                self.screenManager.current = "Main"
+                f(True)
             
         btn1.bind(on_press=back)
         return btn1
@@ -369,6 +402,38 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
 
 
+    def makeDataTablePage(self):
+        screen = Screen(name='TableView')
+        self.servicesScreen = screen
+
+        layout = BoxLayout(orientation='vertical', spacing=10)
+        screen.add_widget(layout)
+
+        layout.add_widget(MDToolbar(title="My Streams"))
+        def goMain(*a):
+            self.screenManager.current = "Main"
+
+        layout.add_widget(self.makeBackButton())
+
+        btn2 = Button(text='Create a Stream',
+                      size_hint=(1, None), font_size="14sp")
+
+        btn2.bind(on_press=self.promptAddStream)
+        layout.add_widget(btn2)
+
+        self.streamsListBoxScroll = ScrollView(size_hint=(1, 1))
+
+        self.streamsListBox = BoxLayout(
+            orientation='vertical', size_hint=(1, None), spacing=10)
+        self.streamsListBox.bind(
+            minimum_height=self.streamsListBox.setter('height'))
+
+        self.streamsListBoxScroll.add_widget(self.streamsListBox)
+
+        layout.add_widget(self.streamsListBoxScroll)
+
+        return screen
+
     def makeLogsPage(self):
         screen = Screen(name='Logs')
         self.servicesScreen = screen
@@ -434,7 +499,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
     def gotoNewStreamPost(self, stream,parent=''):
         self.streamEditPanel.clear_widgets()
-        self.streamEditPanel.add_widget(MDToolbar(title="New Post for "+stream))
+        self.streamEditPanel.add_widget(MDToolbar(title="Posting in: "+stream+"(Autosave on)"))
 
         self.streamEditPanel.add_widget(self.makeBackButton())
         
@@ -445,7 +510,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         newtitle = MDTextField(text='',mode='fill', font_size='22sp')
 
-        newp = MDTextField(text='',mode='rectangle', multiline=True)
+        newp = MDTextFieldRect(text='', multiline=True,size_hint=(0.68,None))
 
         def post(*a):
             if newp.text:
@@ -455,10 +520,14 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                         d['parent']=parent
                     hardline.userDatabases[stream].setDocument(d)
                     hardline.userDatabases[stream].commit()
+
+                self.unsavedDataCallback=None
                 #Done with this, don't need it in back history
                 if self.backStack:
                     self.backStack.pop()
                 self.gotoStreamPosts(stream)
+
+        self.unsavedDataCallback=post
 
         btn1 = Button(text='Post!',
                       size_hint=(1, None), font_size="14sp")
@@ -524,6 +593,30 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
 
 
+    def request_android_permissions(self):
+        """
+        Since API 23, Android requires permission to be requested at runtime.
+        This function requests permission and handles the response via a
+        callback.
+        The request will produce a popup if permissions have not already been
+        been granted, otherwise it will do nothing.
+        """
+        from android.permissions import request_permissions, Permission
+
+        def callback(permissions, results):
+            """
+            Defines the callback to be fired when runtime permission
+            has been granted or denied. This is not strictly required,
+            but added for the sake of completeness.
+            """
+            if all([res for res in results]):
+                print("callback. All permissions granted.")
+            else:
+                print("callback. Some permissions refused.")
+
+        request_permissions([Permission.ACCESS_COARSE_LOCATION,
+                             Permission.ACCESS_FINE_LOCATION], callback)
+
 
     def gotoPostMetadata(self, stream, docID):
         "Handles both top level stream posts and comments"
@@ -542,8 +635,109 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         self.backStack.append(goHere)
         self.backStack = self.backStack[-50:]
 
+        #Barcode Association allows us to quickly jump straight to someething with a QR or other
+        #code lookup
+        location = MDRoundFlatButton(size_hint=(1,None), text="Location: "+s.get("lat",'')+','+s.get('lon','') )
 
+        def promptSet(*a):
+            def onEnter(ld):
+                if d:
+                    l=[i.strip() for i in d.split(",")]
+                    if len(l)==2:
+                        try:
+                            lat = float(l[0])
+                            lon=float(l[1])
+                            del s['time']
+                            s['lat']=lat
+                            s['lon']=lon
+                            with hardline.userDatabases[stream]:
+                                hardline.userDatabases[stream].setDocument(s)
+                            hardline.userDatabases[stream].commit()
+                            return
+                        except:
+                            logging.exception("Parse Error")
+                    
+
+
+
+
+
+    def gotoTableView(self, stream, parent='', search=''):
+        "Data records can be attatched to a post."
+        self.streamEditPanel.clear_widgets()
+        s = hardline.userDatabases[stream]
+        parentDoc=hardline.userDatabases[stream].getDocumentByID(parent)
+        self.streamEditPanel.add_widget(self.makeBackButton())
+        self.streamEditPanel.add_widget(self.makePostWidget(stream,parentDoc))
+        self.streamEditPanel.add_widget((MDToolbar(title="Data Table View")))
+            
+
+        topbar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
+
+        searchBar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
+
+        searchQuery = MDTextField(size_hint=(0.68,None),multiline=False, text=search)
+        searchButton = MDRoundFlatButton(text="Search", size_hint=(0.3,None))
+        searchBar.add_widget(searchQuery)
+        searchBar.add_widget(searchButton)
+
+        def doSearch(*a):
+            self.gotoTableView(stream, parent,searchQuery.text.strip())
+        searchButton.bind(on_release=doSearch)
+
+        def goHere():
+            self.gotoTableView( stream, parent,search)
+        self.backStack.append(goHere)
+        self.backStack = self.backStack[-50:]
+
+        newEntryBar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
+
+
+        newRowName = MDTextField(size_hint=(0.68,None),multiline=False, text=search)
+        def write(*a):
+            if newRowName.text.strip():
+                id = parent+'-'+newRowName.text.strip().lower().replace(' ',"")[:48]
+                #That name already exists, jump to it
+                if hardline.userDatabases[stream].getDocumentByID(id):
+                    self.gotoStreamRow(stream, id)
+                    return
+            else:
+                import uuid
+                id=str(uuid.uuid4())
+
+            newDoc = {'parent': parent,'id':id, 'name':newRowName.text.strip() or id, 'type':'row'}
+            self.gotoStreamRow(stream, id, newDoc)
+
+        btn1 = Button(text='New Entry',
+                size_hint=(1, None), font_size="14sp")
+
+        btn1.bind(on_press=write)
+        newEntryBar.add_widget(newRowName)
+        newEntryBar.add_widget(btn1)
+
+        if s.writePassword:
+            topbar.add_widget(newEntryBar)
+
+        self.streamEditPanel.add_widget(topbar)
         
+        if not search:
+            p = s.getDocumentsByType("row", limit=1000, parent=parent)
+        else:
+            p = s.searchDocuments(search,"row", limit=1000, parent=parent)
+
+
+
+     
+
+        self.streamEditPanel.add_widget(MDToolbar(title="Data Rows"))
+        self.streamEditPanel.add_widget(searchBar)
+
+
+       
+        for i in reversed(p):
+            self.streamEditPanel.add_widget(self.makeRowWidget(stream,i))
+        self.screenManager.current = "EditStream"
+
 
 
 
@@ -565,7 +759,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         searchBar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
 
-        searchQuery = MDTextField(size_hint=(0.68,None),text=search)
+        searchQuery = MDTextField(size_hint=(0.68,None),multiline=False, text=search)
         searchButton = MDRoundFlatButton(text="Search", size_hint=(0.3,None))
         searchBar.add_widget(searchQuery)
         searchBar.add_widget(searchButton)
@@ -590,6 +784,9 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
             topbar.add_widget(btn1)
 
         self.streamEditPanel.add_widget(topbar)
+
+
+
         
         if not search:
             p = s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=100, parent=parent)
@@ -674,10 +871,177 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         return l
 
+    
+    def makeRowWidget(self,stream, post):
+        def f(*a):
+            self.gotoStreamRow(stream,post['id'])
+
+        l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
+        l.add_widget(Button(text=post.get('name',"?????"), size_hint=(1,None), on_release=f))
+        #l.add_widget(Label(text=post.get('body',"?????")[:140], size_hint=(1,None), font_size='22sp',halign='left'))
+        return l
+
+    def gotoStreamRow(self, stream, postID, document=None, noBack=False):
+        "Editor/viewer for ONE specific row"
+        self.streamEditPanel.clear_widgets()
+        self.streamEditPanel.add_widget(MDToolbar(title="Table Row in "+stream))
+
+        self.streamEditPanel.add_widget(self.makeBackButton())
+        
+        if not noBack:
+            def goHere():
+                self.gotoStreamRow(stream, postID)
+            self.backStack.append(goHere)
+            self.backStack = self.backStack[-50:]
+
+        document = document or hardline.userDatabases[stream].getDocumentByID(postID)
+        if 'type' in document and not document['type'] == 'row':
+            raise RuntimeError("Document is not a row")
+        document['type']='row'
+
+        title = Label(text=document.get("name",''),font_size='22sp')
+
+
+
+        def post(*a):
+            with hardline.userDatabases[stream]:
+                #Make sure system knows this is not an old document
+                try:
+                    del document['time']
+                except:
+                    pass
+                hardline.userDatabases[stream].setDocument(document)
+                hardline.userDatabases[stream].commit()
+                self.unsavedDataCallback=None
+
+            self.gotoStreamPosts(stream)
+      
+        btn1 = Button(text='Save Changes',
+                      size_hint=(0.48, None), font_size="14sp")
+        btn1.bind(on_release=post)
+
+
+        self.streamEditPanel.add_widget(title)
+        
+        buttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
+              
+
+        if hardline.userDatabases[stream].writePassword:
+            self.streamEditPanel.add_widget(buttons)  
+            buttons.add_widget(btn1)
+
+
+
+        def delete(*a):
+            def reallyDelete(v):
+                if v==postID:
+                    with hardline.userDatabases[stream]:
+                        hardline.userDatabases[stream].setDocument({'type':'null','id':postID})
+                        hardline.userDatabases[stream].commit()
+                    self.gotoStreamPosts(stream)
+            self.askQuestion("Delete table row permanently on all nodes?", postID, reallyDelete)
+
+        btn1 = Button(text='Delete',
+                      size_hint=(0.48, None), font_size="14sp")
+        btn1.bind(on_release=delete)
+
+        if hardline.userDatabases[stream].writePassword:
+            buttons.add_widget(btn1)
+            
+        names =[]
+
+
+        for i in document:
+            if i.startswith('row.'):
+                names.append(i)
+        
+        for i in names:
+            self.streamEditPanel.add_widget( Label(size_hint=(1,None), text=i))
+            d = document[i]
+            try:
+                d=float(d)
+            except:
+                pass
+                
+            x = MDTextField(text=str(d),mode='fill', multiline=False,font_size='22sp')
+            def oc(*a,i=i):
+                d=x.text.strip()
+                if isinstance(d,str):
+                    d=d.strip()
+                try:
+                    d=float(d or 0)
+                except:
+                    pass
+                document[i]=d
+            x.bind(text=oc)
+            self.streamEditPanel.add_widget(x)
+
+            if isinstance(d,float) or not d.strip():
+                l = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
+                b = MDRoundFlatButton(text="--", size_hint=(0.48,None))
+                def f(*a, i=i, x=x):
+                    d=document[i]
+                    if isinstance(d,str):
+                        d=d.strip()
+                    try:
+                        d=float(d or 0)
+                    except:
+                        return
+                    document[i]=d-1
+                    x.text=str(d-1)
+                b.bind(on_release=f)
+
+                b2 = MDRoundFlatButton(text="--", size_hint=(0.48,None))
+                def f(*a, i=i, x=x):
+                    d=document[i]
+                    if isinstance(d,str):
+                        d=d.strip()
+                    try:
+                        d=float(d or 0)
+                    except:
+                        return
+                    document[i]+=1
+                    x.text=str(document[i])
+
+                b2.bind(on_release=f)
+
+                l.add_widget(b)
+                l.add_widget(b2)
+                self.streamEditPanel.add_widget(l)
+
+
+        b = MDRoundFlatButton(text="Add Column", size_hint=(0.48,None))
+        def f(*a):
+            def f2(r):
+                if r:
+                    document['row.'+r]=0
+                    #Redraw the whole page, it is lightweight, no DB operation needed.
+                    self.gotoStreamRow(stream, postID, document=document, noBack=True)
+            self.askQuestion("Name of new column?",cb=f2)
+
+        b.bind(on_release=f)
+        self.streamEditPanel.add_widget(b)
+
+        b = MDRoundFlatButton(text="Del Column", size_hint=(0.48,None))
+        def f(*a):
+            def f2(r):
+                if r:
+                    document['row.'+r]=0
+                    #Redraw the whole page, it is lightweight, no DB operation needed.
+                    self.gotoStreamRow(stream, postID, document=document, noBack=True)
+            self.askQuestion("Column to delete?",cb=f2)
+                
+        b.bind(on_release=f)
+        self.streamEditPanel.add_widget(b)
+
+
+        self.screenManager.current = "EditStream"
+
+
     def gotoStreamPost(self, stream,postID):
         "Editor/viewer for ONE specific post"
         self.streamEditPanel.clear_widgets()
-        self.streamEditPanel.add_widget(MDToolbar(title="Editing post in "+stream))
+        self.streamEditPanel.add_widget(MDToolbar(title="Post in "+stream+"(Autosave on)"))
 
         self.streamEditPanel.add_widget(self.makeBackButton())
         
@@ -688,9 +1052,9 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         document = hardline.userDatabases[stream].getDocumentByID(postID)
 
-        newtitle = MDTextField(text=document.get("title",''),mode='fill', font_size='22sp')
+        newtitle = MDTextField(text=document.get("title",''),mode='fill', multiline=False,font_size='22sp')
 
-        newp = MDTextField(text=document.get("body",''),mode='rectangle', multiline=True)
+        newp = MDTextFieldRect(text=document.get("body",''), multiline=True,size_hint=(1,None))
 
         date = Label(size_hint=(1,None), text="Last edited on: "+time.strftime('%Y %b %d (%a) @ %r',time.localtime(document.get('time',0)/10**6)))
 
@@ -706,7 +1070,14 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                     pass
                 hardline.userDatabases[stream].setDocument(document)
                 hardline.userDatabases[stream].commit()
+                self.unsavedDataCallback=None
+
             self.gotoStreamPosts(stream)
+        
+        def setUnsaved(*a):
+            self.unsavedDataCallback = post
+        newtitle.bind(text=setUnsaved)
+        newp.bind(text=setUnsaved)
 
         btn1 = Button(text='Save Changes',
                       size_hint=(0.48, None), font_size="14sp")
@@ -717,7 +1088,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         self.streamEditPanel.add_widget(newp)        
         
         buttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
-              
+
 
         if hardline.userDatabases[stream].writePassword:
             self.streamEditPanel.add_widget(buttons)  
@@ -745,10 +1116,24 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         #This button takes you to the full comments manager
         def goToCommentsPage(*a):
-            self.gotoStreamPosts(stream,parent=postID)
+            def f(x):
+                if x:
+                    self.unsavedDataCallback=None
+                    self.gotoStreamPosts(stream,parent=postID)
+            if self.unsavedDataCallback:
+                self.askQuestion("Discard changes?","yes",f)
+            else:
+                f('yes')
 
      
 
+        def tableview(*a):
+            self.gotoTableView(stream,postID)
+        btn1 = Button(text='Data Table',
+                size_hint=(1, None), font_size="14sp")
+
+        btn1.bind(on_press=tableview)
+        self.streamEditPanel.add_widget(btn1)
 
         #This just shows you the most recent info
         self.streamEditPanel.add_widget(Label(size_hint=(

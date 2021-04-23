@@ -8,14 +8,17 @@ OpenSSL, pynacl, dhtnode(On server side only), requests,six,lxml,dateutil
 
 ## Building for Android
 You have to move setup.py out of the directory before using buildozer.  Otherwise, it will not work.  For some reason the settings to ignore the setup.py file aren't having any effect.
+
 ## What it does
 
 Takes a service on computer A, and makes it available on computer B at KEYHASH.localhost:7009.  It does this with a daemon on both computers
 and a tunnel between them, encrypted with SSL, and works over the internet with no manual port forwarding or any need to sign up for a Dynamic DNS service,
 get a certificate manually, or anything like that.
 
-The app(written in Kivy, and available for Android as well as the desktop) also lets you browse services connected to your LAN, and will eventually provide a few other similar conveniences.
+The closely integrated DrayerDB system provides extrememly easy synced databases that do not use a blockchain, instead using a doubly-ordered pseudochain
+with time-based conflict resolution and fast incremental updates.
 
+The app(written in Kivy, and available for Android as well as the desktop) also lets you browse services connected to your LAN, and view and edit posts in DrayerDB sync files in a wiki like manner.
 
 Ideally, you'll be able to take home a smart device, plug it into your router, find it in the listing on the app, and click the button ot jump to the browser.
 
@@ -45,7 +48,7 @@ Computer A uses the native DHT, and does not rely on a proxy.
 
 
 
-### Using It
+### Using it
 
 On the computer that has the service(assuming it is on port 80), use  `python3 hardline.py --service localhost --serviceport 80 --certfile foo.cert --localport 6767 --p2pport 7684`
 
@@ -262,3 +265,10 @@ But largely, it is an abundance of caution due to ease of implementation.
 The key hash we use is the first 20 bytes of the blake2b hash of exactly the DER encoded certificate.
 Everything in the SSL cert is completely ignored, except for checking whether the hash properly matches, so you can use any cert 
 that you want.
+
+
+
+## DrayerDB in the app
+
+
+To sync, you must enable the sync server on a node
