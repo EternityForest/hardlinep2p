@@ -66,6 +66,11 @@ to protect from casual snoopers, and you can't have two services with dofferent 
 If you have Kivy installed, you can also run the GUI version.
 
 
+### DrayerDB
+
+DrayerDB is not currently supported outside the GUI app.  It will eventually be designed as a library. Eventuallu KaithemAutomation should be able to act as a sync server.
+
+
 ### Running as a proper service
 
 Install with setup.py install or pip3 install hardline.  Then you can use the command "hardlined", which acts as both the client and the server.
@@ -268,7 +273,65 @@ that you want.
 
 
 
-## DrayerDB in the app
+## DrayerDB in the GUI
 
 
-To sync, you must enable the sync server on a node
+### Posts
+
+Everything centers around posts, which are basically social-media style posts, with(I think) way better search.
+
+#### Table View
+
+Every post has a "table view" with "data rows" which can be used for vaugely the same purpose as Excel spreadsheet rows.
+
+#### Template Expressions
+
+Posts have a sandboxed expression eval support.   You can put expressions inside {{ braces }} and the whole thing gets replaced with whatever is inside the
+braces.
+
+Expressions have can access data from the data rows. 
+
+As we want to make the most common use case, summing up lists, as easy as possible, Columns are accessible as column objects.
+
+You can just do SUM(value) to add up the "value" column of every row, ignoring rows that lack it, or have a non-numeric value.
+
+
+#### Available Functions
+
+##### SUM(column)
+
+##### AVG(column)
+Average column value, ignoring invalid non-numbers and missing values
+
+##### LATEST(column)
+Gets the first in a list, which will be be the most recent.
+
+
+
+
+
+### Sync
+
+To sync, you must enable the sync server on a node by giving it a server name in the global settings panel.  This creates a standard HardlineP2P service that will show up
+in the service listing.
+
+This URL may be used as the sync URL for a stream in it's stream settings.
+
+
+To sync, the sync key must be the same on both nodes.   For 2-way sync, the write password must match. In fact, you cannot change stream data
+at all without the write password.
+
+This is the only requirement,  you can create two different streams on different devices, change the sync info to match, and all your records from
+both will merge.
+
+### Password issues
+You can arrange any crazy tree structure of servers that you want.  The only issue is that changing the keys is rather heavyweight, and can cause issues when syncing to a read-only node.
+
+Every record is digitally signed(the "writePassword" is technically an ECC private key), so changing the key will cause nodes not to trust old cached records on read-only nodes.
+Nodes with the writePassword will have to re-sign old records when they are requested.  
+
+You may want to delete the database and start over on any read only nodes that act as servers.
+
+
+
+

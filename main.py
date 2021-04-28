@@ -7,6 +7,8 @@ logging.Logger.manager.root = Logger
 import configparser
 from kivy.clock import mainthread,Clock
 
+from hardline import simpleeval
+
 from kivy.uix.widget import Widget
 import hardline
 import service
@@ -34,7 +36,7 @@ import traceback
 # Terrible Hacc, because otherwise we cannot iumport hardline on android.
 import os
 import sys
-
+import re
 from hardline import makeUserDatabase, uihelpers, drayerdb, cidict
 from kivymd.uix.picker import MDDatePicker
 
@@ -44,6 +46,104 @@ from hardline.cidict import CaseInsensitiveDict
 
 from kivy.logger import Logger, LOG_LEVELS
 Logger.setLevel(LOG_LEVELS["info"])
+
+
+def makePostRenderingFuncs(limit=1024*1024):
+    def spreadsheetSum(p):
+        t=0
+        n=0
+        for i in p:
+            try:
+                i=float(i)
+                n+=1
+            except:
+                continue
+            if n>limit:
+                return float('nan')
+            t+=i
+        return t
+    
+    def spreadsheetLatest(p):
+        for i in p:
+            return t
+
+
+    def spreadsheetAvg(p):
+        t=0
+        n =0
+        for i in p:
+            try:
+                i=float(i)
+                n+=1
+            except:
+                continue
+
+            if n>limit:
+                return float('nan')
+            t+=i
+        return t/n
+    
+    funcs = {'SUM':spreadsheetSum, 'AVG':spreadsheetAvg,'LATEST':spreadsheetLatest}
+    return funcs
+
+
+class ColumnIterator():
+    def __init__(self, db,postID, col):
+        self.col = col
+        self.db = db
+        self.postID= postID
+
+    def __iter__(self):
+        self.cur = self.db.getDocumentsByType("row", parent=self.postID, limit=10240000000)
+        return self
+
+    def __next__(self):
+        for i in self.cur:
+            if self.col in i:
+                return i[self.col]
+        raise StopIteration
+
+
+def renderPostTemplate(db, postID,text, limit=100000000):
+    "Render any {{expressions}} in a post based on that post's child data row objects"
+
+    search=list(re.finditer(r'\{\{(.*?)\}\}',text))
+    if not search:
+        return text
+
+    #Need to be able to go slightly 
+    rows = db.getDocumentsByType('row',parent=postID)
+
+    ctx = {}
+    
+    n = 0
+    for i in rows:
+        n+=1
+        if n>limit:
+            return text
+        for j in i:
+            if j.startswith("row."):
+                ctx[j[4:]]=ColumnIterator(db,postID, j)
+                
+    replacements ={}
+    for i in search:
+        if not i.group() in replacements:
+            try:
+                from simpleeval import simple_eval
+                simpleeval.POWER_MAX = 512
+                replacements[i.group()] = simple_eval(i.group(1), names= ctx, functions=makePostRenderingFuncs(limit))
+            except Exception as e:
+                logging.exception("Error in template expression in a post")
+                replacements[i.group()] = e
+    
+    for i in replacements:
+        text = text.replace(i, str(replacements[i]))
+    
+    return text
+
+
+
+
 
 #On android the service that will actually be handling these databases is in the background in a totally separate
 #process.  So we open an SECOND drayer database object for each, with the same physical storage, using the first as the server.
@@ -695,6 +795,10 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         newRowName = MDTextField(size_hint=(0.68,None),multiline=False, text=search)
         def write(*a):
+            for i in  newRowName.text:
+                if i in "[]{}:,./\\":
+                    return
+
             if newRowName.text.strip():
                 id = parent+'-'+newRowName.text.strip().lower().replace(' ',"")[:48]
                 #That name already exists, jump to it
@@ -704,8 +808,18 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
             else:
                 import uuid
                 id=str(uuid.uuid4())
-
+            
+            x = hardline.userDatabases[stream].getDocumentsByType("row.template", parent=parent,limit=1) 
             newDoc = {'parent': parent,'id':id, 'name':newRowName.text.strip() or id, 'type':'row'}
+
+            #Use the previously created or modified row as the template
+            for i in x:
+                for j in i:
+                    if j.startswith('row.'):
+                        newDoc[j]= ''
+
+
+           
             self.gotoStreamRow(stream, id, newDoc)
 
         btn1 = Button(text='New Entry',
@@ -734,7 +848,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
 
        
-        for i in reversed(p):
+        for i in p:
             self.streamEditPanel.add_widget(self.makeRowWidget(stream,i))
         self.screenManager.current = "EditStream"
 
@@ -789,13 +903,13 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         
         if not search:
-            p = s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=100, parent=parent)
+            p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=100, parent=parent))
         else:
-            p=s.searchDocuments(search,"post",startTime=startTime, endTime=endTime or 10**18, limit=100, parent=parent)
+            p=list(s.searchDocuments(search,"post",startTime=startTime, endTime=endTime or 10**18, limit=100, parent=parent))
 
         if p:
-            newest=p[-1]['time']
-            oldest=p[0]['time']
+            newest=p[0]['time']
+            oldest=p[-1]['time']
         else:
             newest=endTime
             oldest=startTime
@@ -857,7 +971,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
 
        
-        for i in reversed(p):
+        for i in p:
             self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
         self.screenManager.current = "EditStream"
 
@@ -865,9 +979,14 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         def f(*a):
             self.gotoStreamPost(stream,post['id'])
 
+        #Chop to a shorter length, then rechop to even shorter, to avoid cutting off part of a long template and being real ugly.
+        body=post.get('body',"?????")[:240]
+        body = renderPostTemplate(hardline.userDatabases[stream], post, body, 4096)
+        body=body[:140]
+
         l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
         l.add_widget(Button(text=post.get('title',"?????") + " "+time.strftime('(%a %b %d, %Y)',time.localtime(post.get('time',0)/10**6)), size_hint=(1,None), on_release=f))
-        l.add_widget(Label(text=post.get('body',"?????")[:140], size_hint=(1,None), font_size='22sp',halign='left'))
+        l.add_widget(Label(text=body, size_hint=(1,None), font_size='22sp',halign='left'))
 
         return l
 
@@ -881,7 +1000,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         #l.add_widget(Label(text=post.get('body',"?????")[:140], size_hint=(1,None), font_size='22sp',halign='left'))
         return l
 
-    def gotoStreamRow(self, stream, postID, document=None, noBack=False):
+    def gotoStreamRow(self, stream, postID, document=None, noBack=False,template=None):
         "Editor/viewer for ONE specific row"
         self.streamEditPanel.clear_widgets()
         self.streamEditPanel.add_widget(MDToolbar(title="Table Row in "+stream))
@@ -900,7 +1019,12 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         document['type']='row'
 
         title = Label(text=document.get("name",''),font_size='22sp')
+        oldTemplate= {'type':"row.template",'parent':document['parent']}
 
+        for i in hardline.userDatabases[stream].getDocumentsByType("row.template", parent=document['parent'],limit=1):
+            oldTemplate=i
+            
+        template= template or oldTemplate
 
 
         def post(*a):
@@ -911,6 +1035,10 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                 except:
                     pass
                 hardline.userDatabases[stream].setDocument(document)
+
+                #If the template has changed, that is how we know we need to save template changes at the same time as data changes
+                if not template.get('time',0)==oldTemplate.get('time',1):
+                    hardline.userDatabases[stream].setDocument(template)
                 hardline.userDatabases[stream].commit()
                 self.unsavedDataCallback=None
 
@@ -948,22 +1076,31 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         if hardline.userDatabases[stream].writePassword:
             buttons.add_widget(btn1)
             
-        names =[]
+        names ={}
 
+        self.streamEditPanel.add_widget(MDToolbar(title="Data Columns:"))
 
+        for i in template:
+            if i.startswith('row.'):
+                names[i]=''
+               
         for i in document:
             if i.startswith('row.'):
-                names.append(i)
+                if i in template:
+                    names[i]=''
+                else:
+                    #In the document but not the template, it is an old/obsolete column, show that to user.
+                    names[i]='(removed)'
         
         for i in names:
-            self.streamEditPanel.add_widget( Label(size_hint=(1,None), text=i))
-            d = document[i]
+            self.streamEditPanel.add_widget( Button(size_hint=(1,None), text=i[4:]))
+            d = document.get(i,'')
             try:
                 d=float(d)
             except:
                 pass
                 
-            x = MDTextField(text=str(d),mode='fill', multiline=False,font_size='22sp')
+            x = MDTextField(text=str(d)+names[i],mode='fill', multiline=False,font_size='22sp')
             def oc(*a,i=i):
                 d=x.text.strip()
                 if isinstance(d,str):
@@ -980,7 +1117,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                 l = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
                 b = MDRoundFlatButton(text="--", size_hint=(0.48,None))
                 def f(*a, i=i, x=x):
-                    d=document[i]
+                    d=document.get(i,'')
                     if isinstance(d,str):
                         d=d.strip()
                     try:
@@ -991,16 +1128,16 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                     x.text=str(d-1)
                 b.bind(on_release=f)
 
-                b2 = MDRoundFlatButton(text="--", size_hint=(0.48,None))
+                b2 = MDRoundFlatButton(text="++", size_hint=(0.48,None))
                 def f(*a, i=i, x=x):
-                    d=document[i]
+                    d=document.get(i,'')
                     if isinstance(d,str):
                         d=d.strip()
                     try:
                         d=float(d or 0)
                     except:
                         return
-                    document[i]+=1
+                    document[i]=d+1
                     x.text=str(document[i])
 
                 b2.bind(on_release=f)
@@ -1014,9 +1151,12 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         def f(*a):
             def f2(r):
                 if r:
-                    document['row.'+r]=0
+                    template['row.'+r]=''
+                    #Remove time field which marks it as a new record that will get a new timestamp rather than
+                    #being ignored when we go to save it, for being old.
+                    template.pop('time',None)
                     #Redraw the whole page, it is lightweight, no DB operation needed.
-                    self.gotoStreamRow(stream, postID, document=document, noBack=True)
+                    self.gotoStreamRow(stream, postID, document=document, noBack=True,template=template)
             self.askQuestion("Name of new column?",cb=f2)
 
         b.bind(on_release=f)
@@ -1026,9 +1166,13 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         def f(*a):
             def f2(r):
                 if r:
-                    document['row.'+r]=0
+                    try:
+                       del template['row.'+r]
+                       template.pop('time',None)
+                    except:
+                        pass
                     #Redraw the whole page, it is lightweight, no DB operation needed.
-                    self.gotoStreamRow(stream, postID, document=document, noBack=True)
+                    self.gotoStreamRow(stream, postID, document=document, noBack=True,template=template)
             self.askQuestion("Column to delete?",cb=f2)
                 
         b.bind(on_release=f)
@@ -1054,7 +1198,23 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         newtitle = MDTextField(text=document.get("title",''),mode='fill', multiline=False,font_size='22sp')
 
-        newp = MDTextFieldRect(text=document.get("body",''), multiline=True,size_hint=(1,None))
+        renderedText = renderPostTemplate(hardline.userDatabases[stream],postID, document.get("body",''))
+
+        sourceText= [document.get("body",'')]
+
+        newp = MDTextFieldRect(text=renderedText, multiline=True,size_hint=(1,None))
+
+
+        def f(instance, focus):
+            if focus:
+                newp.text = sourceText[0]
+
+                #Mark invalid because it can now change
+                sourceText[0]=None
+            else:
+                sourceText[0] =newp.text
+                newp.text = renderPostTemplate(hardline.userDatabases[stream],postID, newp.text)
+        newp.bind(focus=f)
 
         date = Label(size_hint=(1,None), text="Last edited on: "+time.strftime('%Y %b %d (%a) @ %r',time.localtime(document.get('time',0)/10**6)))
 
@@ -1062,7 +1222,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         def post(*a):
             with hardline.userDatabases[stream]:
                 document['title']=newtitle.text
-                document['body']=newp.text
+                document['body']=sourceText[0] or newp.text
                 #Make sure system knows this is not an old document
                 try:
                     del document['time']
@@ -1141,7 +1301,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         s = hardline.userDatabases[stream]
         p = s.getDocumentsByType("post", limit=5,parent=postID)
-        for i in reversed(p):
+        for i in p:
             self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
 
         btn1 = Button(text='Go to Comments and Reports',

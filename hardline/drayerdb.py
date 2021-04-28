@@ -406,7 +406,15 @@ class DocumentDatabase():
 
         oldServerURL = self.serverURL
 
-        async with websockets.connect(self.serverURL) as websocket:
+        #Allow directly copy and pasting http urls, we know what they mean and this
+        #makes it easier for nontechnical users
+        x = self.serverURL.split("://")[-1]
+        if self.serverURL.split("://")[0] in ('wss','https'):
+            x= 'wss://'
+        else:
+            x='ws://'
+
+        async with websockets.connect(x) as websocket:
             try:
 
                 self.dbConnect()
@@ -955,7 +963,16 @@ class DocumentDatabase():
             cur.execute(
                 "SELECT json from document WHERE json_extract(json,'$.type')=? AND json_extract(json,'$.time')>=? AND ifnull(json_extract(json,'$.parent'),'')=? AND json_extract(json,'$.time')<=? ORDER BY json_extract(json,'$.time') desc LIMIT ?", (key,startTime,parent,endTime, limit))
         
-        return list(reversed([i for i in [json.loads(i[0]) for i in cur] if not i.get('type','')=='null']))
+        for i in cur:
+            try:
+                x = json.loads(i[0])
+            except:
+                continue
+            if not x.get('type','')=='null':
+                yield x
+
+
+        #return list(reversed([i for i in [json.loads(i[0]) for i in cur] if not i.get('type','')=='null']))
 
 
 
