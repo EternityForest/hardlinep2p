@@ -7,8 +7,8 @@ logging.Logger.manager.root = Logger
 import configparser
 from kivy.clock import mainthread,Clock
 
-from hardline import simpleeval
-
+from hardline import directories, simpleeval
+from kivy.uix.image import Image
 from kivy.uix.widget import Widget
 import hardline
 import service
@@ -46,6 +46,10 @@ from hardline.cidict import CaseInsensitiveDict
 
 from kivy.logger import Logger, LOG_LEVELS
 Logger.setLevel(LOG_LEVELS["info"])
+
+
+
+
 
 
 def makePostRenderingFuncs(limit=1024*1024):
@@ -211,6 +215,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         sm.add_widget(self.makeStreamsPage())
         sm.add_widget(self.makeStreamEditPage())
         sm.add_widget(self.makeLogsPage())
+        sm.add_widget(self.makePostMetaDataPage())
 
         self.theme_cls.primary_palette = "Green"
 
@@ -677,7 +682,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         screen.add_widget(layout)
 
 
-        self.postMetaScroll = ScrollView(size_hint=(1, 1))
+        self.postMetaPanelScroll = ScrollView(size_hint=(1, 1))
 
         self.postMetaPanel = BoxLayout(
             orientation='vertical',adaptive_height= True, spacing=5)
@@ -718,44 +723,80 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
                              Permission.ACCESS_FINE_LOCATION], callback)
 
 
-    def gotoPostMetadata(self, stream, docID):
+    def gotoPostMetadata(self, stream, docID, document):
         "Handles both top level stream posts and comments"
         self.postMetaPanel.clear_widgets()
-        s = hardline.userDatabases[stream].getDocumentByID(docID)
-        if not s:
-            return
+        s = document
 
-        self.streamEditPanel.add_widget((MDToolbar(title=s.get('title','Untitled'))))
+        self.postMetaPanel.add_widget((MDToolbar(title=s.get('title','Untitled'))))
 
         topbar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
-        topbar.add_widget(self.makeBackButton())
         
-        def goHere():
-            self.gotoPostMetadata( stream, docID)
-        self.backStack.append(goHere)
-        self.backStack = self.backStack[-50:]
-
-        #Barcode Association allows us to quickly jump straight to someething with a QR or other
-        #code lookup
+        def goBack(*a):
+            self.screenManager.current= "EditStream"
+        btn =  MDRoundFlatButton(size_hint=(1,None), text="Go Back")
+        btn.bind(on_release=goBack)
+        self.postMetaPanel.add_widget(btn)
+    
+     
         location = MDRoundFlatButton(size_hint=(1,None), text="Location: "+s.get("lat",'')+','+s.get('lon','') )
 
         def promptSet(*a):
-            def onEnter(ld):
+            def onEnter(d):
+                if d is None:
+                    return
                 if d:
                     l=[i.strip() for i in d.split(",")]
                     if len(l)==2:
                         try:
                             lat = float(l[0])
                             lon=float(l[1])
-                            del s['time']
+                            s['time']=None
                             s['lat']=lat
                             s['lon']=lon
-                            with hardline.userDatabases[stream]:
-                                hardline.userDatabases[stream].setDocument(s)
-                            hardline.userDatabases[stream].commit()
+                            location.text="Location: "+s.get("lat",'')+','+s.get('lon','')
+                    
                             return
                         except:
                             logging.exception("Parse Error")
+                else:
+                    try:
+                        del s['lat']
+                    except:
+                        pass
+                    try:
+                        del s['lon']
+                    except:
+                        pass
+                    location.text="Location: "+s.get("lat",'')+','+s.get('lon','')
+                    s['time']=None
+
+
+            self.askQuestion("Enter location",s.get("lat",0)+','+s.get('lon',0),onEnter)
+
+        location.bind(on_release=promptSet)
+        self.postMetaPanel.add_widget(location)
+
+        self.screenManager.current="PostMeta"
+
+
+        icon = MDRoundFlatButton(size_hint=(1,None), text="Icon: "+os.path.basename(s.get("icon",'')) )
+        def promptSet(*a):
+            from plyer import filechooser
+            selection = filechooser.open_file(path=os.path.join(directories.assetLibPath,'icons'))
+            s['icon'] = selection[0][len(directories.assetLibPath)+1:] if selection else ''
+            s['time']=None
+            icon.text = "Icon: "+os.path.basename(s.get("icon",''))
+
+            
+        icon.bind(on_release=promptSet)
+        self.postMetaPanel.add_widget(icon)
+
+
+
+
+
+
                     
 
 
@@ -986,7 +1027,17 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
         l.add_widget(Button(text=post.get('title',"?????") + " "+time.strftime('(%a %b %d, %Y)',time.localtime(post.get('time',0)/10**6)), size_hint=(1,None), on_release=f))
-        l.add_widget(Label(text=body, size_hint=(1,None), font_size='22sp',halign='left'))
+        l2 = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None))
+        img = Image(size_hint=(0.7,None))
+        l2.add_widget(img)
+        
+        src = os.path.join(directories.assetLibPath, post.get("icon","INVALID"))
+        if os.path.exists(src):
+            img.source= src
+
+
+        l2.add_widget(Label(text=body, size_hint=(0.7,None), font_size='22sp',halign='left'))
+        l.add_widget(l2)
 
         return l
 
@@ -1019,11 +1070,15 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         document['type']='row'
 
         title = Label(text=document.get("name",''),font_size='22sp')
-        oldTemplate= {'type':"row.template",'parent':document['parent']}
+
+        #Our default template if none exists
+        #Give it a name because eventually we may want to have multiple templates.
+        #Give it an ID so it can override any existing children of that template. 
+        oldTemplate= {'type':"row.template",'parent':document['parent'], 'name': 'default', 'id':document['parent']+".rowtemplate.default"}
 
         for i in hardline.userDatabases[stream].getDocumentsByType("row.template", parent=document['parent'],limit=1):
             oldTemplate=i
-            
+
         template= template or oldTemplate
 
 
@@ -1239,8 +1294,8 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         newtitle.bind(text=setUnsaved)
         newp.bind(text=setUnsaved)
 
-        btn1 = Button(text='Save Changes',
-                      size_hint=(0.48, None), font_size="14sp")
+        btn1 = Button(text='Save',
+                      size_hint=(0.28, None), font_size="14sp")
         btn1.bind(on_release=post)
 
 
@@ -1267,11 +1322,23 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
             self.askQuestion("Delete post permanently on all nodes?", postID, reallyDelete)
 
         btn1 = Button(text='Delete',
-                      size_hint=(0.48, None), font_size="14sp")
+                      size_hint=(0.28, None), font_size="14sp")
         btn1.bind(on_release=delete)
 
         if hardline.userDatabases[stream].writePassword:
             buttons.add_widget(btn1)
+
+
+        #This button takes you to it
+        def goToProperties(*a):
+            self.gotoPostMetadata(stream,postID,document)
+          
+        
+
+        btn1 = Button(text='Info',
+                      size_hint=(0.28, None), font_size="14sp")
+        btn1.bind(on_release=goToProperties)
+        buttons.add_widget(btn1)
 
 
         #This button takes you to the full comments manager

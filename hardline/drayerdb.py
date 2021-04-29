@@ -852,7 +852,7 @@ class DocumentDatabase():
                 raise RuntimeError("Cannot modify records without the writePassword")
             #Handling a locally created document
             
-            docObj['time'] = docObj.get('time', time.time()*1000000)
+            docObj['time'] = docObj.get('time', time.time()*1000000) or time.time()*1000000
             docObj['id'] = docObj.get('id', str(uuid.uuid4()))
             docObj['name'] = docObj.get('name', docObj['id'])
             docObj['type'] = docObj.get('type', '')

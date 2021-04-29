@@ -5,6 +5,8 @@ try:
 except:
     settings_path = os.path.expanduser('~/.hardlinep2p/')
     drayerDB_root = os.path.expanduser('~/.hardlinep2p/drayerdb')
+    
+assetLibPath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
 
 try:
     from jnius import autoclass, cast
