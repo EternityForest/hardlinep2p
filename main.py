@@ -1028,7 +1028,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
         l.add_widget(Button(text=post.get('title',"?????") + " "+time.strftime('(%a %b %d, %Y)',time.localtime(post.get('time',0)/10**6)), size_hint=(1,None), on_release=f))
         l2 = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None))
-        img = Image(size_hint=(0.7,None))
+        img = Image(size_hint=(0.3,None))
         l2.add_widget(img)
         
         src = os.path.join(directories.assetLibPath, post.get("icon","INVALID"))
@@ -1253,6 +1253,15 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
 
         newtitle = MDTextField(text=document.get("title",''),mode='fill', multiline=False,font_size='22sp')
 
+        titleBar = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None))
+        img = Image(size_hint=(0.3,None))
+        titleBar.add_widget(img)
+        titleBar.add_widget(newtitle)
+
+        src = os.path.join(directories.assetLibPath, document.get("icon","INVALID"))
+        if os.path.exists(src):
+            img.source= src
+
         renderedText = renderPostTemplate(hardline.userDatabases[stream],postID, document.get("body",''))
 
         sourceText= [document.get("body",'')]
@@ -1299,7 +1308,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers):
         btn1.bind(on_release=post)
 
 
-        self.streamEditPanel.add_widget(newtitle)
+        self.streamEditPanel.add_widget(titleBar)
         self.streamEditPanel.add_widget(newp)        
         
         buttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
