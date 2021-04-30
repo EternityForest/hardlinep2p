@@ -42,7 +42,7 @@ import os
 import sys
 import re
 from .. daemonconfig import makeUserDatabase
-from .. import  uihelpers, drayerdb, cidict
+from .. import  drayerdb, cidict
 
 from kivymd.uix.picker import MDDatePicker
 
@@ -71,7 +71,7 @@ if platform=='android':
     daemonconfig.loadUserDatabases(None,forceProxy='127.0.0.1:7004')
 
 
-from . import tools,servicesUI,discovery,tables,posts,streams
+from . import tools,servicesUI,discovery,tables,posts,streams,uihelpers
 
 class ServiceApp(MDApp, uihelpers.AppHelpers,tools.ToolsAndSettingsMixin,servicesUI.ServicesMixin,discovery.DiscoveryMixin,tables.TablesMixin,posts.PostsMixin,streams.StreamsMixin):
 

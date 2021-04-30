@@ -29,7 +29,7 @@ import os
 import sys
 import re
 from .. daemonconfig import makeUserDatabase
-from .. import  uihelpers, drayerdb, cidict,directories
+from .. import   drayerdb, cidict,directories
 
 from kivymd.uix.picker import MDDatePicker
 
@@ -447,12 +447,12 @@ class PostsMixin():
         
         def goBack(*a):
             self.screenManager.current= "EditStream"
-        btn =  MDRoundFlatButton(size_hint=(1,None), text="Go Back")
+        btn =  Button(size_hint=(1,None), text="Go Back")
         btn.bind(on_release=goBack)
         self.postMetaPanel.add_widget(btn)
     
      
-        location = MDRoundFlatButton(size_hint=(1,None), text="Location: "+s.get("lat",'')+','+s.get('lon','') )
+        location = Button(size_hint=(1,None), text="Location: "+str(s.get("lat",0))+','+str(s.get('lon',0)) )
 
         def promptSet(*a):
             def onEnter(d):
@@ -467,7 +467,7 @@ class PostsMixin():
                             s['time']=None
                             s['lat']=lat
                             s['lon']=lon
-                            location.text="Location: "+s.get("lat",'')+','+s.get('lon','')
+                            location.text="Location: "+str(s.get("lat",0))+','+str(s.get('lon',0))
                     
                             return
                         except:
@@ -481,11 +481,11 @@ class PostsMixin():
                         del s['lon']
                     except:
                         pass
-                    location.text="Location: "+s.get("lat",'')+','+s.get('lon','')
+                    location.text="Location: "+str(s.get("lat",0))+','+str(s.get('lon',0))
                     s['time']=None
 
 
-            self.askQuestion("Enter location",s.get("lat",0)+','+s.get('lon',0),onEnter)
+            self.askQuestion("Enter location",str(s.get("lat",0))+','+str(s.get('lon',0)),onEnter)
 
         location.bind(on_release=promptSet)
         self.postMetaPanel.add_widget(location)
@@ -493,7 +493,7 @@ class PostsMixin():
         self.screenManager.current="PostMeta"
 
 
-        icon = MDRoundFlatButton(size_hint=(1,None), text="Icon: "+os.path.basename(s.get("icon",'')) )
+        icon = Button(size_hint=(1,None), text="Icon: "+os.path.basename(s.get("icon",'')) )
         def promptSet(*a):
             from plyer import filechooser
             selection = filechooser.open_file(path=os.path.join(directories.assetLibPath,'icons'))

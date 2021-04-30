@@ -29,7 +29,7 @@ import os
 import sys
 import re
 from .. daemonconfig import makeUserDatabase
-from .. import  uihelpers, drayerdb, cidict
+from .. import  drayerdb, cidict
 
 
 
