@@ -82,6 +82,25 @@ class StreamsMixin():
         self.streamEditPanel.add_widget(btn2)
 
 
+        importData = Button(size_hint=(1,None), text="Import Data File")
+
+        def promptSet(*a):
+            from plyer import filechooser
+            selection = filechooser.open_file(filters=["*.json"])
+            if selection:
+                import json
+                with open(selection[0]) as f:
+                    for i in json.loads(f.read()):
+                        with  daemonconfig.userDatabases[name]:
+                            daemonconfig.userDatabases[name].setDocument(i[0])
+                        daemonconfig.userDatabases[name].commit()
+
+
+            
+        importData.bind(on_release=promptSet)
+        self.streamEditPanel.add_widget(importData)
+
+
         self.screenManager.current = "EditStream"
 
     def editStreamSettings(self, name):
@@ -111,7 +130,7 @@ class StreamsMixin():
         def delete(*a):
             def f(n):
                 if n and n == name:
-                    hardline.delDatabase(None, n)
+                    daemonconfig.delDatabase(None, n)
                     if platform == 'android':
                         self.stop_service()
                         self.start_service()
@@ -249,7 +268,7 @@ class StreamsMixin():
     def promptAddStream(self, *a, **k):
         def f(v):
             if v:
-                hardline.makeUserDatabase(None, v)
+                daemonconfig.makeUserDatabase(None, v)
                 self.editStream(v)
 
         self.askQuestion("New Stream Name?", cb=f)

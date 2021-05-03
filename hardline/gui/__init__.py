@@ -73,6 +73,68 @@ if platform=='android':
 
 from . import tools,servicesUI,discovery,tables,posts,streams,uihelpers
 
+
+
+#In this mode, we are just acting as a viewer for a file
+oneFileMode = False
+
+
+#Horrible hacc
+try:
+    import plyer.platforms.linux.filechooser
+    from distutils.spawn import find_executable as which
+
+    class KDialogFileChooser(plyer.platforms.linux.filechooser.SubprocessFileChooser):
+        '''A FileChooser implementation using KDialog (on GNU/Linux).
+        Not implemented features:
+        * show_hidden
+        * preview
+        '''
+
+        executable = "kdialog"
+        separator = "\n"
+        successretcode = 0
+
+        def _gen_cmdline(self):
+            cmdline = [which(self.executable)]
+
+            filt = []
+
+            for f in self.filters:
+                if type(f) == str:
+                    filt += [f]
+                else:
+                    filt += list(f[1:])
+
+            if self.mode == "dir":
+                cmdline += [
+                    "--getexistingdirectory",
+                    (self.path if self.path else os.path.expanduser("~"))
+                ]
+            elif self.mode == "save":
+                cmdline += [
+                    "--getsavefilename",
+                    (self.path if self.path else os.path.expanduser("~")),
+                    " ".join(filt)
+                ]
+            else:
+                cmdline += [
+                    "--getopenfilename",
+                    (self.path if self.path else os.path.expanduser("~")),
+                    " ".join(filt)
+                ]
+            if self.multiple:
+                cmdline += ["--multiple", "--separate-output"]
+            if self.title:
+                cmdline += ["--title", self.title]
+            if self.icon:
+                cmdline += ["--icon", self.icon]
+            return cmdline
+    plyer.platforms.linux.filechooser.KDialogFileChooser=KDialogFileChooser
+    plyer.platforms.linux.filechooser.CHOOSERS['kde']=KDialogFileChooser
+except:
+    pass
+
 class ServiceApp(MDApp, uihelpers.AppHelpers,tools.ToolsAndSettingsMixin,servicesUI.ServicesMixin,discovery.DiscoveryMixin,tables.TablesMixin,posts.PostsMixin,streams.StreamsMixin):
 
     def stop_service(self, foo=None):
@@ -262,12 +324,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers,tools.ToolsAndSettingsMixin,service
         return screen
 
 
-
-
-
-
-
-    def request_android_permissions(self):
+    def getPermission(self,type='all'):
         """
         Since API 23, Android requires permission to be requested at runtime.
         This function requests permission and handles the response via a
@@ -275,21 +332,31 @@ class ServiceApp(MDApp, uihelpers.AppHelpers,tools.ToolsAndSettingsMixin,service
         The request will produce a popup if permissions have not already been
         been granted, otherwise it will do nothing.
         """
-        from android.permissions import request_permissions, Permission
+        if platform=="android":
+            from android.permissions import request_permissions, Permission
 
-        def callback(permissions, results):
-            """
-            Defines the callback to be fired when runtime permission
-            has been granted or denied. This is not strictly required,
-            but added for the sake of completeness.
-            """
-            if all([res for res in results]):
-                print("callback. All permissions granted.")
-            else:
-                print("callback. Some permissions refused.")
+            if type=='all':
+                plist = [Permission.ACCESS_COARSE_LOCATION,
+                                Permission.ACCESS_FINE_LOCATION, Permission.MANAGE_EXTERNAL_STORAGE]
+            if type=='location':
+                plist =[Permission.ACCESS_COARSE_LOCATION,
+                                Permission.ACCESS_FINE_LOCATION]
+            if type=='files':
+                plist=[Permission.MANAGE_EXTERNAL_STORAGE]
 
-        request_permissions([Permission.ACCESS_COARSE_LOCATION,
-                             Permission.ACCESS_FINE_LOCATION], callback)
+
+            def callback(permissions, results):
+                """
+                Defines the callback to be fired when runtime permission
+                has been granted or denied. This is not strictly required,
+                but added for the sake of completeness.
+                """
+                if all([res for res in results]):
+                    print("callback. All permissions granted.")
+                else:
+                    print("callback. Some permissions refused.")
+
+            request_permissions(plist, callback)
 
 
 

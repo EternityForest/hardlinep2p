@@ -5,7 +5,6 @@
 # There is one table called Document
 
 from enum import auto
-from hashlib import blake2b
 import logging
 import shutil
 import websockets
@@ -17,7 +16,8 @@ import uuid as uuidModule
 import random
 import configparser
 import os
-import libnacl
+
+from . import libnacl
 import base64
 import struct
 import uuid
@@ -217,7 +217,7 @@ class DocumentDatabase():
 
             # To keep indexing simple and universal, it only works on four standard properties. tags, title, descripion, body
             self.threadLocal.conn.execute('''
-                CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5(tags, title, description, body, content='')''')
+                CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts4(tags, title, description, body, content='')''')
 
             self.threadLocal.conn.execute(
                 '''CREATE INDEX IF NOT EXISTS document_parent ON document(json_extract(json,"$.parent")) WHERE json_extract(json,"$.parent") IS NOT null ''')
@@ -684,6 +684,39 @@ class DocumentDatabase():
             if r:
                 return self.encodeMessage(r)
 
+    def getAllRelatedRecords(self,record,r=None,children=True):
+        "Get all children of this record, and all ancestors, as (json, signature, arrival) indexed by ID"
+        records = {}
+        r = r or {}
+
+        cur = self.threadLocal.conn.cursor()
+        # Avoid dumping way too much at once
+        cur.execute(
+            'SELECT json,signature,arrival FROM document WHERE  json_extract(json,"$.id")=?', (record,))
+
+        for i in cur:
+            d =json.loads(i[0])
+            id = d['id']
+            r[id]=i
+
+            if children:
+                cur2 = self.threadLocal.conn.cursor()
+                cur2.execute(
+                    'SELECT json,signature,arrival FROM document WHERE  json_extract(json,"$.parent")=?', (d['id'],))
+
+                for j in cur2:
+                    d2 =json.loads(j[0])
+                    id = d2['id']
+                    r[id]=j
+
+            if d.get('parent',''):
+                return self.getAllRelatedRecords(d['parent'],r,children=False)
+
+            return r
+        return r
+
+
+        
     def createBinaryWriteCall(self, r, sig=None):
         "Creates a binary command representing a request to insert a record."
         p = self.config.get('Sync', 'writePassword', fallback=None)

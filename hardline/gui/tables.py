@@ -3,7 +3,7 @@ from hardline import daemonconfig
 from .. import daemonconfig, hardline
 
 
-import configparser,logging
+import configparser,logging,textwrap
 
 from kivy.uix.image import Image
 from kivy.uix.widget import Widget
@@ -234,7 +234,20 @@ class TablesMixin():
 
         l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
         l.add_widget(Button(text=post.get('name',"?????"), size_hint=(1,None), on_release=f))
-        #l.add_widget(Label(text=post.get('body',"?????")[:140], size_hint=(1,None), font_size='22sp',halign='left'))
+        
+        tlen =0
+        t = []
+        for i in post:
+            if i.startswith('row.') and not post[i] in (0,''):
+                x = i[4:]+": "+str(post[i])[:16]+("..." if len(str(post[i]))>16 else "")
+                if tlen+len(x)> 120:
+                    continue
+                t.append(x)
+                tlen+=len(x)
+        
+        t ="\r\n".join(textwrap.wrap(",  ".join(t), 48))
+
+        l.add_widget(Label(text=t, size_hint=(1,None), font_size='22sp',halign='left'))
         return l
 
     def gotoStreamRow(self, stream, postID, document=None, noBack=False,template=None):
@@ -342,7 +355,7 @@ class TablesMixin():
                 pass
                 
             x = MDTextField(text=str(d)+names[i],mode='fill', multiline=False,font_size='22sp')
-            def oc(*a,i=i):
+            def oc(*a,i=i,x=x):
                 d=x.text.strip()
                 if isinstance(d,str):
                     d=d.strip()

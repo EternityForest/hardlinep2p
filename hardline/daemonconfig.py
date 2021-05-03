@@ -1,3 +1,7 @@
+"""
+Contains tools relevant to running as a standalone daemon or app
+"""
+
 from .hardline import *
 # "User Services" are configurable services stored in files, asw opposed to those defined in code
 import os
@@ -214,7 +218,7 @@ def loadUserDatabases(serviceDir, only=None, forceProxy=None):
                 userDatabases[i] = defaultDBClass(
                     os.path.join(serviceDir, i), forceProxy=forceProxy)
             except:
-                logger.info(traceback.format_exc())
+                logger.exception(traceback.format_exc())
 
 
 def makeUserDatabase(dir, name):

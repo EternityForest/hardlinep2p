@@ -36,7 +36,7 @@ version = 0.14
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,pyjnius,pynacl,six,lxml,dateutil,requests,urllib3,chardet,idna,certifi,kivy==2.0.0,kivymd,mako,plyer,android,cryptography,netifaces,beautifulsoup4
+requirements = python3,pyjnius,pynacl,six,lxml,dateutil,requests,urllib3,chardet,idna,certifi,kivy==2.0.0,kivymd,mako,plyer,android,cryptography,netifaces,beautifulsoup4,websockets
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
@@ -88,7 +88,8 @@ fullscreen = 0
 
 # (list) Permissions
 #Leave out the wifi multicast one for battery life, but we should really disable that in code
-android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE,FOREGROUND_SERVICE,BATTERY_STATS,CHANGE_WIFI_MULTICAST_STATE,WAKE_LOCK
+#Manage external storage is used
+android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE,FOREGROUND_SERVICE,BATTERY_STATS,CHANGE_WIFI_MULTICAST_STATE,WAKE_LOCK,MANAGE_EXTERNAL_STORAGE
 
 # (int) Target Android API, should be as high as possible.
 android.api = 30

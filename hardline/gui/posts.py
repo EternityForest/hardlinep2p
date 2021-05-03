@@ -1,4 +1,5 @@
 import configparser
+import json
 from hardline import daemonconfig
 from .. import daemonconfig, hardline
 
@@ -510,4 +511,38 @@ class PostsMixin():
             
         icon.bind(on_release=promptSet)
         self.postMetaPanel.add_widget(icon)
+
+
+
+        export = Button(size_hint=(1,None), text="Export Raw Data")
+
+        def promptSet(*a):
+            from plyer import filechooser
+            selection = filechooser.save_file(filters=[("Data Files","*.json")], path=(os.path.join(os.path.expanduser("~"), s.get('title','') or 'UntitledPost')+'.json'))
+
+            if selection:
+                #Needed for android
+                if not "com.eternityforest" in selection:
+                    self.getPermission('files')
+                data = daemonconfig.userDatabases[stream].getAllRelatedRecords(docID)
+
+
+                #Get the records as a list, sorted by time for consistency.
+                l = []
+                import json
+                for i in data:
+                    d=json.loads(data[i][0])
+                    l.append((d['id'],d))
+                l = sorted(l)
+
+                l = [ [i[1]] for i in l]
+
+                with open(selection[0],'w') as f:
+                    f.write(json.dumps(l, sort_keys=True,indent=2))
+
+
+            
+        export.bind(on_release=promptSet)
+        self.postMetaPanel.add_widget(export)
+        self.postMetaPanel.add_widget(Label(text="Exports this post, all descendants,\nand all ancestors in JSON format\nthat can be imported into\nanother stream.",size_hint=(1,None)))
 
