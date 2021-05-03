@@ -1,0 +1,79 @@
+<?xml version="1.0"?>
+<svg xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns="http://www.w3.org/2000/svg" xmlns:osb="http://www.openswatchbook.org/uri/2009/osb" xmlns:cc="http://creativecommons.org/ns#" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:svg="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" xmlns:ns1="http://sozi.baierouge.fr" id="svg7751" viewBox="0 0 322.2 332.55" version="1.1">
+<defs id="defs7753">
+<linearGradient id="linearGradient6964" y2="-28.879" gradientUnits="userSpaceOnUse" x2="254.2" gradientTransform="matrix(.99682 0 0 2.5057 2.471 126.58)" y1="-28.879" x1="80.802">
+<stop id="stop4246" stop-color="#878787" offset="0"/>
+<stop id="stop6973" stop-color="#a5a5a5" offset=".12333"/>
+<stop id="stop6971" stop-color="#d2d2d2" offset=".24667"/>
+<stop id="stop4270" stop-color="#f5f5f5" offset=".38"/>
+<stop id="stop4252" stop-color="#fff" offset=".5"/>
+<stop id="stop4274" stop-color="#f5f5f5" offset=".62"/>
+<stop id="stop6967" stop-color="#d2d2d2" offset=".75"/>
+<stop id="stop6975" stop-color="#a5a5a5" offset=".875"/>
+<stop id="stop4248" stop-color="#878787" offset="1"/>
+</linearGradient>
+</defs>
+<g id="layer1" transform="translate(-267.98 -108.17)">
+<path id="path6061" d="m3 0.90625l-1.9375 1.7812-0.625 2.2501 0.3125 324.15 0.75 1.66 1.6562 1.06 315.43 0.28 2.1-1.18 1.06-1.97-0.44-289.19h-2.25v-13.188l1.78 0.438v-4.5l-24.28-21.312-4.81-0.28175-1.5 1.3438h-25.81l-2.25 2.25-5.25 0.1562h-173.38l0.002-1.5-42.624-0.3124 0.156-1.6563-38.094-0.28125zm288.91 296.25h18.15v11.84h-18.15v-11.84z" fill="#292929" transform="translate(267.98 108.17)" fill-rule="evenodd"/>
+<path id="path6063" stroke-linejoin="round" d="m268.43 113.12 0.3 324.15 0.75 1.65 1.65 1.05 315.45 0.3 2.1-1.2 1.05-1.95-0.45-289.2h-2.25v-13.2l1.8 0.45v-4.5l-24.3-21.3-4.8-0.3-1.5 1.35h-25.8l-2.25 2.25-5.25 0.15h-173.4v-1.5l-42.6-0.3 0.15-1.65-38.1-0.3-1.95 1.8-0.6 2.25z" stroke="#333" stroke-linecap="round" stroke-miterlimit="10" stroke-width=".9" fill="none"/>
+<path id="path6069" stroke-linejoin="round" d="m549.68 151.82c4.2 11.7 13.35 5.55 13.35-8.4 0.15-13.95-10.95-17.4-13.5-5.4" stroke="#eaeaea" stroke-miterlimit="10" stroke-width="1.95" fill="none"/>
+<path id="path6071" stroke-linejoin="round" d="m544.28 158.57v-27.75 15.45h-12.3v-15.45 27.75" stroke="#eaeaea" stroke-miterlimit="10" stroke-width="1.95" fill="none"/>
+<path id="path6073" stroke-linejoin="round" d="m309.38 110.42v106.35l0.75 1.35 1.05 0.45h46.5" stroke="#808080" stroke-linecap="round" stroke-miterlimit="10" stroke-width=".6" fill="none"/>
+<path id="path6075" d="m278.63 148.52h4.2v13.65h8.7v-13.65h4.2l-8.55-24.75-8.55 24.75z" fill-rule="evenodd"/>
+<path id="path6077" stroke-linejoin="round" d="m278.63 148.52h4.2v13.65h8.7v-13.65h4.2l-8.55-24.75-8.55 24.75z" stroke="#808080" stroke-linecap="round" stroke-miterlimit="10" stroke-width=".9" fill="none"/>
+<path id="path6079" d="m278.78 417.32h18.15v-11.85h-18.15v11.85z"/>
+<path id="path6081" d="m278.78 417.32h18.15v-11.85h-18.15v11.85z" stroke="#808080" stroke-linecap="round" stroke-miterlimit="8" stroke-width=".9" fill="none"/>
+<path id="path6083" d="m550.88 439.82v-184.2l-1.8-2.1-240 0.3-2.1 1.5v184.95l243.9-0.45z" fill="#fff" fill-rule="evenodd"/>
+<path id="path6085" stroke-linejoin="round" d="m550.88 439.82v-184.2l-1.8-2.1-240 0.3-2.1 1.5v184.95l243.9-0.45z" stroke="#000" stroke-linecap="round" stroke-miterlimit="10" stroke-width=".9" fill="none"/>
+<path id="path6087" d="m307.58 440.27h242.7v-15h-242.7v15z" fill="#f60"/>
+<path id="path6089" stroke-linejoin="round" d="m307.58 401.57h242.7" stroke="#f60" stroke-miterlimit="10" stroke-width="1.2" fill="none"/>
+<path id="path6091" stroke-linejoin="round" d="m307.58 378.32h242.7" stroke="#f60" stroke-miterlimit="10" stroke-width="1.2" fill="none"/>
+<path id="path6093" stroke-linejoin="round" d="m307.58 355.07h242.7" stroke="#f60" stroke-miterlimit="10" stroke-width="1.2" fill="none"/>
+<path id="path6095" stroke-linejoin="round" d="m307.58 331.67h242.7" stroke="#f60" stroke-miterlimit="10" stroke-width="1.2" fill="none"/>
+<path id="path6097" stroke-linejoin="round" d="m307.58 308.42h242.7" stroke="#f60" stroke-miterlimit="10" stroke-width="1.2" fill="none"/>
+<path id="path6099" stroke-linejoin="round" d="m307.58 285.32h242.7" stroke="#f60" stroke-miterlimit="10" stroke-width="1.2" fill="none"/>
+<path id="path6129" stroke-linejoin="round" d="m523.58 108.62v107.4l-2.85 3.15-166.2-0.15-3-2.1v-108.3h172.05z" stroke="#000" stroke-linecap="round" stroke-miterlimit="10" stroke-width=".9" fill="none"/>
+<path id="path6133" d="m450.68 213.47h46.35v-87h-46.35v87z" stroke="#000" stroke-linecap="round" stroke-miterlimit="8" stroke-width=".9" fill="none"/>
+</g>
+<g id="layer2" stroke="#000">
+<path id="Replacer01" d="m83.656 0.53125v107.97l3.125 2.4062h165.97l2.75-3.0312v-107.34h-171.84zm99.031 17.781h46.375v87h-46.375v-87z" style="color:#000000" stroke-width=".3" fill="url(#linearGradient6964)"/>
+<path id="path6933" d="m70.584 133.55z" stroke-width="1px" fill="none"/>
+</g>
+<metadata>
+<rdf:RDF>
+<cc:Work>
+<dc:format>image/svg+xml</dc:format>
+<dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+<cc:license rdf:resource="http://creativecommons.org/licenses/publicdomain/"/>
+<dc:publisher>
+<cc:Agent rdf:about="http://openclipart.org/">
+<dc:title>Openclipart</dc:title>
+</cc:Agent>
+</dc:publisher>
+<dc:title>Floppy disk 3.5"</dc:title>
+<dc:date>2013-10-01T12:56:19</dc:date>
+<dc:description>Original is made in  MsOffice, then converted to SVG.</dc:description>
+<dc:source>https://openclipart.org/detail/184483/floppy-disk-3.5-by-echo7-184483</dc:source>
+<dc:creator>
+<cc:Agent>
+<dc:title>echo7</dc:title>
+</cc:Agent>
+</dc:creator>
+<dc:subject>
+<rdf:Bag>
+<rdf:li>Computer</rdf:li>
+<rdf:li>FDD</rdf:li>
+<rdf:li>Floppy disk</rdf:li>
+<rdf:li>data storage</rdf:li>
+<rdf:li>floppy</rdf:li>
+</rdf:Bag>
+</dc:subject>
+</cc:Work>
+<cc:License rdf:about="http://creativecommons.org/licenses/publicdomain/">
+<cc:permits rdf:resource="http://creativecommons.org/ns#Reproduction"/>
+<cc:permits rdf:resource="http://creativecommons.org/ns#Distribution"/>
+<cc:permits rdf:resource="http://creativecommons.org/ns#DerivativeWorks"/>
+</cc:License>
+</rdf:RDF>
+</metadata>
+</svg>

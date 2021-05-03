@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400pt" height="400pt" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+ <defs>
+  <radialGradient id="c" cx=".281" cy=".203" r=".997" xlink:href="#a"/>
+  <radialGradient id="b" cx=".264" cy=".227" r="1.036" xlink:href="#a"/>
+  <linearGradient id="a">
+   <stop stop-color="#ff8a00" offset="0"/>
+   <stop stop-color="#ff0" offset="1"/>
+  </linearGradient>
+ </defs>
+ <g fill-rule="evenodd">
+  <path transform="matrix(1.3967 0 0 1.521 -80.238 -8.768)" d="m249.01 11.985c-103.6 0.909-99.966 123.59 1.818 124.5 89.968-0.908 96.33-126.32-1.818-124.5z" fill="url(#b)" stroke="#000" stroke-linejoin="round" stroke-width="6.861"/>
+  <path d="m259.7 18.976c-6.362-10.905-116.19 20.87-83.04 100.75 18.176 8.179 93.037-72.573 83.04-100.75z" fill="#fff" fill-opacity=".5"/>
+  <path transform="matrix(1 0 0 .78483 -1.119 107.42)" d="m88.152 214.64c11.814-26.355 123.59-72.703 175.4-69.068 50.891-2.726 155.4 33.625 176.3 68.158-30.899-4.998-113.37 74.521-57.253 129.84 48.514 48.614-10.905 137.34-10.905 137.34-85.426-89.969-113.6-102.69-218.11 2.726-1.818-10.451-31.58-107.01-9.656-144.5 34.01-56.741-24.424-128.59-55.776-124.5z" fill="url(#c)" font-size="12" stroke="#000" stroke-linejoin="round" stroke-width="11.288"/>
+  <path d="m216.08 237.36c-0.909-12.126-89.06 12.838-113.6 33.522 25.446 15.691 80.882 16.405 39.986 130.52 59.071-71.323 80.882-94.86 73.612-164.04z" fill="#fff" fill-opacity=".498" font-size="12"/>
+ </g>
+</svg>

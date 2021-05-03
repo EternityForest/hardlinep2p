@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="106.67" height="106.67" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+ <defs>
+  <radialGradient id="b" cx=".3" cy=".207" xlink:href="#a"/>
+  <radialGradient id="d" cx=".206" cy=".195" r=".536" xlink:href="#a"/>
+  <radialGradient id="e" cx=".21" cy=".114" r=".584" xlink:href="#a"/>
+  <linearGradient id="a">
+   <stop stop-color="#02e2ff" offset="0"/>
+   <stop stop-color="#0079a8" offset="1"/>
+  </linearGradient>
+  <linearGradient id="c" x1="-.118" x2=".471" y1=".041" y2=".769" xlink:href="#a"/>
+ </defs>
+ <path d="m71.308 19.843c0 6.609-5.362 11.972-11.969 11.972s-11.969-5.363-11.969-11.972 5.362-11.973 11.969-11.973 11.969 5.364 11.969 11.973z" fill="url(#b)" fill-rule="evenodd"/>
+ <path d="M13.186 26.054c10.356-9.324 29.521-4.072 36.898 5.983M38.983 64.054c10.821 7.819 18.373 13.055 26.81 20.385" fill="none" stroke="#00007f" stroke-width="2.5"/>
+ <path d="m53.505 50.237c-2.275 10.958-6.067 19.447-15.677 17.453-8.572-2-9.71-11.291-7.437-22.249 2.275-10.957 5.775-19.287 15.677-17.452 9.654 1.784 9.711 11.292 7.437 22.25z" fill="url(#c)" fill-rule="evenodd"/>
+ <path d="m16.395 27.342c0 2.07-1.68 3.75-3.75 3.75s-3.75-1.68-3.75-3.75 1.68-3.75 3.75-3.75 3.75 1.68 3.75 3.75z" fill="url(#d)" fill-rule="evenodd"/>
+ <path d="M74.794 78.46c1.193 1.692-.127 4.679-2.946 6.667-2.82 1.989-6.075 2.23-7.269.539-1.193-1.692.127-4.679 2.946-6.667 2.82-1.989 6.076-2.23 7.269-.539z" fill="url(#e)" fill-rule="evenodd"/>
+ <path d="m35.458 64.551c7.728 7.2 18.167 15.736 23.924 22.86" fill="none" stroke="#00007f" stroke-width="2.5"/>
+ <path d="M68.145 83.38c.923 1.853-.833 4.606-3.921 6.145-3.088 1.54-6.343 1.285-7.267-.568-.923-1.853.833-4.605 3.921-6.144 3.088-1.54 6.343-1.285 7.267.568z" fill="url(#e)" fill-rule="evenodd"/>
+ <path d="m11.24 40.09c6.44-7.88 22.924-14.174 35.867-7.624" fill="none" stroke="#00007f" stroke-width="2.5"/>
+ <path d="m12.615 41.24c0 2.07-1.68 3.75-3.75 3.75s-3.75-1.68-3.75-3.75 1.68-3.75 3.75-3.75 3.75 1.68 3.75 3.75z" fill="url(#d)" fill-rule="evenodd"/>
+</svg>

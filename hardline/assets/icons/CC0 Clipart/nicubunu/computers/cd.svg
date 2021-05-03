@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400pt" height="400pt" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+ <defs>
+  <linearGradient id="d" x1=".351" x2=".26" y1=".453" y2=".539" spreadMethod="reflect">
+   <stop stop-color="#0f0" stop-opacity=".678" offset="0"/>
+   <stop stop-color="#ff0" stop-opacity=".969" offset="1"/>
+  </linearGradient>
+  <linearGradient id="c" x1=".373" x2=".648" y1=".359" y2="-.031" spreadMethod="reflect">
+   <stop stop-color="#0ff" offset="0"/>
+   <stop stop-color="#ff8aff" offset="1"/>
+  </linearGradient>
+ </defs>
+ <path transform="matrix(1.0302 0 0 1.0056 -20.628 -4.375)" d="m486.71 252.83a224.7 228.52 0 1 0-449.4 0 224.7 228.52 0 1 0 449.4 1e-3h-224.7z" fill="none" stroke="#000" stroke-width="1pt"/>
+ <path d="m473.99 249.86a225.12 224.7 0 1 0-450.25 0 225.12 224.7 0 1 0 450.25 0h-225.12z" fill="#9b9f9f" fill-rule="evenodd"/>
+ <g fill-rule="evenodd" font-size="12">
+  <path transform="matrix(1.1582 0 0 1.1569 -92.073 -113.37)" d="m110.18 258.09a188.66 182.3 0 0 1 97.194-117.27l85.58 162.47z" fill="url(#c)"/>
+  <path transform="matrix(1.1582 0 0 1.1569 -92.073 -111.79)" d="m127.8 215.15a188.66 182.3 0 0 1 40.062-48.34l125.09 136.47z" fill="url(#d)"/>
+  <path transform="matrix(-1.1582 0 0 -1.1569 591.62 609.25)" d="m110.18 258.09a188.66 182.3 0 0 1 97.194-117.27l85.58 162.47z" fill="url(#c)"/>
+  <path transform="matrix(-1.1582 0 0 -1.1569 591.62 607.67)" d="m127.8 215.15a188.66 182.3 0 0 1 40.062-48.34l125.09 136.47z" fill="url(#d)"/>
+ </g>
+ <path transform="matrix(1.1944 0 0 1.1857 -44.068 -53.55)" d="m278.97 254.1a30.525 29.677 0 1 0-61.05 0 30.525 29.677 0 1 0 61.05 0h-30.525z" fill="#fff" fill-rule="evenodd" stroke="#000" stroke-width="1pt"/>
+ <path transform="matrix(1.8438 0 0 1.7879 -214.34 -207.32)" d="m267.1 254.53a13.567 13.99 0 1 0-27.134 0 13.567 13.99 0 1 0 27.134 0h-13.567z" fill="none" stroke="#000" stroke-width="1pt"/>
+ <path d="M278.119 247.743a25.014 25.014 0 10-50.028 0 25.014 25.014 0 1050.028 0h-25.014z" fill="#fff" fill-rule="evenodd"/>
+</svg>

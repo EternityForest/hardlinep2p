@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="48" height="48" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+ <defs>
+  <linearGradient id="g" x1="11.031" x2="24.277" y1="24.5" y2="23.071" gradientTransform="translate(-1 1)" gradientUnits="userSpaceOnUse" xlink:href="#a"/>
+  <linearGradient id="a">
+   <stop stop-color="#003e8c" offset="0"/>
+   <stop stop-color="#0062db" offset="1"/>
+  </linearGradient>
+  <linearGradient id="c" x1="32.646" x2="39.051" y1="23.382" y2="18.414" gradientTransform="translate(-1 1)" gradientUnits="userSpaceOnUse" xlink:href="#a"/>
+  <linearGradient id="h" x1="26.422" x2="35.829" y1="37.712" y2="42.191" gradientTransform="translate(-1 1)" gradientUnits="userSpaceOnUse" xlink:href="#a"/>
+  <linearGradient id="e" x1="16" x2="34.63" y1="22.953" y2="21.167" gradientTransform="translate(-1 1)" gradientUnits="userSpaceOnUse" xlink:href="#a"/>
+  <linearGradient id="d" x1="10.112" x2="19.781" y1="9.07" y2="9.07" gradientTransform="translate(-1 1)" gradientUnits="userSpaceOnUse" xlink:href="#a"/>
+  <linearGradient id="f" x1="11.928" x2="20.135" y1="14.866" y2="10.043" gradientTransform="translate(-1 1)" gradientUnits="userSpaceOnUse" xlink:href="#a"/>
+  <linearGradient id="i" x1="11" x2="37" y1="14" y2="38" gradientTransform="translate(-1 1)" gradientUnits="userSpaceOnUse" xlink:href="#a"/>
+  <filter id="k">
+   <feGaussianBlur stdDeviation=".187"/>
+  </filter>
+  <filter id="j" x="-.175" y="-.056" width="1.351" height="1.113">
+   <feGaussianBlur stdDeviation=".187"/>
+  </filter>
+  <filter id="l" x="-.094" y="-.121" width="1.188" height="1.242">
+   <feGaussianBlur stdDeviation=".187"/>
+  </filter>
+  <filter id="m" x="-.235" y="-.136" width="1.47" height="1.273">
+   <feGaussianBlur stdDeviation=".37"/>
+  </filter>
+  <filter id="n" x="-.161" y="-.486" width="1.322" height="1.973">
+   <feGaussianBlur stdDeviation=".37"/>
+  </filter>
+  <filter id="b" x="-.085" y="-.317" width="1.17" height="1.634">
+   <feGaussianBlur stdDeviation=".957"/>
+  </filter>
+ </defs>
+ <path d="M11.753 37.213c-1.356.027-2.291.307-2.375.782-.135.759 1.964 1.73 4.687 2.187.705.119 1.38.191 2 .219-.002.01.002.021 0 .031-.25 1.447 2.536 3.144 6.219 3.781 3.286.57 6.174.103 6.937-1.03.61.184 1.3.345 2.032.468 2.723.458 5.052.196 5.187-.563.135-.758-1.964-1.73-4.687-2.187-1.444-.243-2.768-.28-3.72-.156-1.127-.759-2.845-1.435-4.843-1.782-1.674-.29-3.228-.29-4.469-.093-.768-.562-2.305-1.127-4.156-1.438-1.021-.171-2-.234-2.812-.219z" fill-opacity=".769" fill-rule="evenodd" filter="url(#b)"/>
+ <path d="M25.156 4.75c-.28.007-.516.038-.593.094l.656.75 4.281 11 9.594 2.718c.806 1.447-.489 3.092-.063 3l-5.248 6.261 4.154 8.99c.235.44-.707 1.482-1.092 1.849l2.374.057c1.062-.037 1.875-1.002 1.5-1.781l-3.313-9.032 5.5-6.562c.469-.64.494-2.496-1.031-2.657l-9.094-3.312-3.656-9.969c-.032-.547-.545-1.06-1.219-1.218a1.936 1.936 0 00-.156-.063c-.318-.003-1.756-.147-2.594-.125zm5.442 14.455l1.91 6.626 3.079-2.18-1.329-3.395-3.66-1.05z" fill="url(#c)" font-family="Bitstream Vera Sans" font-weight="400" overflow="visible" style="block-progression:tb;text-indent:0;text-transform:none"/>
+ <path d="M12.594 8.75c-.461.008-3.325-.396-3.63-.128l9.223 3.066.594-.688-6.187-2.25z" fill="url(#d)" font-family="Bitstream Vera Sans" font-weight="400" overflow="visible" style="block-progression:tb;text-indent:0;text-transform:none"/>
+ <path d="M24.688 9.344l-5.984 3.92 7.983 1.517-.375-1.031-1.968-.719 1.187-1.375-.843-2.312zm-5.364 5.401l-5.217 5.815 3.763 9.98 8.974 2.085.593-.688-6.25-2.343-3.406-8.969 3.969-4.563-2.426-1.317zm-1.27 16.293l4.238 9.31 1.458-4.035-.781-2.032-4.915-3.243z" fill="url(#e)" font-family="Bitstream Vera Sans" font-weight="400" overflow="visible" style="block-progression:tb;text-indent:0;text-transform:none"/>
+ <path d="M10.928 11.043l2.073 9.646 2.562-6.002-.376-1-4.259-2.644z" fill="url(#f)" font-family="Bitstream Vera Sans" font-weight="400" overflow="visible" style="block-progression:tb;text-indent:0;text-transform:none"/>
+ <path d="M13.238 21.831l-5.231 4.986 8.184 2.62-1.597-2.343-1.781-.688 1.062-1.218-.637-3.357z" fill="url(#g)" font-family="Bitstream Vera Sans" font-weight="400" overflow="visible" style="block-progression:tb;text-indent:0;text-transform:none"/>
+ <path d="M32.667 30.443l-4.784 4.021 6.946 1.605-.954-1.694-.938-.375.563-.688-.833-2.869zm-5.269 5.302l-5.892 7.271c.232.346 2.1.058 2.588.14.477.076.992-.018 1.375-.25l4.875-5.843-2.946-1.318z" fill="url(#h)" font-family="Bitstream Vera Sans" font-weight="400" overflow="visible" style="block-progression:tb;text-indent:0;text-transform:none"/>
+ <path d="M24.962 4.757a1.698 1.325 54.89 00-1.14.354l-5.637 6.58-8.369-3.067A1.698 1.325 54.89 008.3 10.39l3.353 8.872-5.488 6.376a1.698 1.325 54.89 001.02 2.706l9.204 3.472 3.789 10.037a1.698 1.325 54.89 001.125 1.193 1.698 1.325 54.89 001.381-.265l5.475-6.542 8.272 3.095a1.698 1.325 54.89 001.517-1.767L34.61 28.54l5.51-6.562a1.698 1.325 54.89 00-1.024-2.674L30 16l-3.672-9.961a1.698 1.325 54.89 00-1.215-1.226 1.698 1.325 54.89 00-.151-.056zm-.29 4.581l2.006 5.432-5.107-1.859 3.101-3.573zm11.617 12.03l-3.007 3.576-1.98-5.39 4.987 1.814zm-8.312-3.013l3.312 8.955-4.457 5.303-8.422-3.151-3.406-8.957 4.544-5.238 8.43 3.088zm-11.845-4.32l-2.46 2.904-1.68-4.405 4.14 1.5zm-3.117 8.805l1.986 5.327-4.98-1.876 2.994-3.45zm19.604 8.067l1.666 4.53-4.134-1.563 2.468-2.967zm-12.85 2.163l5.101 1.92-3.007 3.576-2.093-5.496z" fill="url(#i)" font-family="Bitstream Vera Sans" font-weight="400" overflow="visible" style="block-progression:tb;text-indent:0;text-transform:none"/>
+ <path d="M9.956 8.896c-1.208-.307-1.757.2-1.518 1.22.387 1.191 2.5 6.64 2.5 6.64-.692-2.684-3.143-7.415-.982-7.86z" fill="#fff" fill-opacity=".509" filter="url(#j)" overflow="visible"/>
+ <path d="M7.042 25.042c-.78.59-1.399 2.021.084 3.032l6.106 2.4c-3.285-1.937-8.052-2.22-6.19-5.432z" fill="#fff" fill-opacity=".509" filter="url(#k)" overflow="visible"/>
+ <path d="M21.19 8.705c.8-1.22 2.736-3.368 2.736-3.368 1.241-.849 1.492.176 2.021.547-1.543-.744-3.256 1.08-4.758 2.821z" fill="#fff" fill-opacity=".509" filter="url(#l)" overflow="visible"/>
+ <path d="M38.747 19.526c1.662 1.61.249 2.975-2.397 6.51l3.755-4.43c.115-1.048-.206-1.823-1.358-2.08z" fill="#fff" fill-opacity=".603" filter="url(#m)" overflow="visible"/>
+ <path d="M37.821 37.463c.197.817-.015 1.482-1.084 1.824l-4.365-1.635c1.83.175 3.76 2.18 5.45-.189z" fill="#fff" fill-opacity=".603" filter="url(#n)" overflow="visible"/>
+</svg>

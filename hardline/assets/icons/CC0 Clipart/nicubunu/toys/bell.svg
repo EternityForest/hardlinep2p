@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400pt" height="400pt" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+ <defs>
+  <linearGradient id="a">
+   <stop stop-color="#cc955d" offset="0"/>
+   <stop stop-color="#ffdf32" offset="1"/>
+  </linearGradient>
+  <linearGradient id="e" x1=".482" x2=".03" y1=".484" y2=".492" spreadMethod="reflect" xlink:href="#a"/>
+  <linearGradient id="c" x1=".476" x2="-.024" y1=".545" y2=".545" spreadMethod="reflect">
+   <stop stop-color="#cc5a5d" offset="0"/>
+   <stop stop-color="#ffb712" offset="1"/>
+  </linearGradient>
+  <radialGradient id="d" cx=".121" cy=".141" r=".982" xlink:href="#a"/>
+  <radialGradient id="f" cx=".107" cy=".078" r=".819" xlink:href="#a"/>
+ </defs>
+ <g stroke="#000" stroke-linejoin="round" stroke-width="10">
+  <path transform="rotate(-35.963 192.15 290.13)" d="m71.203 379.75c3.955 64.082 393.2 47.468 384.49 3.955 20.57-16.614-258.7-80.696-384.49-3.955z" fill="url(#c)" fill-rule="evenodd"/>
+  <path transform="rotate(-35.963 255.89 274.84)" d="m170.1 371.84c-70.411 0-65.665-92.564-3.956-93.355 62.5 0 79.114 94.146 3.956 93.355z" fill="url(#d)" fill-rule="evenodd"/>
+  <path transform="rotate(-35.963 192.15 290.13)" d="m71.203 378.96c114.72-66.456 359.18-24.526 386.08 3.955-42.721-60.917-75.157-90.189-85.442-162.98-17.405-94.144-50.633-127.37-113.92-133.7-59.336 4.747-90.981 21.361-103.64 113.13-12.658 91.772-40.348 132.12-83.07 179.59z" fill="url(#e)" fill-rule="evenodd"/>
+  <path transform="rotate(-35.963 192.15 290.13)" d="M255.538 87.025c-32.437 0-36.392-37.975-3.956-41.14 33.228.792 34.019 39.558 3.956 41.14z" fill="url(#f)" fill-rule="evenodd"/>
+  <path d="m354.43 174.05c-31.646 0-153.48 36.392-185.92 126.58" fill="none"/>
+ </g>
+</svg>

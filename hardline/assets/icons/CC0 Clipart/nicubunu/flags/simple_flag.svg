@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" version="1.0" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+ <defs>
+  <linearGradient id="a">
+   <stop stop-color="#909090" offset="0"/>
+   <stop stop-color="#c6c6c6" offset="1"/>
+  </linearGradient>
+  <linearGradient id="b">
+   <stop stop-color="#090092" offset="0"/>
+   <stop stop-color="#2b1bff" offset=".499"/>
+   <stop stop-color="#0c00b1" offset=".75"/>
+   <stop stop-color="#2d1eff" offset="1"/>
+  </linearGradient>
+  <linearGradient id="k" x1="256.9" x2="245.31" y1="392.52" y2="257.35" gradientTransform="matrix(.57075 .1435 -.02688 .01775 -123.79 -17.242)" gradientUnits="userSpaceOnUse" xlink:href="#a"/>
+  <linearGradient id="l" x1="247.36" x2="255.99" y1="323.74" y2="323.62" gradientTransform="matrix(.58308 .30094 0 .65616 -136.66 -206.66)" gradientUnits="userSpaceOnUse" xlink:href="#a"/>
+  <linearGradient id="m" x1="247.36" x2="255.99" y1="323.74" y2="323.62" gradientTransform="matrix(.28213 -.30096 0 .65616 -57.103 -55.865)" gradientUnits="userSpaceOnUse" xlink:href="#a"/>
+  <linearGradient id="n" x1="17.322" x2="8.372" y1="50.619" y2="50.619" gradientUnits="userSpaceOnUse" xlink:href="#b"/>
+  <linearGradient id="o" x1="217" x2="328" y1="394.5" y2="395.29" gradientTransform="matrix(.65616 0 0 .65616 -136.66 -206.66)" gradientUnits="userSpaceOnUse" xlink:href="#b"/>
+ </defs>
+ <path d="M17.86 29.312l-2.409 1.985-.027 4.099c-.483-.26-1.075-.333-1.075-.333l.806 33.43s.155.811.269.881l.077 38.748 5.309 2.566 2.852-3.039.154-34.182c8.783 3.976 22.685 7.665 30.015-1.717 15.766-20.18 67.82-20.023 67.82-20.023s-54.868-22.653-69.775-8.89c-5.726 5.288-18.759.883-27.704-3.072l.154-2.79-.664-.117.115-5.764-5.916-1.782z"/>
+ <path transform="matrix(.87512 0 0 .87512 10.04 10.347)" d="m8.947 22.526 6.169 1.756-3.045 3.25-5.458-3.073 2.334-1.933z" fill="url(#k)"/>
+ <path transform="matrix(.87512 0 0 .87512 10.04 10.347)" d="M6.603 24.45l6.002 3.098-.35 86.692-5.652-2.864V24.45z" fill="url(#l)"/>
+ <path transform="matrix(.87512 0 0 .87512 10.04 10.347)" d="M12.218 27.355l2.903-3.098v86.925l-2.903 3.098V27.355z" fill="url(#m)"/>
+ <path transform="matrix(.87512 0 0 .87512 10.04 10.347)" d="M12.468 32.454l3.052-1.685-.058 39.7-2.994-1.955v-36.06z" fill="url(#n)" fill-rule="evenodd"/>
+ <path transform="matrix(.87512 0 0 .87512 10.04 10.347)" d="M5.728 29.14s31.792 17.949 41.994 8.53c17.034-15.728 77.426 9.186 77.426 9.186S67.706 46.76 49.69 69.82c-12.707 16.264-43.306-3.28-43.306-3.28L5.728 29.14z" fill="url(#o)" fill-rule="evenodd"/>
+</svg>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="160" height="160" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+ <defs>
+  <linearGradient id="d" x1=".133" x2=".938" y1=".117" y2=".945">
+   <stop stop-color="#fff" stop-opacity=".5" offset="0"/>
+   <stop stop-color="#fff" stop-opacity="0" offset="1"/>
+  </linearGradient>
+  <radialGradient id="c" cx=".438" cy=".242" r=".399" fx=".446" fy=".25">
+   <stop stop-color="#fff" offset="0"/>
+   <stop stop-color="#ffc613" offset="1"/>
+  </radialGradient>
+ </defs>
+ <path transform="matrix(1.02 0 0 1.0522 -6.698 -9.934)" d="m130.96 72.296c0 25.884-21.682 46.89-48.397 46.89s-48.397-21.006-48.397-46.889 21.682-46.89 48.397-46.89 48.397 21.007 48.397 46.89z" fill="url(#c)" fill-rule="evenodd" stroke="#000" stroke-linejoin="round" stroke-width="2.413"/>
+ <g fill-rule="evenodd">
+  <path transform="matrix(.9988 0 0 1.0704 -74.347 33.773)" d="m143.02 21.387c0 6.101-5.327 11.053-11.89 11.053s-11.89-4.952-11.89-11.053c0-6.1 5.327-11.052 11.89-11.052s11.89 4.951 11.89 11.052z" fill="#fff" stroke="#000" stroke-linejoin="round" stroke-width="2.418"/>
+  <path d="m62.9 56.584c0 3.45-2.8 6.25-6.25 6.25s-6.25-2.8-6.25-6.25 2.8-6.25 6.25-6.25 6.25 2.8 6.25 6.25z" fill="#00f"/>
+  <path d="m60.398 56.64c0 2.07-1.68 3.75-3.75 3.75s-3.75-1.68-3.75-3.75 1.68-3.75 3.75-3.75 3.75 1.68 3.75 3.75z"/>
+  <path transform="translate(-74.49 36.103)" d="m135.38 19.288c0 2.76-2.24 5-5 5s-5-2.24-5-5 2.24-5 5-5 5 2.24 5 5z" fill="url(#d)"/>
+  <path transform="matrix(.9988 0 0 1.0704 -34.308 32.587)" d="m143.02 21.387c0 6.101-5.327 11.053-11.89 11.053s-11.89-4.952-11.89-11.053c0-6.1 5.327-11.052 11.89-11.052s11.89 4.951 11.89 11.052z" fill="#fff" stroke="#000" stroke-linejoin="round" stroke-width="2.418"/>
+  <path d="m102.94 55.397c0 3.45-2.8 6.25-6.25 6.25s-6.25-2.8-6.25-6.25 2.8-6.25 6.25-6.25 6.25 2.8 6.25 6.25z" fill="#00f"/>
+  <path d="m100.44 55.454c0 2.07-1.68 3.75-3.75 3.75s-3.75-1.68-3.75-3.75 1.68-3.75 3.75-3.75 3.75 1.68 3.75 3.75z"/>
+  <path transform="translate(-34.45 34.916)" d="m135.38 19.288c0 2.76-2.24 5-5 5s-5-2.24-5-5 2.24-5 5-5 5 2.24 5 5z" fill="url(#d)"/>
+ </g>
+ <path d="M57.725 87.903c-.193.139 38.17-.735 38.498-.367" fill="none" stroke="#000" stroke-linejoin="round" stroke-width="2.5"/>
+ <g stroke="#000" stroke-linejoin="round" stroke-width="2.5">
+  <path d="M91.634 89.747s-4.667-2.872-8.256-1.077c-3.59 1.795 0 14.358 7.897 14.717 7.897-.718 12.564-10.41 7.897-14-4.666-3.589-7.18-1.794-7.538.36z" fill="red" fill-rule="evenodd"/>
+  <path d="M90.557 89.388s2.513 3.59 2.154 6.102l-.36 2.513" fill="none"/>
+ </g>
+ <path d="m89.272 90.338c-7.734-4.199-6.85 3.535-3.977 7.513 3.314-0.221 4.64-5.524 3.977-7.513zm9.573 0.827c-9.943-7.07-3.535 2.21-4.64 5.746 3.314-0.221 5.303-3.757 4.64-5.746z" fill="#fff" fill-opacity=".25" fill-rule="evenodd"/>
+</svg>

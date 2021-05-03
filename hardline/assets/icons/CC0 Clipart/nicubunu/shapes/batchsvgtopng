@@ -1,0 +1,1 @@
+for i in *.svg; do inkscape -f "$i" -e "$i.png" -w 128; done

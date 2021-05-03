@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400pt" height="400pt" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+ <defs>
+  <radialGradient id="c" cx=".305" cy=".328" r=".33">
+   <stop stop-color="#e6cd00" offset="0"/>
+   <stop stop-color="#ff9f2d" offset="1"/>
+  </radialGradient>
+  <radialGradient id="d" cx=".448" cy=".977" r=".771">
+   <stop stop-color="#fff" offset="0"/>
+   <stop offset="1"/>
+  </radialGradient>
+ </defs>
+ <path transform="matrix(1.0602 0 0 1.0853 -27.204 -30.544)" d="m491.65 259.57a229.04 224.84 0 1 0-458.07 0 229.04 224.84 0 1 0 458.07 0h-229.04z" fill="url(#c)" fill-rule="evenodd"/>
+ <path d="m128.31 321.33 251.82-4.797s-35.974 94.732-121.11 91.135c-99.529 5.996-133.1-85.139-130.71-86.338z" fill="#fa0000" fill-rule="evenodd" stroke="#000" stroke-width="3.75"/>
+ <path transform="matrix(.96861 0 0 1.8758 13.43 -273.02)" d="m158.56 317.67 0.028 9.477 187.34-1.119 1e-3 -10.669-187.36 2.311z" fill="#fff" fill-rule="evenodd" stroke="#000" stroke-width="1pt"/>
+ <g fill-rule="evenodd">
+  <path d="M159.036 169.47a17.987 17.388 0 10-35.975 0 17.987 17.388 0 1035.974 0H141.05z" fill="#fff" stroke="#000" stroke-width="2.5"/>
+  <path transform="matrix(1.2381 0 0 1 -49.73 11.825)" d="M166.68 161.242a12.591 12.591 0 10-25.181 0 12.591 12.591 0 1025.182 0H154.09z" fill="url(#d)"/>
+  <path d="M374.882 167.072a17.987 17.388 0 10-35.975 0 17.987 17.388 0 1035.974 0h-17.987z" fill="#fff" stroke="#000" stroke-width="2.5"/>
+  <path transform="matrix(1.2381 0 0 1 166.12 9.427)" d="M166.68 161.242a12.591 12.591 0 10-25.181 0 12.591 12.591 0 1025.182 0H154.09z" fill="url(#d)"/>
+ </g>
+ <path d="M194.044 339.591l-.718-18.503 32.221-.848v19.571h32.221l.001-20.418 30.525-.849v20.549h31.373v-20.548l-1.696.848" fill="none" stroke="#000" stroke-width="1.25"/>
+ <path d="M173.824 382.987c.6-3.597 30.525 26.988 87.336 23.742 62.6-2.442 87.336-43.245 86.488-40.701 0-2.543-1.696-12.719-1.696-12.719s-32.572 24.796-83.448 29.036c-51.722.847-87.499-17.516-89.195-17.516.103-.6-.333 21.549.515 18.158z" fill="#fff" fill-rule="evenodd" stroke="#000" stroke-width="1pt"/>
+ <path d="m194.26 372.89v20.985m129.51-27.58 1.199 20.385" fill="none" stroke="#000" stroke-width="1pt"/>
+ <path transform="matrix(1 0 0 1.0769 0 -29.238)" d="m227.84 380.09v23.383" fill="none" stroke="#000" stroke-width="1pt"/>
+ <path d="m261.41 382.48 0.6 24.582m-0.6 0 0.6-0.599m29.978-29.379 0.6 25.182" fill="none" stroke="#000" stroke-width="1pt"/>
+</svg>

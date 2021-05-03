@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400pt" height="400pt" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+ <g fill-rule="evenodd" stroke="#000">
+  <path d="m36.392 151.9s295.1-6.33 296.68-6.33 143.2 107.6 143.2 107.6l-359.18 15.03s-80.697-117.88-80.697-116.3z" fill="#ccc" stroke-linejoin="bevel" stroke-width="3.75"/>
+  <path d="m116.3 340.19-79.905-146.36-0.79-41.931 81.487 115.51c3.164 2.373 3.955 68.829-0.791 72.785z" fill="#b3b3b3" stroke-linejoin="bevel" stroke-width="3.75"/>
+  <path transform="matrix(1.0043 0 0 1 25.722 -.791)" d="m93.355 268.2 356.01-15.032s7.121 20.571 7.121 35.602c0 17.405-3.956 33.228-4.747 34.019l-362.34 17.405c4.747-11.868 4.746-24.526 3.956-71.994z" fill="#ccc" stroke-linejoin="bevel" stroke-width="3.75"/>
+  <path d="M449.367 298.26l14.241-.792v11.867l-14.241.792V298.26z" fill="#b3b3b3" stroke-width="1pt"/>
+  <path d="m134.49 281.65 130.54-5.538-0.791 34.019-130.54 7.119 0.792-35.6z" fill="#ccc" stroke-width="2.5"/>
+  <path d="M443.829 268.196c.791 0 22.152-.791 22.152-.791v15.823l-22.152.791v-15.823z" fill="#b3b3b3" stroke-width="1pt"/>
+ </g>
+ <path d="m228.1 151.94s93.604-1.817 100.88-0.909c7.27 0.909 74.52 57.253 74.52 57.253s-58.162-58.162-175.4-56.344z" fill-opacity=".252" fill-rule="evenodd"/>
+ <path d="m125.41 328.24c0-0.908-4.544-53.618 0-53.618s132.68-9.087 132.68-9.087-134.5 13.631-132.68 62.705z" fill="#fff" fill-opacity=".5" fill-rule="evenodd"/>
+ <path d="m94.513 243.72s17.267 22.719 18.176 28.172 2.726 51.801 2.726 51.801-3.635-48.166-20.902-79.973z" fill="#fff" fill-opacity=".498" fill-rule="evenodd"/>
+</svg>

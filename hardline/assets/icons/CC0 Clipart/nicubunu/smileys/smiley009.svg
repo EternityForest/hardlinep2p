@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400pt" height="400pt" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+ <defs>
+  <radialGradient id="c" cx=".305" cy=".328" r=".33">
+   <stop stop-color="#e6cd00" offset="0"/>
+   <stop stop-color="#ff9f2d" offset="1"/>
+  </radialGradient>
+  <radialGradient id="d" cx=".448" cy=".977" r=".771">
+   <stop stop-color="#fff" offset="0"/>
+   <stop offset="1"/>
+  </radialGradient>
+ </defs>
+ <path transform="matrix(1.0602 0 0 1.0853 -27.204 -30.544)" d="m491.65 259.57a229.04 224.84 0 1 0-458.07 0 229.04 224.84 0 1 0 458.07 0h-229.04z" fill="url(#c)" fill-rule="evenodd"/>
+ <path d="M159.036 169.47a17.987 17.388 0 10-35.975 0 17.987 17.388 0 1035.974 0H141.05z" fill="#fff" fill-rule="evenodd" font-size="12" stroke="#000" stroke-width="2.5"/>
+ <path transform="matrix(.71428 0 0 1 41.177 7.029)" d="M166.68 161.242a12.591 12.591 0 10-25.181 0 12.591 12.591 0 1025.182 0H154.09z" fill="url(#d)" fill-rule="evenodd" font-size="12"/>
+ <path d="M374.882 167.072a17.987 17.388 0 10-35.975 0 17.987 17.388 0 1035.974 0h-17.987z" fill="#fff" fill-rule="evenodd" font-size="12" stroke="#000" stroke-width="2.5"/>
+ <path transform="matrix(.80953 0 0 1 225.56 4.63)" d="M166.68 161.242a12.591 12.591 0 10-25.181 0 12.591 12.591 0 1025.182 0H154.09z" fill="url(#d)" fill-rule="evenodd" font-size="12"/>
+ <path transform="matrix(.66438 0 0 .56716 76.745 142.32)" d="m350.15 357.9a87.537 40.171 0 1 0-175.08 0 87.537 40.171 0 1 0 175.08 0h-87.538z" fill-rule="evenodd" stroke="#000" stroke-width="6.109"/>
+ <path d="M306.214 345.31a54.994 19.62 0 10-109.987 0 54.994 19.62 0 10109.988.001H251.22z" fill="red" fill-rule="evenodd"/>
+</svg>

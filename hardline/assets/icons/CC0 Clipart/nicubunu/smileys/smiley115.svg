@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="160" height="160" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+ <defs>
+  <linearGradient id="f" x1=".283" x2="1.008" y1=".758" y2=".188">
+   <stop stop-color="#d3eeff" offset="0"/>
+   <stop stop-color="#91c2ff" offset="1"/>
+  </linearGradient>
+  <linearGradient id="e">
+   <stop stop-color="#fff" stop-opacity=".5" offset="0"/>
+   <stop stop-color="#fff" stop-opacity="0" offset="1"/>
+  </linearGradient>
+  <radialGradient id="d" cx=".438" cy=".242" r=".399" fx=".446" fy=".25">
+   <stop stop-color="#fff" offset="0"/>
+   <stop stop-color="#ffc613" offset="1"/>
+  </radialGradient>
+ </defs>
+ <path transform="matrix(1.02 0 0 1.0522 -6.698 -9.934)" d="m130.96 72.296c0 25.884-21.682 46.89-48.397 46.89s-48.397-21.006-48.397-46.889 21.682-46.89 48.397-46.89 48.397 21.007 48.397 46.89z" fill="url(#d)" fill-rule="evenodd" stroke="#000" stroke-linejoin="round" stroke-width="2.413"/>
+ <path transform="matrix(.9988 0 0 1.0704 -74.347 33.773)" d="m143.02 21.387c0 6.101-5.327 11.053-11.89 11.053s-11.89-4.952-11.89-11.053c2.724 2.54 4.782 7.754 11.345 7.754s8.622-1.656 12.435-7.754z" fill="url(#e)" fill-rule="evenodd" stroke="#000" stroke-linejoin="round" stroke-width="2.418"/>
+ <path d="M62.454 88.877c11.117.948 19.572 1.05 32.968-.816" fill="none" stroke="#000" stroke-linejoin="round" stroke-width="2.5"/>
+ <text x="64.747" y="32.476" font-family="Bitstream Vera Sans" font-size="12" font-weight="400" stroke-width="1pt"/>
+ <path transform="matrix(.9988 0 0 1.0704 -34.119 32.503)" d="m143.02 21.387c0 6.101-5.327 11.053-11.89 11.053s-11.89-4.952-11.89-11.053c2.724 2.54 4.782 7.754 11.345 7.754s8.622-1.656 12.435-7.754z" fill="url(#e)" fill-rule="evenodd" stroke="#000" stroke-linejoin="round" stroke-width="2.418"/>
+ <path d="M50.418 6.685c9.19-2.16 18.866-2.591 27.572 0 .719 3.483-1.72 6.636-4.266 9.039-1.535 1.49-3.213 2.87-4.465 4.568-2.276 2.454-5.412 4.345-6.887 7.336 0 2.131 2.875 2.212 4.6 1.888 2.048-.363 4.115-.35 6.172-.55 1.973.001 4.638.287 5.444 2.171.614 2.105-1.764 3.859-3.975 3.836-4.095 1.359-19.584 2.592-23.945-.356-1.73-1.622-.638-4.028.64-5.574 2.028-2.597 4.722-4.694 6.891-7.193 1.595-1.703 3.18-3.416 4.924-5 2.077-.59 3.43-3.304 1.726-4.797-1.812-1.03-3.889.411-5.868.251-2.722.343-6.196.589-8.051-1.613-.781-1.216-.513-2.673-.512-4.006z" fill="url(#f)" font-family="Bitstream Vera Sans" font-size="12" font-weight="700" stroke="#0055df" stroke-linejoin="round" stroke-width="2.5"/>
+ <path d="M74.332 18.498c9.19-2.16 18.865-2.592 27.571 0 .72 3.482-1.719 6.635-4.266 9.038-1.535 1.49-3.213 2.87-4.464 4.568-2.277 2.455-5.413 4.345-6.888 7.337 0 2.13 2.875 2.212 4.6 1.887 2.048-.363 4.116-.35 6.173-.55 1.972.002 4.637.288 5.444 2.172.613 2.105-1.764 3.858-3.976 3.835-4.094 1.36-19.583 2.593-23.944-.355-1.73-1.622-.639-4.029.639-5.574 2.028-2.597 4.723-4.694 6.892-7.194 1.594-1.702 3.18-3.416 4.924-4.999 2.076-.59 3.43-3.304 1.725-4.798-1.812-1.029-3.888.412-5.867.252-2.723.342-6.196.588-8.052-1.614-.78-1.216-.513-2.672-.511-4.005z" fill="url(#f)" font-family="Bitstream Vera Sans" font-size="12" font-weight="700" stroke="#0055df" stroke-linejoin="round" stroke-width="2.5"/>
+</svg>

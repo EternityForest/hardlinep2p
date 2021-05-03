@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="533.33" height="533.33" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+ <defs>
+  <radialGradient id="d" cx=".305" cy=".513" r=".496" xlink:href="#a"/>
+  <linearGradient id="f" x1=".085" x2="1.018" y1=".439" y2=".404">
+   <stop stop-color="#000004" stop-opacity=".15" offset="0"/>
+   <stop stop-color="#e48e17" stop-opacity="0" offset="1"/>
+  </linearGradient>
+  <linearGradient id="g" xlink:href="#a"/>
+  <linearGradient id="e" x1=".085" x2="1.018" y1=".439" y2=".404">
+   <stop stop-color="#fff" stop-opacity=".542" offset="0"/>
+   <stop stop-color="#fff" stop-opacity="0" offset="1"/>
+  </linearGradient>
+  <linearGradient id="a">
+   <stop stop-color="#dfbd2e" offset="0"/>
+   <stop stop-color="#e4e417" offset="1"/>
+  </linearGradient>
+ </defs>
+ <g fill-rule="evenodd">
+  <path d="m264.84 40.33-73.155 143.47-162.28 22.373 116.88 112.38-28.375 157.91 145.38-74 144.75 75.187-27.031-158.12 117.84-111.41-162.09-23.719-71.906-144.06z" fill-opacity=".25"/>
+  <path transform="matrix(1.4057 -.0934 .09548 1.375 34.954 166.82)" d="m240 231.25-98.8-61.394-106.59 46.583 27.86-112.94-77.241-86.974 116.02-8.404 58.849-100.34 43.844 107.74 113.61 24.964-88.92 74.992 11.367 115.76z" fill="url(#d)" stroke="#000" stroke-linejoin="round" stroke-width="7.176"/>
+  <path d="m29.68 195.37c223.75-38.75 122.5 13.75 222.5 66.25-118.75-16.25-55 105-222.5-66.25z" fill="url(#e)"/>
+  <path d="m254.08 32.606c101.83 188.05 17.527 119.43-6.494 220.9-15.905-108.99-109.05-28.9 6.494-220.9z" fill="url(#e)"/>
+  <path d="m464.64 201.92c-152.84 155.28-93.646 38.025-207.04 54.24 106.74-53.63-34.618-95.46 207.04-54.24z" fill="url(#f)" stroke="url(#g)" stroke-width="1.414"/>
+  <path transform="translate(-11.25 5)" d="m401.09 454.3c-203-101.78-90.698-96.806-139.94-198.45 85.86 83.627 106.96-38.816 139.94 198.45z" fill="url(#e)"/>
+  <path d="m112.06 451.14c30.412-225.04 56.84-112.77 137.01-192.33-51.247 108.35 76.723 84.157-137.01 192.33z" fill="url(#e)"/>
+ </g>
+</svg>
