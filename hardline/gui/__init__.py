@@ -7,7 +7,7 @@ from hardline import daemonconfig
 logging.Logger.manager.root = Logger
 
 import configparser
-import libnacl,base64
+import base64
 from kivy.clock import mainthread,Clock
 
 from .. import directories

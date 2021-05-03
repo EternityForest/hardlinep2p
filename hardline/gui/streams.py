@@ -29,7 +29,7 @@ import os
 import sys
 import re
 from .. daemonconfig import makeUserDatabase
-from .. import  drayerdb, cidict
+from .. import  drayerdb, cidict, libnacl
 
 from kivymd.uix.picker import MDDatePicker
 
