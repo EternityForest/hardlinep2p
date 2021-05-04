@@ -115,8 +115,8 @@ def renderPostTemplate(db, postID,text, limit=100000000):
     for i in search:
         if not i.group() in replacements:
             try:
-                from simpleeval import simple_eval
-                import simpleeval
+                from ..simpleeval import simple_eval
+                from .. import simpleeval
                 simpleeval.POWER_MAX = 512
                 replacements[i.group()] = simple_eval(i.group(1), names= ctx, functions=makePostRenderingFuncs(limit))
             except Exception as e:

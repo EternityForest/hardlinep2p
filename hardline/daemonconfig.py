@@ -210,12 +210,13 @@ def loadUserDatabases(serviceDir, only=None, forceProxy=None):
             if only:
                 if not i == only+".db":
                     continue
+            name = i[:-3]
             try:
-                userDatabases[i].close()
+                userDatabases[name].close()
             except KeyError:
                 pass
             try:
-                userDatabases[i] = defaultDBClass(
+                userDatabases[name] = defaultDBClass(
                     os.path.join(serviceDir, i), forceProxy=forceProxy)
             except:
                 logger.exception(traceback.format_exc())

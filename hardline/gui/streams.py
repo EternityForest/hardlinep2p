@@ -40,6 +40,8 @@ class StreamsMixin():
     #Reuse the same panel for editStream, the main hub for accessing the stream,
     #and it's core settings
     def editStream(self, name):
+        if not  name in daemonconfig.userDatabases:
+            self.goToStreams()
         db = daemonconfig.userDatabases[name]
         c = db.config
         try:
@@ -112,6 +114,9 @@ class StreamsMixin():
 
         self.streamEditPanel.add_widget(Label(size_hint=(
             1, None), halign="center", text=name))
+        self.streamEditPanel.add_widget(Label(size_hint=(
+            1, None), halign="center", text="file:"+db.filename))
+
 
        
         self.streamEditPanel.add_widget(self.makeBackButton())

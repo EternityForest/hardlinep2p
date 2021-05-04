@@ -4,7 +4,7 @@ from hardline import daemonconfig
 from .. import daemonconfig, hardline
 
 
-import configparser,logging
+import configparser,logging,datetime
 
 from kivy.uix.image import Image
 from kivy.uix.widget import Widget
@@ -259,7 +259,7 @@ class PostsMixin():
 
         #Let the user see older posts by picking a start date to stat showing from.
         startdate = Button(text=time.strftime('(%a %b %d, %Y)',time.localtime(oldest/10**6)),
-                      size_hint=(0.28, None), font_size="14sp")
+                      size_hint=(1, None), font_size="14sp")
 
       
         def f(*a):
@@ -300,11 +300,12 @@ class PostsMixin():
         older.bind(on_release=f3)
 
         pagebuttons.add_widget(older)
-        pagebuttons.add_widget(startdate)
         pagebuttons.add_widget(newer)
 
 
         self.streamEditPanel.add_widget(pagebuttons)
+        self.streamEditPanel.add_widget(startdate)
+
         self.streamEditPanel.add_widget(searchBar)
 
 
@@ -493,6 +494,7 @@ class PostsMixin():
 
         self.screenManager.current="PostMeta"
 
+        self.postMetaPanel.add_widget(Label(text="Icon Asset Lib:"+ directories.assetLibPath, size_hint=(1,None)))
 
         icon = Button(size_hint=(1,None), text="Icon: "+os.path.basename(s.get("icon",'')) )
         def promptSet(*a):

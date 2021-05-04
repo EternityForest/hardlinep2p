@@ -184,7 +184,10 @@ class DocumentDatabase():
         # A hint to know when to do real rescan
         self.lastChange = 0
 
+
+        #Android apparently doesbn't accept multiple cursors doimf stuff so we have to be ultra careful about that
         self.lock = threading.RLock()
+
 
         # Websockets that are subscribing to us.
         self.subscribers = weakref.WeakValueDictionary()
@@ -201,57 +204,94 @@ class DocumentDatabase():
 
         self.threadLocal.conn.row_factory = sqlite3.Row
         with self:
-            # self.threadLocal.conn.execute("PRAGMA wal_checkpoint=FULL")
-            self.threadLocal.conn.execute("PRAGMA secure_delete = off")
-            self.threadLocal.conn.execute("PRAGMA journal_mode=WAL;")
+            with self.lock:
+                # self.threadLocal.conn.execute("PRAGMA wal_checkpoint=FULL")
+                self.threadLocal.conn.execute("PRAGMA secure_delete = off")
+                self.threadLocal.conn.execute("PRAGMA journal_mode=WAL;")
 
-            # Yep, we're really just gonna use it as a document store like this.
-            self.threadLocal.conn.execute(
-                '''CREATE TABLE IF NOT EXISTS document (rowid integer primary key, json text, signature text, arrival integer, receivedFrom text, localinfo text)''')
+                # Yep, we're really just gonna use it as a document store like this.
+                self.threadLocal.conn.execute(
+                    '''CREATE TABLE IF NOT EXISTS document (rowid integer primary key, json text, signature text, arrival integer, receivedFrom text, localinfo text)''')
 
-            self.threadLocal.conn.execute('''CREATE TABLE IF NOT EXISTS meta
-                (key text primary key, value  text)''')
+                self.threadLocal.conn.execute('''CREATE TABLE IF NOT EXISTS meta
+                    (key text primary key, value  text)''')
 
-            self.threadLocal.conn.execute('''CREATE TABLE IF NOT EXISTS peers
-                (peerID text primary key, lastArrival integer, horizon integer, info text)''')
+                self.threadLocal.conn.execute('''CREATE TABLE IF NOT EXISTS peers
+                    (peerID text primary key, lastArrival integer, horizon integer, info text)''')
 
-            # To keep indexing simple and universal, it only works on four standard properties. tags, title, descripion, body
-            self.threadLocal.conn.execute('''
-                CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts4(tags, title, description, body, content='')''')
 
-            self.threadLocal.conn.execute(
-                '''CREATE INDEX IF NOT EXISTS document_parent ON document(json_extract(json,"$.parent")) WHERE json_extract(json,"$.parent") IS NOT null ''')
-            self.threadLocal.conn.execute(
-                '''CREATE INDEX IF NOT EXISTS document_link ON document(json_extract(json,"$.link")) WHERE json_extract(json,"$.link") IS NOT null''')
-            self.threadLocal.conn.execute(
-                '''CREATE INDEX IF NOT EXISTS document_name ON document(json_extract(json,"$.name"))''')
-            self.threadLocal.conn.execute(
-                '''CREATE INDEX IF NOT EXISTS document_id ON document(json_extract(json,"$.id"))''')
-            self.threadLocal.conn.execute(
-                '''CREATE INDEX IF NOT EXISTS document_type ON document(json_extract(json,"$.type"))''')
-            self.threadLocal.conn.execute(
-                '''CREATE INDEX IF NOT EXISTS document_arrival ON document(arrival)''')
+                self.threadLocal.conn.execute(
+                    '''CREATE INDEX IF NOT EXISTS document_parent ON document(json_extract(json,"$.parent")) WHERE json_extract(json,"$.parent") IS NOT null ''')
+                self.threadLocal.conn.execute(
+                    '''CREATE INDEX IF NOT EXISTS document_link ON document(json_extract(json,"$.link")) WHERE json_extract(json,"$.link") IS NOT null''')
+                self.threadLocal.conn.execute(
+                    '''CREATE INDEX IF NOT EXISTS document_name ON document(json_extract(json,"$.name"))''')
+                self.threadLocal.conn.execute(
+                    '''CREATE INDEX IF NOT EXISTS document_id ON document(json_extract(json,"$.id"))''')
+                self.threadLocal.conn.execute(
+                    '''CREATE INDEX IF NOT EXISTS document_type ON document(json_extract(json,"$.type"))''')
+                self.threadLocal.conn.execute(
+                    '''CREATE INDEX IF NOT EXISTS document_arrival ON document(arrival)''')
 
-            self.threadLocal.conn.execute(
-                """
-                CREATE TRIGGER IF NOT EXISTS search_index AFTER INSERT ON document BEGIN
-                INSERT INTO search(rowid, tags,title, description, body) VALUES (new.rowid, IFNULL(json_extract(new.json,"$.tags"), ""), IFNULL(json_extract(new.json,"$.title"), ""), IFNULL(json_extract(new.json,"$.description"), "") , IFNULL(json_extract(new.json,"$.body"), ""));
-                END;
+
+                self.threadLocal.conn.execute("""
+                    CREATE VIEW fts_index_target 
+                    AS 
+                    SELECT
+                        rowid AS rowid,
+                        IFNULL(json_extract(json,"$.tags"), "") AS tags,
+                        IFNULL(json_extract(json,"$.title"), "") AS title,
+                        IFNULL(json_extract(json,"$.description"), "") AS description,
+                        IFNULL(json_extract(json,"$.body"), "") AS body
+                    FROM document
                 """)
+                # To keep indexing simple and universal, it only works on four standard properties. tags, title, descripion, body
+                self.threadLocal.conn.execute('''
+                    CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts4(content='fts_index_target', tags, title, description, body, )''')
 
-            self.threadLocal.conn.execute(
-                """   CREATE TRIGGER IF NOT EXISTS search_delete AFTER DELETE ON document BEGIN
-                INSERT INTO search(search, rowid, tags, title,description, body) VALUES ('delete', old.rowid, IFNULL(json_extract(old.json,"$.tags"), ""), IFNULL(json_extract(old.json,"$.title"), ""), IFNULL(json_extract(old.json,"$.description"), ""), IFNULL(json_extract(old.json,"$.body"), ""));
-                END;""")
+        
 
-            self.threadLocal.conn.execute(
-                """
-                CREATE TRIGGER IF NOT EXISTS search_update AFTER UPDATE ON document BEGIN
-                INSERT INTO search(search, rowid, tags, title,description, body) VALUES ('delete', old.rowid, IFNULL(json_extract(old.json,"$.tags"), ""),IFNULL(json_extract(old.json,"$.title"), ""), IFNULL(json_extract(old.json,"$.description"), ""), IFNULL(json_extract(old.json,"$.body"), ""));
-                INSERT INTO search(rowid, tags, title,description, body) VALUES (new.rowid, IFNULL(json_extract(new.json,"$.tags"), ""), IFNULL(json_extract(new.json,"$.title"), ""), IFNULL(json_extract(new.json,"$.description"), ""), IFNULL(json_extract(new.json,"$.body"), ""));
-                END;
-                """
-            )
+
+                self.threadLocal.conn.execute('''
+                    CREATE TRIGGER IF NOT EXISTS search_index_bu BEFORE UPDATE ON document BEGIN
+                    DELETE FROM search WHERE docid=old.rowid;
+                    END;''')
+                self.threadLocal.conn.execute('''
+                    CREATE TRIGGER IF NOT EXISTS search_index_bd BEFORE DELETE ON document BEGIN
+                    DELETE FROM search WHERE docid=old.rowid;
+                    END;''')
+                self.threadLocal.conn.execute('''
+                    CREATE TRIGGER IF NOT EXISTS search_index_au AFTER UPDATE ON document BEGIN
+                    INSERT INTO search(docid, tags,title, description, body) VALUES (new.rowid, IFNULL(json_extract(new.json,"$.tags"), ""), IFNULL(json_extract(new.json,"$.title"), ""), IFNULL(json_extract(new.json,"$.description"), "") , IFNULL(json_extract(new.json,"$.body"),""));
+                    END;''')
+                self.threadLocal.conn.execute('''
+                    CREATE TRIGGER IF NOT EXISTS search_index_ai AFTER INSERT ON document BEGIN
+                    INSERT INTO search(docid, tags,title, description, body) VALUES (new.rowid, IFNULL(json_extract(new.json,"$.tags"), ""), IFNULL(json_extract(new.json,"$.title"), ""), IFNULL(json_extract(new.json,"$.description"), "") , IFNULL(json_extract(new.json,"$.body"),""));
+                    END;
+                '''
+                )
+
+            #old fts5 stuff, don't use, android doesn't like
+            # self.threadLocal.conn.execute(
+            #     """
+            #     CREATE TRIGGER IF NOT EXISTS search_index AFTER INSERT ON document BEGIN
+            #     INSERT INTO search(rowid, tags,title, description, body) VALUES (new.rowid, IFNULL(json_extract(new.json,"$.tags"), ""), IFNULL(json_extract(new.json,"$.title"), ""), IFNULL(json_extract(new.json,"$.description"), "") , IFNULL(json_extract(new.json,"$.body"), ""));
+            #     END;
+            #     """)
+
+            # self.threadLocal.conn.execute(
+            #     """   CREATE TRIGGER IF NOT EXISTS search_delete AFTER DELETE ON document BEGIN
+            #     INSERT INTO search(search, rowid, tags, title,description, body) VALUES ('delete', old.rowid, IFNULL(json_extract(old.json,"$.tags"), ""), IFNULL(json_extract(old.json,"$.title"), ""), IFNULL(json_extract(old.json,"$.description"), ""), IFNULL(json_extract(old.json,"$.body"), ""));
+            #     END;""")
+
+            # self.threadLocal.conn.execute(
+            #     """
+            #     CREATE TRIGGER IF NOT EXISTS search_update AFTER UPDATE ON document BEGIN
+            #     INSERT INTO search(search, rowid, tags, title,description, body) VALUES ('delete', old.rowid, IFNULL(json_extract(old.json,"$.tags"), ""),IFNULL(json_extract(old.json,"$.title"), ""), IFNULL(json_extract(old.json,"$.description"), ""), IFNULL(json_extract(old.json,"$.body"), ""));
+            #     INSERT INTO search(rowid, tags, title,description, body) VALUES (new.rowid, IFNULL(json_extract(new.json,"$.tags"), ""), IFNULL(json_extract(new.json,"$.title"), ""), IFNULL(json_extract(new.json,"$.description"), ""), IFNULL(json_extract(new.json,"$.body"), ""));
+            #     END;
+            #     """
+            # )
 
 
 
@@ -319,6 +359,7 @@ class DocumentDatabase():
             self.lastDidOnRecordChange = x[0]
         else:
            self.lastDidOnRecordChange=0
+        cur.close()
 
 
 
@@ -326,12 +367,14 @@ class DocumentDatabase():
 
     def scanForDirectChanges():
         "Check the DB for any records that have been changed, but which "
-        cur = self.threadLocal.conn.cursor()
-        # Avoid dumping way too much at once
-        cur.execute(
-            "SELECT json,signature,arrival FROM document WHERE arrival>?", (self.lastDidOnRecordChange,))
-        for i in cur:
-            self._onRecordChange(json.loads(i[0]),i[1],i[2])
+        with self.lock:
+            cur = self.threadLocal.conn.cursor()
+            # Avoid dumping way too much at once
+            cur.execute(
+                "SELECT json,signature,arrival FROM document WHERE arrival>?", (self.lastDidOnRecordChange,))
+            for i in cur:
+                self._onRecordChange(json.loads(i[0]),i[1],i[2])
+            cur.close()
 
     def useSyncServer(self, server, permanent=False):
         with self.lock:
@@ -351,26 +394,27 @@ class DocumentDatabase():
         k ={}
         torm =[]
 
-        for i in self.threadLocal.conn.execute('SELECT json FROM document ORDER BY json_extract(json,"$.time") DESC'):
-            i= json.loads(i)
-            if 'autoclean' in i:
-                if not i:
-                    if i.get('time',horizon)<horizon:
-                        torm.append(i['id'])
-                else:
-                    #If autoclean specifies a channel, we want to retain the 
-                    if (i['autoclean'] and i.get('parent','')) in k:
-                        torm.append(i['id'])
+        with self.lock:
+            for i in self.threadLocal.conn.execute('SELECT json FROM document ORDER BY json_extract(json,"$.time") DESC'):
+                i= json.loads(i)
+                if 'autoclean' in i:
+                    if not i:
+                        if i.get('time',horizon)<horizon:
+                            torm.append(i['id'])
                     else:
-                        k[(i['autoclean'] and i.get('parent',''))] = True
-            
-            #If we are trying to track more than 100k different keys we may fill all RAM.
-            if len(k)>100000:
-                for i in k:
-                    x =i
-                del x[x]
-            if len(torm)>100000:
-                break
+                        #If autoclean specifies a channel, we want to retain the 
+                        if (i['autoclean'] and i.get('parent','')) in k:
+                            torm.append(i['id'])
+                        else:
+                            k[(i['autoclean'] and i.get('parent',''))] = True
+                
+                #If we are trying to track more than 100k different keys we may fill all RAM.
+                if len(k)>100000:
+                    for i in k:
+                        x =i
+                    del x[x]
+                if len(torm)>100000:
+                    break
 
     def serverManagerThread(self):
         oldServerURL = self.serverURL
@@ -432,17 +476,19 @@ class DocumentDatabase():
                         # The initial request happens after we know who they are
                         if session.remoteNodeID and not session.alreadyDidInitialSync:
                             r = {}
-                            cur = self.threadLocal.conn.cursor()
-                            cur.execute(
-                                "SELECT lastArrival FROM peers WHERE peerID=?", (base64.b64encode(session.remoteNodeID),))
+                            with self.lock:
+                                cur = self.threadLocal.conn.cursor()
+                                cur.execute(
+                                    "SELECT lastArrival FROM peers WHERE peerID=?", (base64.b64encode(session.remoteNodeID),))
 
-                            c = cur.fetchone()
-                            if c:
-                                c = c[0]
-                            else:
-                                c = 0
-                            # No falsy value allowed, that would mean don't get new arrivals
-                            r['getNewArrivals'] = c or 1
+                                c = cur.fetchone()
+                                if c:
+                                    c = c[0]
+                                else:
+                                    c = 0
+                                # No falsy value allowed, that would mean don't get new arrivals
+                                r['getNewArrivals'] = c or 1
+                                cur.close()
 
                             session.alreadyDidInitialSync = True
                             await websocket.send(self.encodeMessage(r))
@@ -463,7 +509,40 @@ class DocumentDatabase():
 
     def dbConnect(self):
         if not hasattr(self.threadLocal, 'conn'):
+            if not os.path.exists(self.filename):
+                print("Creating new DB file at:"+self.filename)
             self.threadLocal.conn = sqlite3.connect(self.filename)
+
+
+            #Lets make our own crappy fake copy of JSON1, so we can use it on
+            #Sqlite versions without that extension loaded.
+            def json_valid(x):
+                try:
+                    json.loads(x)
+                    return 1
+                except:
+                    return 0
+
+            self.threadLocal.conn.create_function("json_valid",1,json_valid,deterministic=True)
+
+
+            def json_extract(x, path):
+                try:
+                    j =json.loads(x)
+
+                    #Remove the $., this is just a limited version that only supports top level index getting
+                    path = path[2:]
+                    j = j[path]
+                    if isinstance(j, (dict,list)):
+                        return json.dumps(j)
+                    else:
+                        return j
+
+                except:
+                    return None
+
+            self.threadLocal.conn.create_function("json_extract",2,json_extract,deterministic=True)
+
 
     def connectToServer(self, uri):
         "Open a new sync connection to a server."
@@ -488,7 +567,8 @@ class DocumentDatabase():
                 sig = libnacl.crypto_sign_detached(mdg, base64.b64decode(self.writePassword))
                 signature = base64.b64encode(mdg+kdg+sig).decode()
                 id = json.loads(i[0])['id']
-                c2 = self.threadLocal.conn.execute('UPDATE document SET signature=? WHERE json_extract(json,"$.id")=?',(signature,id))
+                with self.lock:
+                    c2 = self.threadLocal.conn.execute('UPDATE document SET signature=? WHERE json_extract(json,"$.id")=?',(signature,id))
 
                 return signature
             else:
@@ -563,20 +643,22 @@ class DocumentDatabase():
         #It is an explicitly supported use case to have both the client and the server of a connection share the same database, for use in IPC.
         #In this scenario, it is useless to send ir request old records, as the can't get out of sync, there is only one DB.
         if not remoteNodeID== self.localNodeVK:
-            cur = self.threadLocal.conn.cursor()
-            cur.execute(
-                "SELECT lastArrival,horizon FROM peers WHERE peerID=?", (b64remoteNodeID,))
+            with self.lock:
+                cur = self.threadLocal.conn.cursor()
+                cur.execute(
+                    "SELECT lastArrival,horizon FROM peers WHERE peerID=?", (b64remoteNodeID,))
 
-            peerinfo = cur.fetchone()
-            #How far back do we have knowledge of ther peer's records
-            peerHorizon = time.time()*1000000
-            isNewPeer = False
-            if peerinfo:
-                c = peerinfo[0]               
-                peerHorizon=peerinfo[1]
-            else:
-                isNewPeer=True
-                c = 0
+                peerinfo = cur.fetchone()
+                #How far back do we have knowledge of ther peer's records
+                peerHorizon = time.time()*1000000
+                isNewPeer = False
+                if peerinfo:
+                    c = peerinfo[0]               
+                    peerHorizon=peerinfo[1]
+                else:
+                    isNewPeer=True
+                    c = 0
+                cur.close()
 
             if sessionObject and not sessionObject.alreadyDidInitialSync:
             
@@ -587,72 +669,78 @@ class DocumentDatabase():
 
             if "getNewArrivals" in d:
                 kdg = libnacl.crypto_generichash(base64.b64decode(self.syncKey))[:8]
-                cur = self.threadLocal.conn.cursor()
-                # Avoid dumping way too much at once
-                cur.execute(
-                    "SELECT json,signature,arrival FROM document WHERE arrival>? AND receivedFrom!=? LIMIT 100", (d['getNewArrivals'],b64remoteNodeID))
+                with self.lock:
+                    cur = self.threadLocal.conn.cursor()
+                    # Avoid dumping way too much at once
+                    cur.execute(
+                        "SELECT json,signature,arrival FROM document WHERE arrival>? AND receivedFrom!=? LIMIT 100", (d['getNewArrivals'],b64remoteNodeID))
 
-                # Declares that there are no records left out in between this time and the first time we actually send
-                r['recordsStartFrom'] = d['getNewArrivals']
+                    # Declares that there are no records left out in between this time and the first time we actually send
+                    r['recordsStartFrom'] = d['getNewArrivals']
 
-                needCommit =False
+                    needCommit =False
 
-                for i in cur:
-                    sig = i[1]
-                    #Detect if the record was signed with an old key and needs to be resigned
-                    if not base64.b64decode(i[1])[24:].startswith(kdg):
-                        if self.writePassword:
-                            sig = self._checkIfNeedsResign(i)
-                            needCommit=True
+                    for i in cur:
+                        sig = i[1]
+                        #Detect if the record was signed with an old key and needs to be resigned
+                        if not base64.b64decode(i[1])[24:].startswith(kdg):
+                            if self.writePassword:
+                                sig = self._checkIfNeedsResign(i)
+                                needCommit=True
+                            else:
+                                #Can't send stuff sent with old keys if we can't re sign, they will have to get from a source that can.
+                                continue
                         else:
-                            #Can't send stuff sent with old keys if we can't re sign, they will have to get from a source that can.
-                            continue
-                    else:
-                        signature = i[1]
+                            signature = i[1]
 
-                    if not 'records' in r:
-                        r['records'] = []
-                    logging.info(i)
-                    r['records'].append([i[0],sig,i[2]])
+                        if not 'records' in r:
+                            r['records'] = []
+                        logging.info(i)
+                        r['records'].append([i[0],sig,i[2]])
 
-                    sessionObject.lastResyncFlushTime = max(
-                        sessionObject.lastResyncFlushTime, i[2])
-                
-                if needCommit:
-                    self.commit()
+                        sessionObject.lastResyncFlushTime = max(
+                            sessionObject.lastResyncFlushTime, i[2])
+                    cur.close()
+                    if needCommit:
+                        self.commit()
 
         needUpdatePeerTimestamp = False
         if "records" in d and d['records']:
             #If we ARE the same database as the remote node, we already have the record they are telling us about, we just need to do the notification
             if not remoteNodeID== self.localNodeVK:
                 with self:
-                    for i in d['records']:
-                    
-                        self.setDocument(i[0],i[1],receivedFrom= b64remoteNodeID)
-                        r['getNewArrivals'] = latest = i[2]
-                        needUpdatePeerTimestamp = True
+                    try:
+                        for i in d['records']:
+                        
+                            self.setDocument(i[0],i[1],receivedFrom= b64remoteNodeID)
+                            r['getNewArrivals'] = latest = i[2]
+                            needUpdatePeerTimestamp = True
 
-                    if needUpdatePeerTimestamp:
-                        # Set a flag saying that
-                        cur = self.threadLocal.conn.cursor()
+                        if needUpdatePeerTimestamp:
+                            # Set a flag saying that
+                            with self.lock:
+                                cur = self.threadLocal.conn.cursor()
 
-                        if not isNewPeer:
-                            # If the recorded lastArrival is less than the incoming recordsStartFrom, it would mean that there is a gap in which records
-                            # That we don't know about could be hiding.   Don't update the timestamp in that case, as the chain is broken.
-                            # We can still accept new records, but we will need to request everything all over again starting at the breakpoint to fix this.
-                            cur.execute("UPDATE peers SET lastArrival=? WHERE peerID=? AND lastArrival !=? AND lastArrival>=?",
-                                        (latest,base64.b64encode(remoteNodeID).decode(), latest, d["recordsStartFrom"]))
+                                if not isNewPeer:
+                                    # If the recorded lastArrival is less than the incoming recordsStartFrom, it would mean that there is a gap in which records
+                                    # That we don't know about could be hiding.   Don't update the timestamp in that case, as the chain is broken.
+                                    # We can still accept new records, but we will need to request everything all over again starting at the breakpoint to fix this.
+                                    cur.execute("UPDATE peers SET lastArrival=? WHERE peerID=? AND lastArrival !=? AND lastArrival>=?",
+                                                (latest,base64.b64encode(remoteNodeID).decode(), latest, d["recordsStartFrom"]))
 
-                            #Now we do the same thing, but for the horizon.  If the tip of the new block pf records is later than or equal to the current
-                            #horizon, we have a complete chain and we can set the horizon to recordsStartFrom, knowing that we have all records up to that point.
-                            cur.execute("UPDATE peers SET horizon=? WHERE peerID=? AND horizon !=? AND horizon<=?",
-                                        (d["recordsStartFrom"],base64.b64encode(remoteNodeID).decode(), d["recordsStartFrom"],  latest))
-                        else:
-                            # If the recorded lastArrival is less than the incoming recordsStartFrom, it would mean that there is a gap in which records
-                            # That we don't know about could be hiding.   Don't update the timestamp in that case, as the chain is broken.
-                            # We can still accept new records, but we will need to request everything all over again starting at the breakpoint to fix this.
-                            cur.execute("INSERT INTO peers VALUES(?,?,?,?)",
-                                        (base64.b64encode(remoteNodeID).decode(), latest, d["recordsStartFrom"],'{}'))
+                                    #Now we do the same thing, but for the horizon.  If the tip of the new block pf records is later than or equal to the current
+                                    #horizon, we have a complete chain and we can set the horizon to recordsStartFrom, knowing that we have all records up to that point.
+                                    cur.execute("UPDATE peers SET horizon=? WHERE peerID=? AND horizon !=? AND horizon<=?",
+                                                (d["recordsStartFrom"],base64.b64encode(remoteNodeID).decode(), d["recordsStartFrom"],  latest))
+                                else:
+                                    # If the recorded lastArrival is less than the incoming recordsStartFrom, it would mean that there is a gap in which records
+                                    # That we don't know about could be hiding.   Don't update the timestamp in that case, as the chain is broken.
+                                    # We can still accept new records, but we will need to request everything all over again starting at the breakpoint to fix this.
+                                    cur.execute("INSERT INTO peers VALUES(?,?,?,?)",
+                                                (base64.b64encode(remoteNodeID).decode(), latest, d["recordsStartFrom"],'{}'))
+                                cur.close()
+                    finally:
+                        self.commit()
             else:
                 for i in d['records']:
                     self.setDocument(i[0],i[1],receivedFrom= b64remoteNodeID)
@@ -664,21 +752,23 @@ class DocumentDatabase():
         # Don't send anything till they have requested something, ohterwise we will just be sending nonsense they already have
         if session.lastResyncFlushTime:
             r = {}
-            cur = self.threadLocal.conn.cursor()
-            # Avoid dumping way too much at once
-            cur.execute(
-                "SELECT json,signature,arrival FROM document WHERE arrival>? AND receivedFrom!=? LIMIT 100", (session.lastResyncFlushTime,session.b64remoteNodeID))
+            with self.lock:
+                cur = self.threadLocal.conn.cursor()
+                # Avoid dumping way too much at once
+                cur.execute(
+                    "SELECT json,signature,arrival FROM document WHERE arrival>? AND receivedFrom!=? LIMIT 100", (session.lastResyncFlushTime,session.b64remoteNodeID))
 
-            # Let the client know that there are no records left out in between the start of this message and the end of what they have
-            r['recordsStartFrom'] = session.lastResyncFlushTime
+                # Let the client know that there are no records left out in between the start of this message and the end of what they have
+                r['recordsStartFrom'] = session.lastResyncFlushTime
 
-            for i in cur:
-                if not 'records' in r:
-                    r['records'] = []
-                r['records'].append([i[0], i[1]])
+                for i in cur:
+                    if not 'records' in r:
+                        r['records'] = []
+                    r['records'].append([i[0], i[1]])
 
-                session.lastResyncFlushTime = max(
-                    session.lastResyncFlushTime, i[2])
+                    session.lastResyncFlushTime = max(
+                        session.lastResyncFlushTime, i[2])
+                cur.close()
 
             # We can of course just send nothing if there are no changes to flush.
             if r:
@@ -688,31 +778,33 @@ class DocumentDatabase():
         "Get all children of this record, and all ancestors, as (json, signature, arrival) indexed by ID"
         records = {}
         r = r or {}
+        with self.lock:
+            cur = self.threadLocal.conn.cursor()
+            # Avoid dumping way too much at once
+            cur.execute(
+                'SELECT json,signature,arrival FROM document WHERE  json_extract(json,"$.id")=?', (record,))
 
-        cur = self.threadLocal.conn.cursor()
-        # Avoid dumping way too much at once
-        cur.execute(
-            'SELECT json,signature,arrival FROM document WHERE  json_extract(json,"$.id")=?', (record,))
+            for i in cur:
+                d =json.loads(i[0])
+                id = d['id']
+                r[id]=i
 
-        for i in cur:
-            d =json.loads(i[0])
-            id = d['id']
-            r[id]=i
+                if children:
+                    cur2 = self.threadLocal.conn.cursor()
+                    cur2.execute(
+                        'SELECT json,signature,arrival FROM document WHERE  json_extract(json,"$.parent")=?', (d['id'],))
 
-            if children:
-                cur2 = self.threadLocal.conn.cursor()
-                cur2.execute(
-                    'SELECT json,signature,arrival FROM document WHERE  json_extract(json,"$.parent")=?', (d['id'],))
+                    for j in cur2:
+                        d2 =json.loads(j[0])
+                        id = d2['id']
+                        r[id]=j
 
-                for j in cur2:
-                    d2 =json.loads(j[0])
-                    id = d2['id']
-                    r[id]=j
-
-            if d.get('parent',''):
-                return self.getAllRelatedRecords(d['parent'],r,children=False)
-
-            return r
+                if d.get('parent',''):
+                    cur.close()
+                    return self.getAllRelatedRecords(d['parent'],r,children=False)
+                cur.close()
+                return r
+            cur.close()
         return r
 
 
@@ -772,26 +864,40 @@ class DocumentDatabase():
         return self.encodeMessage(d)
 
     def getMeta(self, key):
-        cur = self.threadLocal.conn.cursor()
-        cur.execute(
-            "SELECT value FROM meta WHERE key=?", (key,))
-        x = cur.fetchone()
-        if x:
-            return x[0]
+        with self.lock:
+            cur = self.threadLocal.conn.cursor()
+            cur.execute(
+                "SELECT value FROM meta WHERE key=?", (key,))
+            x = cur.fetchone()
+            cur.close()
+            if x:
+                return x[0]
 
     def setMeta(self, key, value):
-        self.threadLocal.conn.execute(
-            "INSERT INTO meta VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=?", (key, value, value))
-        self.commit()
+        with self.lock:
+            x = self.getMeta(key)
+            if x==value:
+                return
+
+            if x is not None:
+                self.threadLocal.conn.execute(
+                    "DELETE FROM meta WHERE key=?", (key, ))
+
+            self.threadLocal.conn.execute(
+                "INSERT INTO meta VALUES (?,?)", (key, value))
+            
+            self.commit()
 
     def getPeerSyncTime(self, key):
-        cur = self.threadLocal.conn.cursor()
-        cur.execute(
-            "SELECT lastArrival FROM peers WHERE peerID=?", (key,))
-        x = cur.fetchone()
-        if x:
-            return x[0]
-        return 0
+        with self.lock:
+            cur = self.threadLocal.conn.cursor()
+            cur.execute(
+                "SELECT lastArrival FROM peers WHERE peerID=?", (key,))
+            x = cur.fetchone()
+            cur.close()
+            if x:
+                return x[0]
+            return 0
 
     def setConfig(self, section, key, value):
         try:
@@ -801,8 +907,9 @@ class DocumentDatabase():
         self.config.set(section, key, value)
 
     def commit(self):
-        self.dbConnect()
-        self.threadLocal.conn.commit()
+        with self.lock:
+            self.dbConnect()
+            self.threadLocal.conn.commit()
 
     def saveConfig(self):
         with open(self.filename+".ini", 'w') as configfile:
@@ -819,25 +926,42 @@ class DocumentDatabase():
 
         ts = int((time.time())*10**6)
 
+    def makeNewArrivalTimestamp(self):
+        #Have a bit of protection from a clock going backwards to keep things monotonic
+        with self.lock:
+            maxArrival = self.threadLocal.conn.execute("SELECT arrival FROM document ORDER BY arrival DESC limit 1").fetchone()
+            if maxArrival:
+                return max(maxArrival[0]+1, time.time()*10**6)
+
+            else:
+                return time.time()*10**6
+
     def setDocument(self, doc, signature=None,receivedFrom = ''):
+        with self.lock:
+            self._setDocument(doc, signature,receivedFrom )
+
+    def _setDocument(self, doc, signature=None,receivedFrom = ''):
         "Two modes: Locally generate a signature, or use the existing sig data"
 
         if isinstance(doc, str):
             docObj = json.loads(doc)
         else:
             docObj = doc
-
+        self.dbConnect()
+        
         if 'id' in docObj:
-            # If a UUID has been supplied, we want to erase any old record bearing that name.
-            cur = self.threadLocal.conn.cursor()
-            cur.execute(
-                'SELECT json, json_extract(json,"$.time") FROM document WHERE  json_extract(json,"$.id")=?', (docObj['id'],))
-            x = cur.fetchone()
-            if x:
-                oldVersionData, oldVersion = x
-                oldVersionData=json.loads(oldVersionData)
-            else:
-                oldVersion=None
+            with self.lock:
+                # If a UUID has been supplied, we want to erase any old record bearing that name.
+                cur = self.threadLocal.conn.cursor()
+                cur.execute(
+                    'SELECT json, json_extract(json,"$.time") FROM document WHERE  json_extract(json,"$.id")=?', (docObj['id'],))
+                x = cur.fetchone()
+                if x:
+                    oldVersionData, oldVersion = x
+                    oldVersionData=json.loads(oldVersionData)
+                else:
+                    oldVersion=None
+                cur.close()
         else:
             oldVersion=None
 
@@ -916,21 +1040,33 @@ class DocumentDatabase():
             if oldVersion:
                 # Check that record we are trying to insert is newer, else ignore
                 if oldVersion < docObj['time']:
-                    c = self.threadLocal.conn.execute(
-                        "UPDATE document SET json=?, signature=?,arrival=(IFNULL((SELECT arrival FROM document ORDER BY arrival DESC LIMIT 1),1)+1), receivedFrom=? WHERE json_extract(json,'$.id')=?", (d, signature,receivedFrom, docObj['id']))
+                    try:
+                        c = self.threadLocal.conn.execute(
+                            "DELETE FROM document WHERE IFNULL(json_extract(json,'$.id'),'INVALID')=?;", (docObj['id'],))
+                    except sqlite3.Error as er:
+                        import sys
+                        print('SQLite error: %s' % (' '.join(er.args)))
+                        print("Exception class is: ", er.__class__)
+                        print('SQLite traceback: ')
+                        exc_type, exc_value, exc_tb = sys.exc_info()
+                        print(traceback.format_exception(exc_type, exc_value, exc_tb))
+                        raise
 
-                    # If we are marking this as deleted, we can ditch everything that depends on it.
-                    # We don't even have to just set them as deleted, we can relly delete them, the deleted parent record
-                    # is enough for other nodes to know this shouldn't exist anymore.
-                    if docObj['type'] == "null":
-                        self.threadLocal.conn.execute(
-                            "DELETE FROM document WHERE json_extract(json,'$.parent')=?", (docObj['id'],))
                 else:
                     return docObj['id']
-            else:
 
-                c = self.threadLocal.conn.execute(
-                    "INSERT INTO document VALUES (null,?,?,(IFNULL((SELECT arrival FROM document ORDER BY arrival DESC LIMIT 1),1)+1),?,?)", (d, signature,receivedFrom,'{}'))
+            c = self.threadLocal.conn.execute(
+                "INSERT INTO document VALUES (null,?,?,?,?,?)", (d, signature,self.makeNewArrivalTimestamp(),receivedFrom,'{}'))
+
+
+
+        # If we are marking this as deleted, we can ditch everything that depends on it.
+        # We don't even have to just set them as deleted, we can relly delete them, the deleted parent record
+        # is enough for other nodes to know this shouldn't exist anymore.
+        if docObj['type'] == "null":
+            self.threadLocal.conn.execute(
+                "DELETE FROM document WHERE json_extract(json,'$.parent')=?", (docObj['id'],))
+
 
         #We don't have RETURNING yet, so we just read back the thing we just wrote to see what the DB set it's arrival to
         c = self.threadLocal.conn.execute("SELECT json, signature, arrival FROM document WHERE json_extract(json,'$.id')=?",(docObj['id'],)).fetchone()
@@ -981,6 +1117,7 @@ class DocumentDatabase():
             if x.get("type",'')=='null':
                 return None
             return x
+        cur.close()
 
     def getDocumentsByType(self, key, startTime=0, endTime=10**18, limit=100,parent=None):
         if isinstance(parent,str):
@@ -1003,6 +1140,7 @@ class DocumentDatabase():
                 continue
             if not x.get('type','')=='null':
                 yield x
+        cur.close()
 
 
         #return list(reversed([i for i in [json.loads(i[0]) for i in cur] if not i.get('type','')=='null']))
@@ -1024,7 +1162,7 @@ class DocumentDatabase():
             for i in cur:
                 r.append(i[0])
 
-            
+        cur.close()
         return list(reversed([i for i in [json.loads(i) for i in r]]))
 
 
