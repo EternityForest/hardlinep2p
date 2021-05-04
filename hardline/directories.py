@@ -8,6 +8,8 @@ except:
     
 assetLibPath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
 
+
+externalStorageDir = None
 try:
     from jnius import autoclass, cast
     PythonActivity = autoclass('org.kivy.android.PythonActivity')
@@ -30,6 +32,7 @@ try:
         if p.startswith("/sdcard") or p.startswith("/storage/sdcard0/") or (p.startswith("/storage/") and not p.startswith("/storage/emulated/")):
             logging.info("Found External SD")
             r= p
+            externalStorageDir= p
             break
 
     user_services_dir = os.path.join(r, "services")

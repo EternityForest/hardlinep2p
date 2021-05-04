@@ -78,7 +78,7 @@ class PostsMixin():
 
         sourceText= [document.get("body",'')]
 
-        newp = MDTextFieldRect(text=renderedText, multiline=True,size_hint=(1,None))
+        newp = MDTextField(text=renderedText, multiline=True,size_hint=(1,0.5),mode="rectangle")
 
 
         def f(instance, focus):
@@ -190,7 +190,7 @@ class PostsMixin():
         for i in p:
             self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
 
-        btn1 = Button(text='Go to Comments and Reports',
+        btn1 = Button(text='Full Comments',
                       size_hint=(1, None), font_size="14sp")
         btn1.bind(on_release=goToCommentsPage)
         self.streamEditPanel.add_widget(btn1)
@@ -322,9 +322,9 @@ class PostsMixin():
             self.gotoStreamPost(stream,post['id'])
 
         #Chop to a shorter length, then rechop to even shorter, to avoid cutting off part of a long template and being real ugly.
-        body=post.get('body',"?????")[:240]
+        body=post.get('body',"?????")[:240].strip()
         body = tables.renderPostTemplate(daemonconfig.userDatabases[stream], post, body, 4096)
-        body=body[:140]
+        body=body[:140].replace("\r",'').replace("\n",'_NEWLINE',2).replace("\n","").replace("_NEWLINE","\r\n")
 
         l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
         l.add_widget(Button(text=post.get('title',"?????") + " "+time.strftime('(%a %b %d, %Y)',time.localtime(post.get('time',0)/10**6)), size_hint=(1,None), on_release=f))
@@ -336,8 +336,8 @@ class PostsMixin():
         if os.path.exists(src):
             img.source= src
 
-
-        l2.add_widget(Label(text=body, size_hint=(0.7,None), font_size='22sp',halign='left'))
+        w = MDTextField(text=body, multiline=True,size_hint=(1,0.5),mode="rectangle",readonly=True)
+        l2.add_widget(w)
         l.add_widget(l2)
 
         l.image = img
@@ -561,14 +561,14 @@ class PostsMixin():
                     l = sorted(l)
 
                     l = [ [i[1]] for i in l]
-
+                    logging.info("Exporting data to:"+selection)
                     with open(selection,'w') as f:
                         f.write(json.dumps(l, sort_keys=True,indent=2))
                     self.openFM.close()
 
              #Autocorrect had some fun with the kivymd devs
             self.openFM= MDFileManager(select_path=f,save_mode=((s.get('title','') or 'UntitledPost')+'.json'))
-            self.openFM.show(directories.settings_path)
+            self.openFM.show(directories.externalStorageDir or directories.settings_path)
 
 
             

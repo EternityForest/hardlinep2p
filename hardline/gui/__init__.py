@@ -116,59 +116,6 @@ try:
 except:
     pass
 
-try:
-    from android import activity, mActivity
-    from jnius import autoclass, cast, JavaException
-    from plyer.facades import FileChooser
-    from plyer import storagepath
-    from plyer.platforms.android.filechooser import AndroidFileChooser
-    String = autoclass('java.lang.String')
-    Intent = autoclass('android.content.Intent')
-    Activity = autoclass('android.app.Activity')
-    DocumentsContract = autoclass('android.provider.DocumentsContract')
-    ContentUris = autoclass('android.content.ContentUris')
-    Uri = autoclass('android.net.Uri')
-    Long = autoclass('java.lang.Long')
-    IMedia = autoclass('android.provider.MediaStore$Images$Media')
-    VMedia = autoclass('android.provider.MediaStore$Video$Media')
-    AMedia = autoclass('android.provider.MediaStore$Audio$Media')
-    class AndroidFileChooser(AndroidFileChooser):
-
-        def _save_file(self, **kwargs):
-            '''
-            Running Android Activity is non-blocking and the only call
-            that blocks is onActivityResult running in GUI thread
-            .. versionadded:: 1.4.0
-            '''
-
-            # set up selection handler
-            # startActivityForResult is async
-            # onActivityResult is sync
-            self._handle_selection = kwargs.pop(
-                'on_selection', self._handle_selection
-            )
-
-            # create Intent for opening
-            file_intent = Intent(Intent.ACTION_GET_CONTENT)
-
-            # VERY BAD.  Hardcoding this here makes it almost useless for everthing except
-            # data export.  But this hack is b
-            file_intent.setType('application/json')
-
-            # start a new activity from PythonActivity
-            # which creates a filechooser via intent
-            mActivity.startActivityForResult(
-                Intent.createChooser(file_intent, cast(
-                    'java.lang.CharSequence',
-                    String("FileChooser")
-                )),
-                self.select_code
-            )
-    import plyer.platforms.android.filechooser
-    plyer.platforms.android.filechooser.AndroidFileChooser=AndroidFileChooser
-except:
-    logging.exception("wtf")
-
 
 class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servicesUI.ServicesMixin, discovery.DiscoveryMixin, tables.TablesMixin, posts.PostsMixin, streams.StreamsMixin):
 

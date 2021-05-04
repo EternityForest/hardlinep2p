@@ -87,17 +87,25 @@ class StreamsMixin():
         importData = Button(size_hint=(1,None), text="Import Data File")
 
         def promptSet(*a):
-            from plyer import filechooser
-            selection = filechooser.open_file(filters=["*.json"])
-            if selection:
-                import json
-                with open(selection[0]) as f:
-                    for i in json.loads(f.read()):
-                        with  daemonconfig.userDatabases[name]:
-                            daemonconfig.userDatabases[name].setDocument(i[0])
-                        daemonconfig.userDatabases[name].commit()
+            def f(selection):
+                if selection:
+                    def f2(x):
+                        if x:
+                            import json
+                            with open(selection) as f:
+                                for i in json.loads(f.read()):
+                                    with  daemonconfig.userDatabases[name]:
+                                        daemonconfig.userDatabases[name].setDocument(i[0])
+                                    daemonconfig.userDatabases[name].commit()
+                    self.askQuestion("Really import?","yes",cb=f2)
+                self.openFM.close()
 
+            from .kivymdfmfork import MDFileManager
+            from . import directories
+            self.openFM= MDFileManager(select_path=f)
+            self.openFM.show(directories.externalStorageDir or directories.settings_path)
 
+            
             
         importData.bind(on_release=promptSet)
         self.streamEditPanel.add_widget(importData)

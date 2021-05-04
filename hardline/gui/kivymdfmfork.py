@@ -113,6 +113,7 @@ Example
 
 __all__ = ("MDFileManager",)
 
+import logging
 import os
 import threading
 
@@ -401,6 +402,8 @@ class MDFileManager(ThemableBehavior, BoxLayout):
     and defaults to `False`.
     """
 
+    ext = ListProperty([])
+
     _window_manager = None
     _window_manager_open = False
 
@@ -412,7 +415,7 @@ class MDFileManager(ThemableBehavior, BoxLayout):
         self.history_flag = True
         toolbar_label = self.ids.toolbar.children[1].children[0]
         toolbar_label.font_style = "Subtitle1"
-        self.ext = [".png", ".jpg", ".jpeg",".svg"]
+        
         self.app = App.get_running_app()
         from kivymd.uix.button import MDFillRoundFlatButton as Button, MDRoundFlatButton
 
@@ -477,7 +480,7 @@ class MDFileManager(ThemableBehavior, BoxLayout):
                 )
         else:
             for name in dirs:
-                _path = path + name if path == "/" else path + "/" + name
+                _path =os.path.join(path,name)
                 access_string = self.get_access_string(_path)
                 if "r" not in access_string:
                     icon = "folder-lock"
@@ -494,7 +497,7 @@ class MDFileManager(ThemableBehavior, BoxLayout):
                     }
                 )
             for name in files:
-                _path = path + name if path == "/" else path + "/" + name
+                _path = os.path.join(path,name)
                 manager_list.append(
                     {
                         "viewclass": "BodyManager",
@@ -517,8 +520,8 @@ class MDFileManager(ThemableBehavior, BoxLayout):
 
     def count_ext(self, path):
         ext = os.path.splitext(path)[1]
-        if ext != "":
-            if ext.lower() in self.ext or ext.upper() in self.ext:
+        if ext != "" or not self.ext:
+            if (not self.ext) or (ext.lower() in self.ext or ext.upper() in self.ext):
                 return True
         return False
 
@@ -550,14 +553,12 @@ class MDFileManager(ThemableBehavior, BoxLayout):
                         dirs.append(content)
                 else:
                     if self.search == "all" or self.search == "files":
-                        if len(self.ext) != 0:
-                            try:
-                                if self.count_ext(content):
-                                    files.append(content)
-                            except IndexError:
-                                pass
-                        else:
-                            files.append(content)
+                        try:
+                            if self.count_ext(content):
+                                files.append(content)
+                        except IndexError:
+                            pass
+                      
             return dirs, files
         except OSError:
             self.history.pop()
@@ -591,8 +592,15 @@ class MDFileManager(ThemableBehavior, BoxLayout):
                 return
             self.history[0] = path
         else:
-            self.history.pop()
-            path = self.history[-1]
+            try:
+                self.history.pop()
+                path = self.history[-1]
+            except:
+                logging.exception("err")
+                self.close()
+                self.exit_manager(1)
+                return
+
         self.history_flag = False
         self.select_dir_or_file(path)
 
