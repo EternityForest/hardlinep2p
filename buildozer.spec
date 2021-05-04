@@ -36,7 +36,7 @@ version = 0.14
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,pyjnius,pynacl,six,lxml,dateutil,requests,urllib3,chardet,idna,certifi,kivy==2.0.0,kivymd,mako,plyer,android,cryptography,netifaces,beautifulsoup4,websockets,sqlite3>3.9.0
+requirements = python3,pyjnius,pynacl,six,lxml,dateutil,requests,urllib3,chardet,idna,certifi,kivy==2.0.0,kivymd,mako,plyer,android,cryptography,netifaces,beautifulsoup4,websockets,sqlite3>3.9.0,pillow,sdl2_ttf
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes

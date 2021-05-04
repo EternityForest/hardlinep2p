@@ -1,85 +1,66 @@
 # This is the kivy android app.  Maybe ignore it on ither platforms, the code the support them is only for testing.
 
+from . import tools, servicesUI, discovery, tables, posts, streams, uihelpers
+from kivymd.uix.textfield import MDTextFieldRect, MDTextField
+from kivy.clock import mainthread, Clock
+from kivy.logger import Logger, LOG_LEVELS
+from hardline.cidict import CaseInsensitiveDict
+import datetime
+from kivymd.uix.picker import MDDatePicker
+from .. import drayerdb, cidict
+from .. daemonconfig import makeUserDatabase
+import re
+import sys
+import os
+import traceback
+import time
+from kivy.uix.screenmanager import ScreenManager, Screen
+import threading
+from kivymd.uix.boxlayout import MDBoxLayout as BoxLayout
+from kivymd.uix.card import MDCard
+from kivymd.uix.toolbar import MDToolbar
+from kivy.uix.textinput import TextInput
+from kivy.uix.scrollview import ScrollView
+from kivymd.uix.label import MDLabel as Label
+from kivymd.uix.button import MDFlatButton
+from kivymd.uix.button import MDFillRoundFlatButton as Button, MDRoundFlatButton
+from kivy.utils import platform
+from kivymd.app import MDApp
+from typing import Sized, Text
+from .. import hardline
+from kivy.uix.widget import Widget
+from kivy.uix.image import Image
+from .. import simpleeval
+from .. import directories
+import base64
+import configparser
 from kivy.logger import Logger
 import logging
 
 from hardline import daemonconfig
 logging.Logger.manager.root = Logger
 
-import configparser
-import base64
-from kivy.clock import mainthread,Clock
-
-from .. import directories
-from .. import simpleeval
-from kivy.uix.image import Image
-from kivy.uix.widget import Widget
-from .. import hardline
-
-from typing import Sized, Text
-from kivymd.app import MDApp
-from kivy.utils import platform
-from kivymd.uix.button import MDFillRoundFlatButton as Button, MDRoundFlatButton
-from kivymd.uix.button import MDFlatButton
-
-from kivymd.uix.textfield import MDTextFieldRect,MDTextField
-from kivymd.uix.label import MDLabel as Label
-from kivy.uix.scrollview import ScrollView
-from kivy.uix.textinput import TextInput
-from kivymd.uix.toolbar import MDToolbar
-
-from kivymd.uix.card import MDCard
-
-from kivymd.uix.boxlayout import MDBoxLayout as BoxLayout
-import threading
-from kivy.uix.screenmanager import ScreenManager, Screen
-
-import time
-import traceback
 
 # Terrible Hacc, because otherwise we cannot iumport hardline on android.
-import os
-import sys
-import re
-from .. daemonconfig import makeUserDatabase
-from .. import  drayerdb, cidict
 
-from kivymd.uix.picker import MDDatePicker
 
-import datetime
-
-from hardline.cidict import CaseInsensitiveDict
-
-from kivy.logger import Logger, LOG_LEVELS
 Logger.setLevel(LOG_LEVELS["info"])
 
 
+# On android the service that will actually be handling these databases is in the background in a totally separate
+# process.  So we open an SECOND drayer database object for each, with the same physical storage, using the first as the server.
+# just for use in the foreground app.
+
+# Because of this, two connections to the same DB file is a completetely supported use case that drayerDB has optimizations for.
+if platform == 'android':
+    daemonconfig.loadUserDatabases(None, forceProxy='127.0.0.1:7004')
 
 
-
-
-
-
-
-
-#On android the service that will actually be handling these databases is in the background in a totally separate
-#process.  So we open an SECOND drayer database object for each, with the same physical storage, using the first as the server.
-#just for use in the foreground app.
-
-#Because of this, two connections to the same DB file is a completetely supported use case that drayerDB has optimizations for.
-if platform=='android':
-    daemonconfig.loadUserDatabases(None,forceProxy='127.0.0.1:7004')
-
-
-from . import tools,servicesUI,discovery,tables,posts,streams,uihelpers
-
-
-
-#In this mode, we are just acting as a viewer for a file
+# In this mode, we are just acting as a viewer for a file
 oneFileMode = False
 
 
-#Horrible hacc
+# Horrible hacc
 try:
     import plyer.platforms.linux.filechooser
     from distutils.spawn import find_executable as which
@@ -130,12 +111,66 @@ try:
             if self.icon:
                 cmdline += ["--icon", self.icon]
             return cmdline
-    plyer.platforms.linux.filechooser.KDialogFileChooser=KDialogFileChooser
-    plyer.platforms.linux.filechooser.CHOOSERS['kde']=KDialogFileChooser
+    plyer.platforms.linux.filechooser.KDialogFileChooser = KDialogFileChooser
+    plyer.platforms.linux.filechooser.CHOOSERS['kde'] = KDialogFileChooser
 except:
     pass
 
-class ServiceApp(MDApp, uihelpers.AppHelpers,tools.ToolsAndSettingsMixin,servicesUI.ServicesMixin,discovery.DiscoveryMixin,tables.TablesMixin,posts.PostsMixin,streams.StreamsMixin):
+try:
+    from android import activity, mActivity
+    from jnius import autoclass, cast, JavaException
+    from plyer.facades import FileChooser
+    from plyer import storagepath
+    from plyer.platforms.android.filechooser import AndroidFileChooser
+    String = autoclass('java.lang.String')
+    Intent = autoclass('android.content.Intent')
+    Activity = autoclass('android.app.Activity')
+    DocumentsContract = autoclass('android.provider.DocumentsContract')
+    ContentUris = autoclass('android.content.ContentUris')
+    Uri = autoclass('android.net.Uri')
+    Long = autoclass('java.lang.Long')
+    IMedia = autoclass('android.provider.MediaStore$Images$Media')
+    VMedia = autoclass('android.provider.MediaStore$Video$Media')
+    AMedia = autoclass('android.provider.MediaStore$Audio$Media')
+    class AndroidFileChooser(AndroidFileChooser):
+
+        def _save_file(self, **kwargs):
+            '''
+            Running Android Activity is non-blocking and the only call
+            that blocks is onActivityResult running in GUI thread
+            .. versionadded:: 1.4.0
+            '''
+
+            # set up selection handler
+            # startActivityForResult is async
+            # onActivityResult is sync
+            self._handle_selection = kwargs.pop(
+                'on_selection', self._handle_selection
+            )
+
+            # create Intent for opening
+            file_intent = Intent(Intent.ACTION_GET_CONTENT)
+
+            # VERY BAD.  Hardcoding this here makes it almost useless for everthing except
+            # data export.  But this hack is b
+            file_intent.setType('application/json')
+
+            # start a new activity from PythonActivity
+            # which creates a filechooser via intent
+            mActivity.startActivityForResult(
+                Intent.createChooser(file_intent, cast(
+                    'java.lang.CharSequence',
+                    String("FileChooser")
+                )),
+                self.select_code
+            )
+    import plyer.platforms.android.filechooser
+    plyer.platforms.android.filechooser.AndroidFileChooser=AndroidFileChooser
+except:
+    logging.exception("wtf")
+
+
+class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servicesUI.ServicesMixin, discovery.DiscoveryMixin, tables.TablesMixin, posts.PostsMixin, streams.StreamsMixin):
 
     def stop_service(self, foo=None):
         if self.service:
@@ -163,7 +198,6 @@ class ServiceApp(MDApp, uihelpers.AppHelpers,tools.ToolsAndSettingsMixin,service
                     None)
 
                 daemonconfig.loadDrayerServerConfig()
-
 
                 db = daemonconfig.loadUserDatabases(
                     None)
@@ -197,7 +231,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers,tools.ToolsAndSettingsMixin,service
 
         self.backStack = []
 
-        #Call this to save whatever unsaved data. Also acts as a flag.
+        # Call this to save whatever unsaved data. Also acts as a flag.
         self.unsavedDataCallback = None
 
         self.screenManager = sm
@@ -206,7 +240,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers,tools.ToolsAndSettingsMixin,service
 
         return sm
 
-    #Here is our autosave
+    # Here is our autosave
     def on_pause(self):
         self.flushUnsaved()
         return True
@@ -217,16 +251,16 @@ class ServiceApp(MDApp, uihelpers.AppHelpers,tools.ToolsAndSettingsMixin,service
     def on_destroy(self):
         self.flushUnsaved()
 
-    def flushUnsaved(self,*a):
+    def flushUnsaved(self, *a):
         if self.unsavedDataCallback:
             self.unsavedDataCallback()
-            self.unsavedDataCallback=None
-
+            self.unsavedDataCallback = None
 
     def makeMainScreen(self):
         mainScreen = Screen(name='Main')
 
-        layout = BoxLayout(orientation='vertical', spacing=10,size_hint=(1,1))
+        layout = BoxLayout(orientation='vertical',
+                           spacing=10, size_hint=(1, 1))
         mainScreen.add_widget(layout)
         label = MDToolbar(title="HardlineP2P")
         layout.add_widget(label)
@@ -258,38 +292,32 @@ class ServiceApp(MDApp, uihelpers.AppHelpers,tools.ToolsAndSettingsMixin,service
 
         return mainScreen
 
-
-
     def makeBackButton(self):
         btn1 = Button(text='Back',
-                size_hint=(1, None), font_size="14sp")
+                      size_hint=(1, None), font_size="14sp")
 
         def back(*a):
             def f(d):
                 if d:
-                    self.unsavedDataCallback=False
-                    #Get rid of the first one representing the current page
+                    self.unsavedDataCallback = False
+                    # Get rid of the first one representing the current page
                     if self.backStack:
                         self.backStack.pop()
 
-                    #Go to the previous page, if that page left an instruction for how to get back to it
+                    # Go to the previous page, if that page left an instruction for how to get back to it
                     if self.backStack:
                         self.backStack.pop()()
                     else:
                         self.screenManager.current = "Main"
 
-            #If they have an unsaved post, ask them if they really want to leave.
+            # If they have an unsaved post, ask them if they really want to leave.
             if self.unsavedDataCallback:
-                self.askQuestion("Discard unsaved data?",'yes',cb=f)
+                self.askQuestion("Discard unsaved data?", 'yes', cb=f)
             else:
                 f(True)
-            
+
         btn1.bind(on_press=back)
         return btn1
-
-    
-
-
 
     def makeDataTablePage(self):
         screen = Screen(name='TableView')
@@ -299,6 +327,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers,tools.ToolsAndSettingsMixin,service
         screen.add_widget(layout)
 
         layout.add_widget(MDToolbar(title="My Streams"))
+
         def goMain(*a):
             self.screenManager.current = "Main"
 
@@ -323,8 +352,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers,tools.ToolsAndSettingsMixin,service
 
         return screen
 
-
-    def getPermission(self,type='all'):
+    def getPermission(self, type='all'):
         """
         Since API 23, Android requires permission to be requested at runtime.
         This function requests permission and handles the response via a
@@ -332,18 +360,17 @@ class ServiceApp(MDApp, uihelpers.AppHelpers,tools.ToolsAndSettingsMixin,service
         The request will produce a popup if permissions have not already been
         been granted, otherwise it will do nothing.
         """
-        if platform=="android":
+        if platform == "android":
             from android.permissions import request_permissions, Permission
 
-            if type=='all':
+            if type == 'all':
                 plist = [Permission.ACCESS_COARSE_LOCATION,
-                                Permission.ACCESS_FINE_LOCATION, Permission.MANAGE_EXTERNAL_STORAGE]
-            if type=='location':
-                plist =[Permission.ACCESS_COARSE_LOCATION,
-                                Permission.ACCESS_FINE_LOCATION]
-            if type=='files':
-                plist=[Permission.MANAGE_EXTERNAL_STORAGE]
-
+                         Permission.ACCESS_FINE_LOCATION, Permission.MANAGE_EXTERNAL_STORAGE]
+            if type == 'location':
+                plist = [Permission.ACCESS_COARSE_LOCATION,
+                         Permission.ACCESS_FINE_LOCATION]
+            if type == 'files':
+                plist = [Permission.MANAGE_EXTERNAL_STORAGE]
 
             def callback(permissions, results):
                 """
@@ -357,23 +384,6 @@ class ServiceApp(MDApp, uihelpers.AppHelpers,tools.ToolsAndSettingsMixin,service
                     print("callback. Some permissions refused.")
 
             request_permissions(plist, callback)
-
-
-
-
-
-
-                    
-
-
-
-
-
-
-
-
-
-   
 
 
 ServiceApp().run()

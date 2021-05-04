@@ -498,17 +498,33 @@ class PostsMixin():
 
         icon = Button(size_hint=(1,None), text="Icon: "+os.path.basename(s.get("icon",'')) )
         def promptSet(*a):
-            from plyer import filechooser
-            selection = filechooser.open_file(path=os.path.join(directories.assetLibPath,'icons'))
-            s['icon'] = selection[0][len(directories.assetLibPath)+1:] if selection else ''
-            s['time']=None
-            icon.text = "Icon: "+os.path.basename(s.get("icon",''))
+            from .kivymdfmfork import MDFileManager
+          
+            def f(selection):
+                s['icon'] = selection[len(directories.assetLibPath)+1:] if selection else ''
+                s['time']=None
+                icon.text = "Icon: "+os.path.basename(s.get("icon",''))
 
-            #Immediately update the image as seen in the post editor window
+                #Immediately update the image as seen in the post editor window
 
-            src = os.path.join(directories.assetLibPath, s.get("icon","INVALID"))
-            if os.path.exists(src):
-                 self.currentlyViewedPostImage.source = src
+                src = os.path.join(directories.assetLibPath, s.get("icon","INVALID"))
+                if os.path.exists(src):
+                    self.currentlyViewedPostImage.source = src
+                self.openFM.close()
+            
+            def e(selection):
+                self.openFM.close()
+
+            #Autocorrect had some fun with the kivymd devs
+            try:
+                self.openFM= MDFileManager(select_path=f,preview=True)
+            except:
+                try:
+                    self.openFM= MDFileManager(select_path=f,previous=True)
+                except:
+                    self.openFM= MDFileManager(select_path=f)
+
+            self.openFM.show(os.path.join(directories.assetLibPath,'icons'))
 
             
         icon.bind(on_release=promptSet)
@@ -519,28 +535,40 @@ class PostsMixin():
         export = Button(size_hint=(1,None), text="Export Raw Data")
 
         def promptSet(*a):
-            from plyer import filechooser
-            selection = filechooser.save_file(filters=[("Data Files","*.json")], path=(os.path.join(os.path.expanduser("~"), s.get('title','') or 'UntitledPost')+'.json'))
-
-            if selection:
-                #Needed for android
-                if not "com.eternityforest" in selection:
-                    self.getPermission('files')
-                data = daemonconfig.userDatabases[stream].getAllRelatedRecords(docID)
+            from .kivymdfmfork import MDFileManager
 
 
-                #Get the records as a list, sorted by time for consistency.
-                l = []
-                import json
-                for i in data:
-                    d=json.loads(data[i][0])
-                    l.append((d['id'],d))
-                l = sorted(l)
+            def f(selection):
+                if selection:
+                    if not selection.endswith(".json"):
+                        selection=selection+".json"
+                
+                    try:
+                        #Needed for android
+                        if not "com.eternityforest" in selection:
+                            self.getPermission('files')
+                    except:
+                        logging.exception("cant ask permission")
+                    data = daemonconfig.userDatabases[stream].getAllRelatedRecords(docID)
 
-                l = [ [i[1]] for i in l]
 
-                with open(selection[0],'w') as f:
-                    f.write(json.dumps(l, sort_keys=True,indent=2))
+                    #Get the records as a list, sorted by time for consistency.
+                    l = []
+                    import json
+                    for i in data:
+                        d=json.loads(data[i][0])
+                        l.append((d['id'],d))
+                    l = sorted(l)
+
+                    l = [ [i[1]] for i in l]
+
+                    with open(selection,'w') as f:
+                        f.write(json.dumps(l, sort_keys=True,indent=2))
+                    self.openFM.close()
+
+             #Autocorrect had some fun with the kivymd devs
+            self.openFM= MDFileManager(select_path=f,save_mode=((s.get('title','') or 'UntitledPost')+'.json'))
+            self.openFM.show(directories.settings_path)
 
 
             

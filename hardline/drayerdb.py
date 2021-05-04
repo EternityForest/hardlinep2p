@@ -235,7 +235,7 @@ class DocumentDatabase():
 
 
                 self.threadLocal.conn.execute("""
-                    CREATE VIEW fts_index_target 
+                    CREATE VIEW IF NOT EXISTS fts_index_target
                     AS 
                     SELECT
                         rowid AS rowid,
