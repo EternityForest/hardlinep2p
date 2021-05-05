@@ -46,12 +46,15 @@ class PostsMixin():
 
         self.streamEditPanel.add_widget(self.makeBackButton())
         
+        document = daemonconfig.userDatabases[stream].getDocumentByID(postID)
+
+        fullpath =  daemonconfig.userDatabases[stream].getFullPath(document)
+
         def goHere():
             self.gotoStreamPost(stream, postID)
         self.backStack.append(goHere)
         self.backStack = self.backStack[-50:]
 
-        document = daemonconfig.userDatabases[stream].getDocumentByID(postID)
 
         newtitle = MDTextField(text=document.get("title",''),mode='fill', multiline=False,font_size='22sp')
 
@@ -186,7 +189,7 @@ class PostsMixin():
             1, None), halign="center", text="Recent Comments:"))
 
         s = daemonconfig.userDatabases[stream]
-        p = s.getDocumentsByType("post", limit=5,parent=postID)
+        p = s.getDocumentsByType("post", limit=5,parent=fullpath)
         for i in p:
             self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
 
@@ -359,20 +362,24 @@ class PostsMixin():
 
         newp = MDTextFieldRect(text='', multiline=True,size_hint=(0.68,None))
 
-        def post(*a):
+        def savepost(*a,goto=False):
             if newp.text:
                 with daemonconfig.userDatabases[stream]:
                     d = {'body': newp.text,'title':newtitle.text,'type':'post'}
                     if parent:
-                        d['parent']=parent
+                        d['parent'] = daemonconfig.userDatabases[stream].getFullPath(daemonconfig.userDatabases[stream].getDocumentByID(parent))
+
                     daemonconfig.userDatabases[stream].setDocument(d)
                     daemonconfig.userDatabases[stream].commit()
 
                 self.unsavedDataCallback=None
-                #Done with this, don't need it in back history
-                if self.backStack:
-                    self.backStack.pop()
-                self.gotoStreamPosts(stream)
+                if goto:
+                    #Done with this, don't need it in back history
+                    if self.backStack:
+                        self.backStack.pop()
+                    self.gotoStreamPosts(stream)
+        def post(*a):
+            savepost(goto=True)
 
         self.unsavedDataCallback=post
 

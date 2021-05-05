@@ -27,6 +27,8 @@ You can also theoretically get around this if you are only interested in recent 
 
 Every record is a JSON obj.  Custom application defined keys and types should use com.domain.foo formats to stay unambiguous.
 
+Every record has an implicit full path.  This is the full chain of parent to child records, separated by /.
+
 Common special keys:
 
 ### id(indexed)
@@ -53,6 +55,10 @@ and can be silently deleted.  Keep this in mind as it allows you to avoid having
 
 The parent does not have to exist yet.
 
+The parent of field must be a full path. If you are C, your parent is B, and B's parent is A, your 'parent' field must be 'A/B', while your ID is C.
+
+
+Note that IDs are still globally unique.  There cannot be another A in the database even with a different parent.
 
 ### autoclean(optional)
 When this is set to something, it means that nodes can silently delete old records older than a locally configured date.  Use this for things like log entries.

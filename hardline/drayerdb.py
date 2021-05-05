@@ -6,6 +6,7 @@
 
 from enum import auto
 import logging
+from os.path import islink
 import shutil
 import websockets
 import asyncio
@@ -791,8 +792,10 @@ class DocumentDatabase():
 
                 if children:
                     cur2 = self.threadLocal.conn.cursor()
+                    fullpath = self.getFullPath(d)
+
                     cur2.execute(
-                        'SELECT json,signature,arrival FROM document WHERE  json_extract(json,"$.parent")=?', (d['id'],))
+                        'SELECT json,signature,arrival FROM document WHERE  json_extract(json,"$.parent") LIKE ? COLLATE NOCASE', (fullpath+'%',))
 
                     for j in cur2:
                         d2 =json.loads(j[0])
@@ -801,7 +804,8 @@ class DocumentDatabase():
 
                 if d.get('parent',''):
                     cur.close()
-                    return self.getAllRelatedRecords(d['parent'],r,children=False)
+                    #Last element of the parent is the direct ID of the parent element
+                    return self.getAllRelatedRecords(d['parent'].split("/")[-1],r,children=False)
                 cur.close()
                 return r
             cur.close()
@@ -940,16 +944,44 @@ class DocumentDatabase():
         with self.lock:
             self._setDocument(doc, signature,receivedFrom )
 
+    def getFullPath(self, doc):
+        if doc.get('parent',''):
+            p= doc['parent']
+            if p[-1]=='/':
+                p=p[:-1]
+            return p+"/"+doc['id']
+        else:
+            return doc['id']
+
     def _setDocument(self, doc, signature=None,receivedFrom = ''):
-        "Two modes: Locally generate a signature, or use the existing sig data"
+        """Two modes: Locally generate a signature, or use the existing sig data.        
+        """
 
         if isinstance(doc, str):
             docObj = json.loads(doc)
         else:
             docObj = doc
+
+        if 'parent' in doc:
+            if isinstance(doc['parent'],dict):
+                doc['parent']= self.getFullPath(doc['parent'])
+            else:
+                if doc['parent'].endswith("/"):
+                    raise ValueError("Parent cannot end with slash")
+
+
+
         self.dbConnect()
         
         if 'id' in docObj:
+            uid = docObj['id']
+            #Ensure corrrectness of UUID representation
+            if isinstance(docObj['id'],(str,bytes)):
+                uid = uuid.UUID(uid)
+            #No sig means we are doing it ourselves and can clean up any incorrectly formatted UUIDs
+            if not signature:
+                docObj['id']=str(uid)
+
             with self.lock:
                 # If a UUID has been supplied, we want to erase any old record bearing that name.
                 cur = self.threadLocal.conn.cursor()
@@ -1064,8 +1096,10 @@ class DocumentDatabase():
         # We don't even have to just set them as deleted, we can relly delete them, the deleted parent record
         # is enough for other nodes to know this shouldn't exist anymore.
         if docObj['type'] == "null":
+            fullpath=self.getFullPath(docObj)
+
             self.threadLocal.conn.execute(
-                "DELETE FROM document WHERE json_extract(json,'$.parent')=?", (docObj['id'],))
+                "DELETE FROM document WHERE json_extract(json,'$.parent') LIKE ? COLLATE NOCASE", (fullpath+'%',))
 
 
         #We don't have RETURNING yet, so we just read back the thing we just wrote to see what the DB set it's arrival to
@@ -1107,6 +1141,7 @@ class DocumentDatabase():
         pass
 
     def getDocumentByID(self, key):
+        key=str(key)
         self.dbConnect()
         cur = self.threadLocal.conn.cursor()
         cur.execute(
@@ -1123,7 +1158,9 @@ class DocumentDatabase():
         if isinstance(parent,str):
             pass
         else:
-            parent=parent['id']
+            parent=self.getFullPath(parent)
+
+
         self.dbConnect()
         cur = self.threadLocal.conn.cursor()
         if parent is None:
@@ -1149,6 +1186,11 @@ class DocumentDatabase():
 
     
     def searchDocuments(self, key, type,startTime=0,  endTime=10**18, limit=100,parent=None):
+        if isinstance(parent,str):
+            pass
+        else:
+            parent=self.getFullPath(parent)
+            
         self.dbConnect()
         cur = self.threadLocal.conn.cursor()
         r=[]

@@ -3,7 +3,7 @@ from hardline import daemonconfig
 from .. import daemonconfig, hardline
 
 
-import configparser,logging,textwrap
+import configparser,logging,textwrap,uuid
 
 from kivy.uix.image import Image
 from kivy.uix.widget import Widget
@@ -74,13 +74,13 @@ def makePostRenderingFuncs(limit=1024*1024):
 
 
 class ColumnIterator():
-    def __init__(self, db,postID, col):
+    def __init__(self, db,postPath, col):
         self.col = col
         self.db = db
-        self.postID= postID
+        self.postPath= postPath
 
     def __iter__(self):
-        self.cur = self.db.getDocumentsByType("row", parent=self.postID, limit=10240000000)
+        self.cur = self.db.getDocumentsByType("row", parent=self.postPath, limit=10240000000)
         return self
 
     def __next__(self):
@@ -97,8 +97,10 @@ def renderPostTemplate(db, postID,text, limit=100000000):
     if not search:
         return text
 
+    path = db.getFullPath(db.getDocumentByID(postID))
+
     #Need to be able to go slightly 
-    rows = db.getDocumentsByType('row',parent=postID)
+    rows = db.getDocumentsByType('row',parent=path)
 
     ctx = {}
     
@@ -109,7 +111,7 @@ def renderPostTemplate(db, postID,text, limit=100000000):
             return text
         for j in i:
             if j.startswith("row."):
-                ctx[j[4:]]=ColumnIterator(db,postID, j)
+                ctx[j[4:]]=ColumnIterator(db,path, j)
                 
     replacements ={}
     for i in search:
@@ -137,6 +139,7 @@ class TablesMixin():
         self.streamEditPanel.clear_widgets()
         s = daemonconfig.userDatabases[stream]
         parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent)
+        fullpath = daemonconfig.userDatabases[stream].getFullPath(parentDoc)
         self.streamEditPanel.add_widget(self.makeBackButton())
         self.streamEditPanel.add_widget(self.makePostWidget(stream,parentDoc))
         self.streamEditPanel.add_widget((MDToolbar(title="Data Table View")))
@@ -170,25 +173,22 @@ class TablesMixin():
                     return
 
             if newRowName.text.strip():
-                id = parent+'-'+newRowName.text.strip().lower().replace(' ',"")[:48]
+                id = uuid.uuid5(uuid.UUID(parent),newRowName.text.strip().lower().replace(' ',""))
                 #That name already exists, jump to it
                 if daemonconfig.userDatabases[stream].getDocumentByID(id):
                     self.gotoStreamRow(stream, id)
                     return
             else:
-                import uuid
                 id=str(uuid.uuid4())
             
-            x = daemonconfig.userDatabases[stream].getDocumentsByType("row.template", parent=parent,limit=1) 
-            newDoc = {'parent': parent,'id':id, 'name':newRowName.text.strip() or id, 'type':'row'}
+            x = daemonconfig.userDatabases[stream].getDocumentsByType("row.template", parent=fullpath,limit=1) 
+            newDoc = {'parent': fullpath,'id':id, 'name':newRowName.text.strip() or id, 'type':'row'}
 
             #Use the previously created or modified row as the template
             for i in x:
                 for j in i:
                     if j.startswith('row.'):
                         newDoc[j]= ''
-
-
            
             self.gotoStreamRow(stream, id, newDoc)
 
@@ -205,9 +205,9 @@ class TablesMixin():
         self.streamEditPanel.add_widget(topbar)
         
         if not search:
-            p = s.getDocumentsByType("row", limit=1000, parent=parent)
+            p = s.getDocumentsByType("row", limit=1000, parent=fullpath)
         else:
-            p = s.searchDocuments(search,"row", limit=1000, parent=parent)
+            p = s.searchDocuments(search,"row", limit=1000, parent=fullpath)
 
 
 
@@ -272,8 +272,9 @@ class TablesMixin():
 
         #Our default template if none exists
         #Give it a name because eventually we may want to have multiple templates.
-        #Give it an ID so it can override any existing children of that template. 
-        oldTemplate= {'type':"row.template",'parent':document['parent'], 'name': 'default', 'id':document['parent']+".rowtemplate.default"}
+        #Give it an ID so it can override any existing children of that template.
+        #Use only the direct ID of the parent record in cade we want to move it eventually.
+        oldTemplate= {'type':"row.template",'parent':document['parent'], 'name': 'default', 'id':uuid.uuid5(uuid.UUID(document['parent'].split("/")[-1]),".rowtemplate.default")}
 
         for i in daemonconfig.userDatabases[stream].getDocumentsByType("row.template", parent=document['parent'],limit=1):
             oldTemplate=i
