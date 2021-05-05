@@ -220,17 +220,17 @@ class DocumentDatabase():
                 self.threadLocal.conn.execute('''CREATE TABLE IF NOT EXISTS peers
                     (peerID text primary key, lastArrival integer, horizon integer, info text)''')
 
-
+                #Preferentially use documentTime, if htat is not available use the low level data timestamp.
+                #documentTime is a user-settable field that can go backwards, wheras time must be the raw record creation time
                 self.threadLocal.conn.execute(
-                    '''CREATE INDEX IF NOT EXISTS document_parent ON document(json_extract(json,"$.parent")) WHERE json_extract(json,"$.parent") IS NOT null ''')
+                    '''CREATE INDEX IF NOT EXISTS document_type_parent_time ON document(json_extract(json,"$.type"),IFNULL(json_extract(json,"$.parent"),""), IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))) ''')
                 self.threadLocal.conn.execute(
                     '''CREATE INDEX IF NOT EXISTS document_link ON document(json_extract(json,"$.link")) WHERE json_extract(json,"$.link") IS NOT null''')
                 self.threadLocal.conn.execute(
                     '''CREATE INDEX IF NOT EXISTS document_name ON document(json_extract(json,"$.name"))''')
                 self.threadLocal.conn.execute(
                     '''CREATE INDEX IF NOT EXISTS document_id ON document(json_extract(json,"$.id"))''')
-                self.threadLocal.conn.execute(
-                    '''CREATE INDEX IF NOT EXISTS document_type ON document(json_extract(json,"$.type"))''')
+
                 self.threadLocal.conn.execute(
                     '''CREATE INDEX IF NOT EXISTS document_arrival ON document(arrival)''')
 
@@ -1141,6 +1141,7 @@ class DocumentDatabase():
         pass
 
     def getDocumentByID(self, key):
+        "Return None or one document by exact ID match. ID may be string or UUID instance"
         key=str(key)
         self.dbConnect()
         cur = self.threadLocal.conn.cursor()
@@ -1155,6 +1156,7 @@ class DocumentDatabase():
         cur.close()
 
     def getDocumentsByType(self, key, startTime=0, endTime=10**18, limit=100,parent=None):
+        "Return documents meeting the filter criteria. Parent must by the full path of the parent record, to limit the results to children of that record."
         if isinstance(parent,str):
             pass
         else:
@@ -1165,10 +1167,10 @@ class DocumentDatabase():
         cur = self.threadLocal.conn.cursor()
         if parent is None:
             cur.execute(
-                "SELECT json from document WHERE json_extract(json,'$.type')=? AND json_extract(json,'$.time')>=? AND json_extract(json,'$.time')<=? ORDER BY json_extract(json,'$.time') desc LIMIT ?", (key,startTime,endTime, limit))
+                "SELECT json from document WHERE json_extract(json,'$.type')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))>=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))<=? ORDER BY IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time')) desc LIMIT ?", (key,startTime,endTime, limit))
         else:
             cur.execute(
-                "SELECT json from document WHERE json_extract(json,'$.type')=? AND json_extract(json,'$.time')>=? AND ifnull(json_extract(json,'$.parent'),'')=? AND json_extract(json,'$.time')<=? ORDER BY json_extract(json,'$.time') desc LIMIT ?", (key,startTime,parent,endTime, limit))
+                "SELECT json from document WHERE json_extract(json,'$.type')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))>=? AND ifnull(json_extract(json,'$.parent'),'')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))<=? ORDER BY IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time')) desc LIMIT ?", (key,startTime,parent,endTime, limit))
         
         for i in cur:
             try:
@@ -1197,10 +1199,10 @@ class DocumentDatabase():
         with self:
             if parent is None:
                 cur.execute(
-                    "SELECT json from ((select rowid as id from search WHERE search MATCH ?) INNER JOIN document ON id=rowid)  WHERE json_extract(json,'$.type')=? AND json_extract(json,'$.time')>=? AND json_extract(json,'$.time')<=? ORDER BY json_extract(json,'$.time') DESC LIMIT ?", (key,type, startTime, endTime, limit))
+                    "SELECT json from ((select rowid as id from search WHERE search MATCH ?) INNER JOIN document ON id=rowid)  WHERE json_extract(json,'$.type')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))>=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))<=? ORDER BY IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time')) DESC LIMIT ?", (key,type, startTime, endTime, limit))
             else:
                 cur.execute(
-                    "SELECT json from ((select rowid as id from search WHERE search MATCH ?) INNER JOIN document ON id=rowid)  WHERE ifnull(json_extract(json,'$.parent'),'')=? AND json_extract(json,'$.type')=? AND json_extract(json,'$.time')>=? AND json_extract(json,'$.time')<=? ORDER BY json_extract(json,'$.time') DESC LIMIT ?", (key,parent, type, startTime, endTime, limit))
+                    "SELECT json from ((select rowid as id from search WHERE search MATCH ?) INNER JOIN document ON id=rowid)  WHERE ifnull(json_extract(json,'$.parent'),'')=? AND json_extract(json,'$.type')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))>=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))<=? ORDER BY IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time')) DESC LIMIT ?", (key,parent, type, startTime, endTime, limit))
             for i in cur:
                 r.append(i[0])
 
