@@ -97,8 +97,13 @@ crypto_sign-ed inner message from that sender
 Payload
 
 ## Payload protocol
-The payload is a JSON object that can have the following keys
+The payload is a JSON object that can have the following keys.
 
+When we get a NEW record, we send it to all other peers.  However, if we and a peer ar using the same physical DB,
+the record will never be new, because they would have put it in the shared DB before sending.
+
+Implementions must detect this, and always forward all records arriving from our own nodeID to other nodes, as we explicitly
+support multiple nodes sharing one sqlite database while using the protocol for IPC
 
 ### records
 
@@ -108,9 +113,11 @@ This is a list of records, where each record is a 3 element list:
 * Record Signature made by: concat(24 byte Blake2b digest of record data, 8 byte blake2b of the sender's pubkey, crypto_sign_detached of the digest)
 * Integer record arrival time, the time at which that record arrrived at the remote
 
+
 ### recordsStartFrom
 
 An arrival time.  This indicates that there are no records in between the earliest record present in the records list, and this timestamp.
+It is so the recierver can be sure they have all records to a point,
 
 
 

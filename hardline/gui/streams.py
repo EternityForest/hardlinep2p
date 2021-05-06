@@ -119,7 +119,7 @@ class StreamsMixin():
             try:
                 localServer = daemonconfig.ddbservice[0].getSharableURL()
             except:
-                logging.exception()
+                logging.exception("wtf")
         else:
             localServer=''
 

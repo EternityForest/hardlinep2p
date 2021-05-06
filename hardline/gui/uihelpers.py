@@ -1,5 +1,6 @@
 
 
+import logging
 from kivy.uix.boxlayout import BoxLayout
 from kivymd.uix.button import MDFlatButton
 
@@ -13,7 +14,6 @@ from kivy.utils import platform
 
 class AppHelpers():
     def showText(self, text,title="QR"):
-        from kivy_garden.qrcode import QRCodeWidget
        
         t= MDTextField(text=text, multiline=True,size_hint=(1,None),mode="rectangle")
         
@@ -35,7 +35,11 @@ class AppHelpers():
         self.dialog.open()
 
     def showQR(self, text,title="QR"):
-        from kivy_garden.qrcode import QRCodeWidget
+        try:
+            from kivy_garden.qrcode import QRCodeWidget
+        except:
+            logging.exception("Could not get QR lib")
+            return self.showText(text,title)
         t =QRCodeWidget(data=text, size_hint=(1,None))
         
         def cbr_yes(*a):

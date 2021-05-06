@@ -97,7 +97,9 @@ class Session():
         self.remoteNodeID = None
 
         #Just used as a match flag for the DB to avoid loops
-        self.b64NodeID = 'UNKNOWN'
+        self.b64RemoteNodeID = 'UNKNOWN'
+
+        self.location='unknown'
 
 
 async def DBAPI(websocket, path):
@@ -107,7 +109,10 @@ async def DBAPI(websocket, path):
 
         databaseBySyncKeyHash[a[1:17]].dbConnect()
         logging.info("incoming connection to DB! ")
-        await websocket.send(databaseBySyncKeyHash[a[1:17]].handleBinaryAPICall(a, session))
+        x = databaseBySyncKeyHash[a[1:17]].handleBinaryAPICall(a, session,forceResponse=True)
+        if x:
+            await websocket.send(x)
+
         
         def f(x):
             asyncio.run_coroutine_threadsafe(websocket.send(x),wsloop)
@@ -120,7 +125,9 @@ async def DBAPI(websocket, path):
         while not websocket.closed:
             try:
                 a = await asyncio.wait_for(websocket.recv(), timeout=5)
-                await websocket.send(databaseBySyncKeyHash[a[1:17]].handleBinaryAPICall(a, session))
+                x=databaseBySyncKeyHash[a[1:17]].handleBinaryAPICall(a, session)
+                if x:
+                    await websocket.send(x)
             except (TimeoutError, asyncio.TimeoutError):
                 pass
 
@@ -128,7 +135,10 @@ async def DBAPI(websocket, path):
                 pass
 
     except websockets.exceptions.ConnectionClosedOK:
-        pass
+        print("Connection closed with client!!")
+    except:
+        logging.exception("Error in DDB server")
+        raise
 
 
 start_server = None
@@ -148,6 +158,12 @@ def stopServer():
 
 wsloop = None
 
+#Mutable container
+wsloopc=[0]
+
+wsloop = asyncio.new_event_loop()
+wsloopc[0]=wsloop
+
 def startServer(port,bindTo='localhost'):
     if not port:
         port = int((random.random()*10000)+10000)
@@ -161,7 +177,7 @@ def startServer(port,bindTo='localhost'):
     except:
         l=None
 
-    wsloop = asyncio.new_event_loop()
+
     asyncio.set_event_loop(wsloop)
     s = websockets.serve(DBAPI, bindTo, port)
     serverLocalPorts[0] = port
@@ -191,12 +207,14 @@ def startServer(port,bindTo='localhost'):
             time.sleep(0.01)
         else:
             break
+
+    if l:
+        asyncio.set_event_loop(l)
+
     if not start_server.sockets:
         raise RuntimeError("Server not running")
     #Terrible stuff here. We are going to try to restore the event loop.
 
-    if l:
-        asyncio.set_event_loop(l)
     time.sleep(3)
 
 
@@ -469,7 +487,7 @@ class DocumentDatabase():
         logging.info("Server Manager Target is:"+oldServerURL)
         while oldServerURL == self.serverURL:
             try:
-                if loop.run_until_complete(self.openSessionAsClient()):
+                if loop.run_until_complete(self.openSessionAsClient(loop)):
                     self.syncFailBackoff = 1
             except:
                 logging.exception("Error in DB Client")
@@ -486,12 +504,14 @@ class DocumentDatabase():
         loop.stop()
         loop.close()
 
-    async def openSessionAsClient(self):
+    async def openSessionAsClient(self,loop):
+        global wsloop
 
         if not self.serverURL:
             return 1
 
         session = Session(True)
+        session.location = self.serverURL
 
         oldServerURL = self.serverURL
 
@@ -522,6 +542,12 @@ class DocumentDatabase():
 
                 # Empty message so they know who we are
                 await websocket.send(self.encodeMessage({}))
+
+                def f(x):
+                    asyncio.run_coroutine_threadsafe(websocket.send(x),loop)
+
+                session.send = f                
+                self.subscribers[time.time()] = session
 
                 while not websocket.closed:
                     try:
@@ -560,8 +586,9 @@ class DocumentDatabase():
                         return
 
             except websockets.exceptions.ConnectionClosedOK:
-                pass
+                logging.info("Connection Closed to "+x)
             except:
+                logging.exception("Errot in DDB WS client")
                 return 0
 
     def dbConnect(self):
@@ -619,9 +646,9 @@ class DocumentDatabase():
 
         return i[1]
 
-    def handleBinaryAPICall(self, a, sessionObject=None):
+    def handleBinaryAPICall(self, a, sessionObject=None,forceResponse=False):
         # Process one incoming binary API message.  If part of a sesson, using a sesson objert enables certain features.
-
+        logging.info("i got a msg")
         #Message type byte is reserved for a future use
         if not a[0]==1:
             return
@@ -655,7 +682,7 @@ class DocumentDatabase():
                 raise RuntimeError("Remote ID changed in same session")
             
         sessionObject.remoteNodeID=remoteNodeID
-        sessionObject.b64remoteNodeID= base64.b64encode(remoteNodeID).decode()
+        sessionObject.b64RemoteNodeID= base64.b64encode(remoteNodeID).decode()
 
         d = d[32:]
 
@@ -669,10 +696,11 @@ class DocumentDatabase():
 
         # reject very old stuff
         if t < (time.time()-3600)*1000000:
+            logging.info("Ancient Message")
             return {}
+
         if sessionObject:
             sessionObject.remoteNodeID = remoteNodeID
-
         # Get the data
         d = a[8:]
 
@@ -681,7 +709,9 @@ class DocumentDatabase():
 
         r = {'records': []}
 
-        b64remoteNodeID= base64.b64encode(remoteNodeID).decode()
+        b64RemoteNodeID= base64.b64encode(remoteNodeID).decode()
+        logging.info("msg was from:"+ b64RemoteNodeID)
+        logging.info("we are:"+ base64.b64encode(self.localNodeVK).decode())
 
         #It is an explicitly supported use case to have both the client and the server of a connection share the same database, for use in IPC.
         #In this scenario, it is useless to send ir request old records, as the can't get out of sync, there is only one DB.
@@ -689,7 +719,7 @@ class DocumentDatabase():
             with self.lock:
                 cur = self.threadLocal.conn.cursor()
                 cur.execute(
-                    "SELECT lastArrival,horizon FROM peers WHERE peerID=?", (b64remoteNodeID,))
+                    "SELECT lastArrival,horizon FROM peers WHERE peerID=?", (b64RemoteNodeID,))
 
                 peerinfo = cur.fetchone()
                 #How far back do we have knowledge of ther peer's records
@@ -711,12 +741,16 @@ class DocumentDatabase():
 
 
             if "getNewArrivals" in d:
+                #Mark it as ok to send newer recordas than this immediatelty when we get them
+                sessionObject.lastResyncFlushTime = max(
+                            sessionObject.lastResyncFlushTime, d['getNewArrivals'])
+                            
                 kdg = libnacl.crypto_generichash(base64.b64decode(self.syncKey))[:8]
                 with self.lock:
                     cur = self.threadLocal.conn.cursor()
                     # Avoid dumping way too much at once
                     cur.execute(
-                        "SELECT json,signature,arrival FROM document WHERE arrival>? AND receivedFrom!=? LIMIT 100", (d['getNewArrivals'],b64remoteNodeID))
+                        "SELECT json,signature,arrival FROM document WHERE arrival>? AND receivedFrom!=? LIMIT 100", (d['getNewArrivals'],b64RemoteNodeID))
 
                     # Declares that there are no records left out in between this time and the first time we actually send
                     r['recordsStartFrom'] = d['getNewArrivals']
@@ -747,16 +781,19 @@ class DocumentDatabase():
                     if needCommit:
                         self.commit()
 
+
         needUpdatePeerTimestamp = False
         if "records" in d and d['records']:
+            logging.info("Has records")
             #If we ARE the same database as the remote node, we already have the record they are telling us about, we just need to do the notification
             if not remoteNodeID== self.localNodeVK:
                 with self:
                     try:
+                        latest=0
                         for i in d['records']:
                         
-                            self.setDocument(i[0],i[1],receivedFrom= b64remoteNodeID)
-                            r['getNewArrivals'] = latest = i[2]
+                            self.setDocument(i[0],i[1],receivedFrom= b64RemoteNodeID,remoteArrivalTime=i[2])
+                            r['getNewArrivals'] = latest = max(latest,i[2])
                             needUpdatePeerTimestamp = True
 
                         if needUpdatePeerTimestamp:
@@ -786,28 +823,34 @@ class DocumentDatabase():
                         self.commit()
             else:
                 for i in d['records']:
-                    self.setDocument(i[0],i[1],receivedFrom= b64remoteNodeID)
+                    self.setDocument(i[0],i[1],receivedFrom= b64RemoteNodeID)
 
-
+        if 'records' in r and not r['records']:
+            del r['records']
+        if (not r) and (not forceResponse):
+            return None
         return self.encodeMessage(r)
 
-    def getUpdatesForSession(self, session):
+    def getUpdatesForSession(self, session, forceSendAfter =0):
+        "ForceSendAfter will force sending of update records after that point."
         # Don't send anything till they have requested something, ohterwise we will just be sending nonsense they already have
-        if session.lastResyncFlushTime:
+        if session.lastResyncFlushTime or forceSendAfter:
             r = {}
             with self.lock:
                 cur = self.threadLocal.conn.cursor()
                 # Avoid dumping way too much at once
                 cur.execute(
-                    "SELECT json,signature,arrival FROM document WHERE arrival>? AND receivedFrom!=? LIMIT 100", (session.lastResyncFlushTime,session.b64remoteNodeID))
+                    "SELECT json,signature,arrival FROM document WHERE arrival>? AND receivedFrom!=? LIMIT 100", (session.lastResyncFlushTime or forceSendAfter,session.b64RemoteNodeID))
 
                 # Let the client know that there are no records left out in between the start of this message and the end of what they have
-                r['recordsStartFrom'] = session.lastResyncFlushTime
+                #We know nothing is left out because we just checked the DB
+                r['recordsStartFrom'] = session.lastResyncFlushTime or forceSendAfter
 
                 for i in cur:
+                    logging.info("Pushing Update Record!")
                     if not 'records' in r:
                         r['records'] = []
-                    r['records'].append([i[0], i[1]])
+                    r['records'].append([i[0], i[1],i[2]])
 
                     session.lastResyncFlushTime = max(
                         session.lastResyncFlushTime, i[2])
@@ -816,6 +859,8 @@ class DocumentDatabase():
             # We can of course just send nothing if there are no changes to flush.
             if r:
                 return self.encodeMessage(r)
+        else:
+            logging.info("Not fully connected yet")
 
     def getAllRelatedRecords(self,record,r=None,children=True):
         "Get all children of this record, and all ancestors, as (json, signature, arrival) indexed by ID"
@@ -982,9 +1027,9 @@ class DocumentDatabase():
             else:
                 return time.time()*10**6
 
-    def setDocument(self, doc, signature=None,receivedFrom = ''):
+    def setDocument(self, doc, signature=None,receivedFrom = '',remoteArrivalTime=0):
         with self.lock:
-            self._setDocument(doc, signature,receivedFrom )
+            self._setDocument(doc, signature,receivedFrom,remoteArrivalTime)
 
     def getFullPath(self, doc):
         if doc.get('parent',''):
@@ -995,8 +1040,9 @@ class DocumentDatabase():
         else:
             return doc['id']
 
-    def _setDocument(self, doc, signature=None,receivedFrom = ''):
-        """Two modes: Locally generate a signature, or use the existing sig data.        
+    def _setDocument(self, doc, signature=None,receivedFrom = '',remoteArrivalTime=0):
+        """Two modes: Locally generate a signature, or use the existing sig data.
+            When the record is remotely recieved, you must specify what arrival time the remote node thinks it came in at.        
         """
 
         if isinstance(doc, str):
@@ -1011,8 +1057,10 @@ class DocumentDatabase():
                 if doc['parent'].endswith("/"):
                     raise ValueError("Parent cannot end with slash")
 
+        logging.info("Setting record, recieved from: "+receivedFrom+" and local ID is "+base64.b64encode(self.localNodeVK).decode())
 
 
+        
         self.dbConnect()
         
         if 'id' in docObj:
@@ -1107,6 +1155,34 @@ class DocumentDatabase():
             signature = base64.b64encode(mdg+kdg+sig).decode()
 
        
+        #we  proxy through *all* messages
+        #Recieved from ourselves, even if we are old, because using yourself as a transparent proxy
+        #is explicitly supported.
+
+        #The use case is in having A be the friontend, B be the backend, and C being the remote server.
+        #A is a client of B on the same machine, two different processes but the same database to save space.
+        #B needs to forward all "new" records it gets from A to C, but the will not actually be new, because
+        #A already put them in the shared DB.  So we special case this logic!!!
+        if receivedFrom == base64.b64encode(self.localNodeVK).decode():
+            logging.info("Got message from the same database")
+            try:
+                for i in self.subscribers:
+                    logging.info("Subsciirber exists: "+str(self.subscribers[i].location))
+                    #Data wasting loop avoidance, which is essential in proxy mode or we would endlessly relay stuff back and forth between the same
+                    #copies of the same node
+                    if not self.subscribers[i].b64RemoteNodeID == receivedFrom:
+                        logging.info("Pushing update to subscriber "+("client" if (not self.subscribers[i].isClientSide) else "server")+" at "+self.subscribers[i].location)
+                        try:
+                            #Their arrival time is ours, because we are the same DB.  By using -1 we are sure to catch the record.
+                            x = self.getUpdatesForSession(self.subscribers[i], forceSendAfter=remoteArrivalTime-1)
+                            if x:
+                                self.subscribers[i].send(x)
+                        except:
+                            logging.info(traceback.format_exc())
+                    else:
+                        logging.info("But ignoring them")
+            except:
+                logging.info(traceback.format_exc())
 
         #Don't insert messages recieved from self that we already have
         if not receivedFrom == base64.b64encode(self.localNodeVK).decode():
@@ -1152,11 +1228,24 @@ class DocumentDatabase():
 
         self.lastChange = time.time()
 
-        for i in self.subscribers:
+        #Don't do that, we already proxy through *all* messages
+        #Recieved from ourselves, even if we are old, because using yourself as a transparent proxy
+        #is explicitly supported
+        if not receivedFrom == base64.b64encode(self.localNodeVK).decode():
             try:
-                x = self.getUpdatesForSession(self.subscribers[i])
-                if x:
-                    self.subscribers[i].send(x)
+                for i in self.subscribers:
+                    
+                    #Data wasting loop avoidance, which is essential in proxy mode or we would endlessly relay stuff back and forth between the same
+                    #copies of the same node
+                    if not self.subscribers[i].b64RemoteNodeID == receivedFrom:
+                        logging.info("Pushing update to subscriber "+("client" if (not self.subscribers[i].isClientSide) else "server")+" at "+self.subscribers[i].location)
+                        try:
+                            #ForceSendAfter only takes effect if we don't already know how much the client already has from us.
+                            x = self.getUpdatesForSession(self.subscribers[i], forceSendAfter=c[2]-1)
+                            if x:
+                                self.subscribers[i].send(x)
+                        except:
+                            logging.info(traceback.format_exc())
             except:
                 logging.info(traceback.format_exc())
 

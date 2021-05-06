@@ -498,7 +498,7 @@ class Service():
         self.lpd.register(self.password+"-"+self.keyhash.hex(),
                           LocalP2PPortContainer, info)
 
-    def getSharableURL():
+    def getSharableURL(self):
         return "http://"+self.password+"-"+self.keyhash.hex()+".localhost:7009"
 
     def close(self):

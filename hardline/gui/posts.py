@@ -99,16 +99,17 @@ class PostsMixin():
 
         def post(*a):
             with daemonconfig.userDatabases[stream]:
-                document['title']=newtitle.text
-                document['body']=sourceText[0] or newp.text
-                #Make sure system knows this is not an old document
-                try:
-                    del document['time']
-                except:
-                    pass
-                daemonconfig.userDatabases[stream].setDocument(document)
-                daemonconfig.userDatabases[stream].commit()
-                self.unsavedDataCallback=None
+                if self.unsavedDataCallback:
+                    document['title']=newtitle.text
+                    document['body']=sourceText[0] or newp.text
+                    #Make sure system knows this is not an old document
+                    try:
+                        del document['time']
+                    except:
+                        pass
+                    daemonconfig.userDatabases[stream].setDocument(document)
+                    daemonconfig.userDatabases[stream].commit()
+                    self.unsavedDataCallback=None
 
             self.gotoStreamPosts(stream)
         
