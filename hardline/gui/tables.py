@@ -97,7 +97,10 @@ def renderPostTemplate(db, postID,text, limit=100000000):
     if not search:
         return text
 
-    path = db.getFullPath(db.getDocumentByID(postID))
+    d = db.getDocumentByID(postID)
+    if not d:
+        return ''
+    path = db.getFullPath(d)
 
     #Need to be able to go slightly 
     rows = db.getDocumentsByType('row',parent=path)

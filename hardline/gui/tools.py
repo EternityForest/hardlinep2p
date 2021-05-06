@@ -188,7 +188,7 @@ class ToolsAndSettingsMixin():
         try:
             from kivy.logger import LoggerHistory
             for i in LoggerHistory.history:
-                self.logsListBox.add_widget(Label(text=str(i.getMessage()), size_hint=(1,None)))
+                self.logsListBox.add_widget(MDTextField(text=str(i.getMessage()), multiline=True,size_hint=(1,None),mode="rectangle"))
 
             self.screenManager.current = "Logs"
         except Exception as e:

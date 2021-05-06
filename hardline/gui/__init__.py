@@ -53,68 +53,11 @@ Logger.setLevel(LOG_LEVELS["info"])
 
 # Because of this, two connections to the same DB file is a completetely supported use case that drayerDB has optimizations for.
 if platform == 'android':
-    daemonconfig.loadUserDatabases(None, forceProxy='127.0.0.1:7004')
+    daemonconfig.loadUserDatabases(None, forceProxy='localhost:7004')
 
 
 # In this mode, we are just acting as a viewer for a file
 oneFileMode = False
-
-
-# Horrible hacc
-try:
-    import plyer.platforms.linux.filechooser
-    from distutils.spawn import find_executable as which
-
-    class KDialogFileChooser(plyer.platforms.linux.filechooser.SubprocessFileChooser):
-        '''A FileChooser implementation using KDialog (on GNU/Linux).
-        Not implemented features:
-        * show_hidden
-        * preview
-        '''
-
-        executable = "kdialog"
-        separator = "\n"
-        successretcode = 0
-
-        def _gen_cmdline(self):
-            cmdline = [which(self.executable)]
-
-            filt = []
-
-            for f in self.filters:
-                if type(f) == str:
-                    filt += [f]
-                else:
-                    filt += list(f[1:])
-
-            if self.mode == "dir":
-                cmdline += [
-                    "--getexistingdirectory",
-                    (self.path if self.path else os.path.expanduser("~"))
-                ]
-            elif self.mode == "save":
-                cmdline += [
-                    "--getsavefilename",
-                    (self.path if self.path else os.path.expanduser("~")),
-                    " ".join(filt)
-                ]
-            else:
-                cmdline += [
-                    "--getopenfilename",
-                    (self.path if self.path else os.path.expanduser("~")),
-                    " ".join(filt)
-                ]
-            if self.multiple:
-                cmdline += ["--multiple", "--separate-output"]
-            if self.title:
-                cmdline += ["--title", self.title]
-            if self.icon:
-                cmdline += ["--icon", self.icon]
-            return cmdline
-    plyer.platforms.linux.filechooser.KDialogFileChooser = KDialogFileChooser
-    plyer.platforms.linux.filechooser.CHOOSERS['kde'] = KDialogFileChooser
-except:
-    pass
 
 
 class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servicesUI.ServicesMixin, discovery.DiscoveryMixin, tables.TablesMixin, posts.PostsMixin, streams.StreamsMixin):
@@ -173,6 +116,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         sm.add_widget(self.makeStreamEditPage())
         sm.add_widget(self.makeLogsPage())
         sm.add_widget(self.makePostMetaDataPage())
+
 
         self.theme_cls.primary_palette = "Green"
 

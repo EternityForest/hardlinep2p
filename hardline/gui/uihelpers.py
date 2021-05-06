@@ -1,5 +1,6 @@
 
 
+from kivy.uix.boxlayout import BoxLayout
 from kivymd.uix.button import MDFlatButton
 
 from kivymd.uix.textfield import MDTextField
@@ -11,11 +12,62 @@ from kivy.uix.checkbox import CheckBox
 from kivy.utils import platform
 
 class AppHelpers():
+    def showText(self, text,title="QR"):
+        from kivy_garden.qrcode import QRCodeWidget
+       
+        t= MDTextField(text=text, multiline=True,size_hint=(1,None),mode="rectangle")
+        
+        def cbr_yes(*a):
+            print("Accept Button")
+            self.dialog.dismiss()
 
-    def askQuestion(self, question, answer='', cb=None):
+        self.dialog = MDDialog(
+            type="custom",
+            title=title,
+            content_cls=t,
+            buttons=[
+                Button(
+                    text="Close", text_color=self.theme_cls.primary_color, on_press=cbr_yes
+                )
+            ],
+        )
+        self.dialog.set_normal_height()
+        self.dialog.open()
+
+    def showQR(self, text,title="QR"):
+        from kivy_garden.qrcode import QRCodeWidget
+        t =QRCodeWidget(data=text, size_hint=(1,None))
+        
+        def cbr_yes(*a):
+            print("Accept Button")
+            self.dialog.dismiss()
+
+    
+        def cbr_txt(*a):
+            print("Accept Button")
+            self.dialog.dismiss()
+            self.showText(text,title)
+
+        self.dialog = MDDialog(
+            type="custom",
+            title=title,
+            content_cls=t,
+            buttons=[
+                Button(
+                    text="Close", text_color=self.theme_cls.primary_color, on_press=cbr_yes
+                ),
+                Button(
+                    text="Show Text", text_color=self.theme_cls.primary_color, on_press=cbr_txt
+                )
+            ],
+        )
+        self.dialog.set_normal_height()
+        self.dialog.open()
+
+    def askQuestion(self, question, answer='', cb=None,multiline=False):
         "As a text box based question, with optional  default answer.  If user confirm, call cb."
 
-        t = MDTextField(text='', size_hint=(1,None))
+        t = MDTextField(text='', size_hint=(1,None),multiline=multiline,mode="rectangle")
 
         def cbr_yes(*a):
             print("Accept Button")

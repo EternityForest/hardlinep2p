@@ -80,7 +80,7 @@ class ServicesMixin():
         def save(*a):
             logging.info("SAVE BUTTON WAS PRESSED")
             # On android this is the bg service's job
-            hardline.makeUserService(None, name, c['Info'].get("title", 'Untitled'), service=c['Service'].get("service", ""),
+            daemonconfig.makeUserService(None, name, c['Info'].get("title", 'Untitled'), service=c['Service'].get("service", ""),
                                      port=c['Service'].get("port", ""), cacheInfo=c['Cache'], noStart=(platform == 'android'), useDHT=c['Access'].get("useDHT", "yes"))
             if platform == 'android':
                 self.stop_service()
@@ -91,7 +91,7 @@ class ServicesMixin():
         def delete(*a):
             def f(n):
                 if n and n == name:
-                    hardline.delUserService(None, n)
+                    daemonconfig.delUserService(None, n)
                     if platform == 'android':
                         self.stop_service()
                         self.start_service()
@@ -240,7 +240,7 @@ class ServicesMixin():
         self.localServicesListBox.clear_widgets()
 
         try:
-            s = hardline.listServices(None)
+            s = daemonconfig.listServices(None)
             time.sleep(0.5)
             for i in s:
                 self.localServicesListBox.add_widget(

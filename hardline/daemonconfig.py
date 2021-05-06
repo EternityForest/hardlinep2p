@@ -200,10 +200,12 @@ def loadUserDatabases(serviceDir, only=None, forceProxy=None):
         pass
 
     logger.info("Loading Databases from " + serviceDir)
+    r = []
 
     if os.path.exists(serviceDir):
         x = os.listdir(serviceDir)
         for i in x:
+            r.append(i)
             logger.info("File"+i)
             if not i.endswith(".db"):
                 continue
@@ -220,6 +222,7 @@ def loadUserDatabases(serviceDir, only=None, forceProxy=None):
                     os.path.join(serviceDir, i), forceProxy=forceProxy)
             except:
                 logger.exception(traceback.format_exc())
+    return r
 
 
 def makeUserDatabase(dir, name):

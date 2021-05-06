@@ -8,7 +8,7 @@ from enum import auto
 import logging
 from os.path import islink
 import shutil
-import websockets
+from . import websockets
 import asyncio
 import sqlite3
 import time
@@ -32,11 +32,56 @@ import uuid
 import time
 import struct
 
-from websockets import server
+from .websockets import server
 
 from .cidict import CaseInsensitiveDict
 
 databaseBySyncKeyHash = weakref.WeakValueDictionary()
+
+from os import environ
+
+def getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    """Resolve host and port into list of address info entries.
+
+    Translate the host/port argument into a sequence of 5-tuples that contain
+    all the necessary arguments for creating a socket connected to that service.
+    host is a domain name, a string representation of an IPv4/v6 address or
+    None. port is a string service name such as 'http', a numeric port number or
+    None. By passing None as the value of host and port, you can pass NULL to
+    the underlying C API.
+
+    The family, type and proto arguments can be optionally specified in order to
+    narrow the list of addresses returned. Passing zero as a value for each of
+    these arguments selects the full range of results.
+    """
+    # We override this function since we want to translate the numeric family
+    # and socket type values to enum constants.
+    addrlist = []
+    
+    
+    #Horrific HACC over android's inability to resolve anything!!!!!
+    #Assume that all localhost and subdomainst share an address, best we can do for now
+    if 'ANDROID_STORAGE' in environ and (host.endswith(".localhost") or host.endswith("127.0.0.1") or host.endswith("::1")):
+        for res in socket._socket.getaddrinfo('localhost', port, family, type, proto, flags):
+            af, socktype, proto, canonname, sa = res
+            addrlist.append((socket._intenum_converter(af, socket.AddressFamily),
+                            socket._intenum_converter(socktype, socket.SocketKind),
+                            proto, canonname, ('127.0.0.1' if af== socket.AF_INET6 else "::1",port)))
+
+    else:
+        try:
+            for res in socket._socket.getaddrinfo(host, port, family, type, proto, flags):
+                af, socktype, proto, canonname, sa = res
+                addrlist.append(( socket._intenum_converter(af, socket.AddressFamily),
+                                socket._intenum_converter(socktype, socket.SocketKind),
+                                proto, canonname, sa))
+        except:
+            print(host)
+            raise
+    return addrlist
+
+
+socket.getaddrinfo=getaddrinfo
 
 
 class Session():
@@ -61,7 +106,7 @@ async def DBAPI(websocket, path):
         a = await websocket.recv()
 
         databaseBySyncKeyHash[a[1:17]].dbConnect()
-
+        logging.info("incoming connection to DB! ")
         await websocket.send(databaseBySyncKeyHash[a[1:17]].handleBinaryAPICall(a, session))
         
         def f(x):
@@ -421,14 +466,13 @@ class DocumentDatabase():
         oldServerURL = self.serverURL
         loop = asyncio.new_event_loop()
 
-
+        logging.info("Server Manager Target is:"+oldServerURL)
         while oldServerURL == self.serverURL:
             try:
                 if loop.run_until_complete(self.openSessionAsClient()):
                     self.syncFailBackoff = 1
             except:
                 logging.exception("Error in DB Client")
-                logging.info(traceback.format_exc())
 
             self.syncFailBackoff *= 2
             self.syncFailBackoff = min(self.syncFailBackoff, 5*60)
@@ -455,13 +499,25 @@ class DocumentDatabase():
         #makes it easier for nontechnical users
         x = self.serverURL.split("://")[-1]
         if self.serverURL.split("://")[0] in ('wss','https'):
-            x= 'wss://'
+            x= 'wss://'+x
         else:
-            x='ws://'
+            x='ws://'+x
 
-        async with websockets.connect(x) as websocket:
+        if x.endswith("/"):
+            x=x[:-1]
+
+        port = x.split(":")[-1]
+        try:
+            #Move port off to own thing
+            port = int(port)
+            x = x[:-(len(str(port))+1)]
+        except:
+            port = 80 if x.startswith("ws://") else 443
+
+        logging.info("Connecting to "+x+" on port "+str(port))
+        async with websockets.connect(uri=x,port=port) as websocket:
+            logging.info("Connected to "+x)
             try:
-
                 self.dbConnect()
 
                 # Empty message so they know who we are
@@ -545,26 +601,12 @@ class DocumentDatabase():
             self.threadLocal.conn.create_function("json_extract",2,json_extract,deterministic=True)
 
 
-    def connectToServer(self, uri):
-        "Open a new sync connection to a server."
-        async def f(self):
-            async with websockets.connect(uri) as websocket:
-                name = input("What's your name? ")
-
-                await websocket.send(name)
-                logging.info(f"> {name}")
-
-                greeting = await websocket.recv()
-                logging.info(f"< {greeting}")
-
-        asyncio.create_task(f)
-
     def _checkIfNeedsResign(self,i):
-        "Check if we need to redo the sig on a record,sig pair because the key has changed.  Return sig, old sig if no correction needed"
+        "Check if we need to redo the sig on a record,sig pair because the key has changed.  Return sig, old sig if no correction needed"                
+        kdg = libnacl.crypto_generichash(base64.b64decode(self.syncKey))[:8]
         if not base64.b64decode(i[1])[24:].startswith(kdg):
             if self.writePassword:
                 mdg = libnacl.crypto_generichash(i[0].encode())[:24]
-                kdg = libnacl.crypto_generichash(base64.b64decode(self.syncKey))[:8]
                 sig = libnacl.crypto_sign_detached(mdg, base64.b64decode(self.writePassword))
                 signature = base64.b64encode(mdg+kdg+sig).decode()
                 id = json.loads(i[0])['id']

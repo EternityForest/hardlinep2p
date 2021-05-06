@@ -113,6 +113,34 @@ class StreamsMixin():
 
         self.screenManager.current = "EditStream"
 
+    
+    def showSharingCode(self,name,c,wp=True):
+        if daemonconfig.ddbservice[0]:
+            try:
+                localServer = daemonconfig.ddbservice[0].getSharableURL()
+            except:
+                logging.exception()
+        else:
+            localServer=''
+
+        d = {
+            'sv':c['Sync'].get('server','') or localServer,
+            'vk':c['Sync'].get("syncKey",''),
+            'n':name[:24]
+
+        }
+        if wp:
+            d['sk']=c['Sync'].get('writePassword','')
+        else:
+            d['sk']=''
+
+        import json
+        d=json.dumps(d,indent=0,separators=(',',':'))
+        if wp:
+            self.showQR(d, "Stream Code(full access)")
+        else:
+            self.showQR(d, "Stream Code(readonly)")
+
     def editStreamSettings(self, name):
         db = daemonconfig.userDatabases[name]
         c = db.config
@@ -180,7 +208,7 @@ class StreamsMixin():
         self.streamEditPanel.add_widget(keyButton)
 
         self.streamEditPanel.add_widget(
-            self.settingButton(c, "Sync", "server"))
+            serverBox:=self.settingButton(c, "Sync", "server"))
 
         self.streamEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="14sp",
                                               text='Do not include the http:// '))
@@ -197,6 +225,46 @@ class StreamsMixin():
 
         self.streamEditPanel.add_widget(
             self.settingButton(c, "Application", "notifications",'no'))
+
+
+
+
+        def f(*a):
+            def g(a):
+                try:
+                    import json
+                    a = json.loads(a)
+                    serverBox.text= c['Sync']['server']= a['sv'] or c['Sync']['server']
+                    keyBox.text= c['Sync']['syncKey']= a['vk']
+                    pBox.text= c['Sync']['writePassword']= a['sk']
+
+                except:
+                    pass
+            self.askQuestion("Enter Sharing Code",cb=g,multiline=True)
+
+
+        keyButton = Button(text='Load from Code',
+                    size_hint=(1, None), font_size="14sp")
+        keyButton.bind(on_press=f)
+        self.streamEditPanel.add_widget(keyButton)
+
+
+
+        def f(*a):
+            self.showSharingCode(name,c)
+
+        keyButton = Button(text='Show Sharing Code',
+                      size_hint=(1, None), font_size="14sp")
+        keyButton.bind(on_press=f)
+        self.streamEditPanel.add_widget(keyButton)
+
+        def f(*a):
+            self.showSharingCode(name,c,wp=False)
+
+        keyButton = Button(text='Readonly Sharing Code',
+                      size_hint=(1, None), font_size="14sp")
+        keyButton.bind(on_press=f)
+        self.streamEditPanel.add_widget(keyButton)
 
         btn1 = Button(text='Save Changes',
                       size_hint=(1, None), font_size="14sp")

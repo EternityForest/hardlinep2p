@@ -164,6 +164,7 @@ I don't have any new devices to test with, but it works fine on older android.  
 On Android, you can create services through the GUI. Cache and service info will Always be on the SD card if possible and will even be copied there from
 internal storage. Keep both device and card safe if the private keys thereon are important!!!!!!
 
+
 ## Security Considerations
 
 This is using SSL, and I've tried to keep things standard and avoid having too many places to mess up.  It provides an encrypted channel to a server, and does not allow
