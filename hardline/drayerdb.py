@@ -259,7 +259,9 @@ class DocumentDatabase():
         self.dbConnect()
 
         self.inTransaction=0
-       
+
+        #When we have uncommitted recprds this should be the arrival time of the first one
+        self.earliestUncommittedRecord=0       
 
         self.config = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
 
@@ -822,8 +824,27 @@ class DocumentDatabase():
                     finally:
                         self.commit()
             else:
+                rt = 0
                 for i in d['records']:
-                    self.setDocument(i[0],i[1],receivedFrom= b64RemoteNodeID)
+                    #Get the earliest arrival time of all these records.  We already have the records in our shared db, 
+                    # we just need to look them up by time range and relay them to all other nodes.
+                    if rt==0:
+                        rt = i[2]
+                    else:
+                        rt= min(rt,i[2])
+
+                try:
+                    for i in self.subscribers:
+                        try:
+                            x = self.getUpdatesForSession(self.subscribers[i],forceSendAfter=rt-1)
+                            if x:
+                                self.subscribers[i].send(x)
+                        except:
+                            logging.info(traceback.format_exc())
+                except:
+                    logging.info(traceback.format_exc())
+
+                
 
         if 'records' in r and not r['records']:
             del r['records']
@@ -840,17 +861,19 @@ class DocumentDatabase():
                 cur = self.threadLocal.conn.cursor()
                 # Avoid dumping way too much at once
                 cur.execute(
-                    "SELECT json,signature,arrival FROM document WHERE arrival>? AND receivedFrom!=? LIMIT 100", (session.lastResyncFlushTime or forceSendAfter,session.b64RemoteNodeID))
+                    "SELECT json,signature,arrival,receivedFrom FROM document WHERE arrival>? AND receivedFrom!=? LIMIT 100", (session.lastResyncFlushTime or forceSendAfter,session.b64RemoteNodeID))
 
                 # Let the client know that there are no records left out in between the start of this message and the end of what they have
                 #We know nothing is left out because we just checked the DB
                 r['recordsStartFrom'] = session.lastResyncFlushTime or forceSendAfter
 
                 for i in cur:
-                    logging.info("Pushing Update Record!")
-                    if not 'records' in r:
-                        r['records'] = []
-                    r['records'].append([i[0], i[1],i[2]])
+                    #Don't loop records
+                    if not i[3]==session.b64RemoteNodeID:
+                        logging.info("Pushing Update Record!")
+                        if not 'records' in r:
+                            r['records'] = []
+                        r['records'].append([i[0], i[1],i[2]])
 
                     session.lastResyncFlushTime = max(
                         session.lastResyncFlushTime, i[2])
@@ -1001,6 +1024,24 @@ class DocumentDatabase():
         with self.lock:
             self.dbConnect()
             self.threadLocal.conn.commit()
+        r = self.earliestUncommittedRecord
+        self.earliestUncommittedRecord = 0
+
+        try:
+            for i in self.subscribers:
+                try:
+                    #Their arrival time is ours, because we are the same DB.  By using -1 we are sure to catch the record.
+                    #In the case of same-database stuff, the record we are about 
+
+                    #Force only applies if they haven't made a request yet though, which usually only happens when we are doing
+                    #two processes with the same DB file.
+                    x = self.getUpdatesForSession(self.subscribers[i],forceSendAfter=r-1)
+                    if x:
+                        self.subscribers[i].send(x)
+                except:
+                    logging.info(traceback.format_exc())
+        except:
+            logging.info(traceback.format_exc())
 
     def saveConfig(self):
         with open(self.filename+".ini", 'w') as configfile:
@@ -1155,34 +1196,6 @@ class DocumentDatabase():
             signature = base64.b64encode(mdg+kdg+sig).decode()
 
        
-        #we  proxy through *all* messages
-        #Recieved from ourselves, even if we are old, because using yourself as a transparent proxy
-        #is explicitly supported.
-
-        #The use case is in having A be the friontend, B be the backend, and C being the remote server.
-        #A is a client of B on the same machine, two different processes but the same database to save space.
-        #B needs to forward all "new" records it gets from A to C, but the will not actually be new, because
-        #A already put them in the shared DB.  So we special case this logic!!!
-        if receivedFrom == base64.b64encode(self.localNodeVK).decode():
-            logging.info("Got message from the same database")
-            try:
-                for i in self.subscribers:
-                    logging.info("Subsciirber exists: "+str(self.subscribers[i].location))
-                    #Data wasting loop avoidance, which is essential in proxy mode or we would endlessly relay stuff back and forth between the same
-                    #copies of the same node
-                    if not self.subscribers[i].b64RemoteNodeID == receivedFrom:
-                        logging.info("Pushing update to subscriber "+("client" if (not self.subscribers[i].isClientSide) else "server")+" at "+self.subscribers[i].location)
-                        try:
-                            #Their arrival time is ours, because we are the same DB.  By using -1 we are sure to catch the record.
-                            x = self.getUpdatesForSession(self.subscribers[i], forceSendAfter=remoteArrivalTime-1)
-                            if x:
-                                self.subscribers[i].send(x)
-                        except:
-                            logging.info(traceback.format_exc())
-                    else:
-                        logging.info("But ignoring them")
-            except:
-                logging.info(traceback.format_exc())
 
         #Don't insert messages recieved from self that we already have
         if not receivedFrom == base64.b64encode(self.localNodeVK).decode():
@@ -1223,31 +1236,12 @@ class DocumentDatabase():
         #We don't have RETURNING yet, so we just read back the thing we just wrote to see what the DB set it's arrival to
         c = self.threadLocal.conn.execute("SELECT json, signature, arrival FROM document WHERE json_extract(json,'$.id')=?",(docObj['id'],)).fetchone()
         docObj = json.loads(c[0])
+        self.earliestUncommittedRecord = c[2]
         self._onRecordChange(docObj, c[1],c[2])
 
 
-        self.lastChange = time.time()
 
-        #Don't do that, we already proxy through *all* messages
-        #Recieved from ourselves, even if we are old, because using yourself as a transparent proxy
-        #is explicitly supported
-        if not receivedFrom == base64.b64encode(self.localNodeVK).decode():
-            try:
-                for i in self.subscribers:
-                    
-                    #Data wasting loop avoidance, which is essential in proxy mode or we would endlessly relay stuff back and forth between the same
-                    #copies of the same node
-                    if not self.subscribers[i].b64RemoteNodeID == receivedFrom:
-                        logging.info("Pushing update to subscriber "+("client" if (not self.subscribers[i].isClientSide) else "server")+" at "+self.subscribers[i].location)
-                        try:
-                            #ForceSendAfter only takes effect if we don't already know how much the client already has from us.
-                            x = self.getUpdatesForSession(self.subscribers[i], forceSendAfter=c[2]-1)
-                            if x:
-                                self.subscribers[i].send(x)
-                        except:
-                            logging.info(traceback.format_exc())
-            except:
-                logging.info(traceback.format_exc())
+        self.lastChange = time.time()
 
         if 'autoclean' in docObj:
             #Don't do it every time that would waste CPU

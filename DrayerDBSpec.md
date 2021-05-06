@@ -99,11 +99,27 @@ Payload
 ## Payload protocol
 The payload is a JSON object that can have the following keys.
 
-When we get a NEW record, we send it to all other peers.  However, if we and a peer ar using the same physical DB,
-the record will never be new, because they would have put it in the shared DB before sending.
+If we and a peer ar using the same physical DB, we may never get "get records" to send, because they would have put it in the shared DB before sending.
 
-Implementions must detect this, and always forward all records arriving from our own nodeID to other nodes, as we explicitly
-support multiple nodes sharing one sqlite database while using the protocol for IPC
+Implementions must detect this, and always trigger flushes for all all records arriving from our own nodeID to other nodes, as we explicitly
+support multiple nodes sharing one sqlite database while using the protocol for IPC.
+
+A flush is when you send every peer note all the records newer than hte last one you have sent them.
+
+The "clock" starts from their first request, we don't send any records older than that, EXCEPT that we must always send all new records(And all records we just got told
+about by peers sharing our same DB file!, because those peers likely don't share the same set of other peers as us!).
+
+The reason for this is that when sharing a DB file the usual mechanism of requesting records newer than the last message breaks down. We do not want to
+keep track of records sent to ourself every time, this would waste disk activity!!
+
+
+So, any time we commit a set of records, or hear about a set, we trigger a flush which sends all peers every record in the DB which is newer than the oldest record in the incoming set.
+
+Records have to be sent in contiguous blocks or else recordsStartFrom makes no sense!!
+
+The exception is that we do not have to send a peer any records that originally arrived from that exact peer, for very obvious reasons.
+
+
 
 ### records
 
