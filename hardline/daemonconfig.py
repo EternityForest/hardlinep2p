@@ -171,7 +171,7 @@ notesremaining = 12
 
 class defaultDBClass(drayerdb.DocumentDatabase):
     def onRecordChange(self, record, signature):
-
+        
         global lastnotehorizon, notesremaining
         elapsed = time.time()-lastnotehorizon
         notesremaining = min(12, notesremaining + elapsed/10)
@@ -189,8 +189,10 @@ class defaultDBClass(drayerdb.DocumentDatabase):
 
         return super().onRecordChange(record, signature)
 
+    
 
-def loadUserDatabases(serviceDir, only=None, forceProxy=None):
+
+def loadUserDatabases(serviceDir, only=None, forceProxy=None, callbackFunction=None):
     serviceDir = serviceDir or directories.drayerDB_root
 
     "Load services from a configuration directory.  Only to  only reload one."
@@ -201,6 +203,7 @@ def loadUserDatabases(serviceDir, only=None, forceProxy=None):
 
     logger.info("Loading Databases from " + serviceDir)
     r = []
+
 
     if os.path.exists(serviceDir):
         x = os.listdir(serviceDir)
@@ -220,6 +223,8 @@ def loadUserDatabases(serviceDir, only=None, forceProxy=None):
             try:
                 userDatabases[name] = defaultDBClass(
                     os.path.join(serviceDir, i), forceProxy=forceProxy)
+                
+                userDatabases[name].dataCallback = callbackFunction
             except:
                 logger.exception(traceback.format_exc())
     return r

@@ -39,8 +39,10 @@ from . import tables
 class PostsMixin():
 
 
-    def gotoStreamPost(self, stream,postID):
+    def gotoStreamPost(self, stream,postID,noBack=True):
         "Editor/viewer for ONE specific post"
+        self.unsavedDataCallback=None
+        
         self.streamEditPanel.clear_widgets()
         self.streamEditPanel.add_widget(MDToolbar(title="Post in "+stream+"(Autosave on)"))
 
@@ -50,10 +52,12 @@ class PostsMixin():
 
         fullpath =  daemonconfig.userDatabases[stream].getFullPath(document)
 
-        def goHere():
-            self.gotoStreamPost(stream, postID)
-        self.backStack.append(goHere)
-        self.backStack = self.backStack[-50:]
+        #Don't pollute history with timewaasters for every refresh
+        if not noBack:
+            def goHere():
+                self.gotoStreamPost(stream, postID)
+            self.backStack.append(goHere)
+            self.backStack = self.backStack[-50:]
 
 
         newtitle = MDTextField(text=document.get("title",''),mode='fill', multiline=False,font_size='22sp')
@@ -111,7 +115,7 @@ class PostsMixin():
                     daemonconfig.userDatabases[stream].commit()
                     self.unsavedDataCallback=None
 
-            self.gotoStreamPosts(stream)
+            self.goBack()
         
         def setUnsaved(*a):
             self.unsavedDataCallback = post
@@ -141,6 +145,8 @@ class PostsMixin():
                     with daemonconfig.userDatabases[stream]:
                         daemonconfig.userDatabases[stream].setDocument({'type':'null','id':postID})
                         daemonconfig.userDatabases[stream].commit()
+                        self.unsavedDataCallback=None
+                        self.currentPageNewRecordHandler=None
                     self.gotoStreamPosts(stream)
             self.askQuestion("Delete post permanently on all nodes?", postID, reallyDelete)
 
@@ -154,7 +160,7 @@ class PostsMixin():
 
         #This button takes you to it
         def goToProperties(*a):
-            self.gotoPostMetadata(stream,postID,document)
+            self.gotoPostMetadata(stream,postID,document,post)
           
         
 
@@ -164,21 +170,20 @@ class PostsMixin():
         buttons.add_widget(btn1)
 
 
-        #This button takes you to the full comments manager
-        def goToCommentsPage(*a):
+
+
+        def tableview(*a):
             def f(x):
                 if x:
                     self.unsavedDataCallback=None
-                    self.gotoStreamPosts(stream,parent=postID)
+                    self.currentPageNewRecordHandler=None
+                    self.gotoTableView(stream,postID)
             if self.unsavedDataCallback:
                 self.askQuestion("Discard changes?","yes",f)
             else:
                 f('yes')
 
-     
 
-        def tableview(*a):
-            self.gotoTableView(stream,postID)
         btn1 = Button(text='Data Table',
                 size_hint=(1, None), font_size="14sp")
 
@@ -194,6 +199,19 @@ class PostsMixin():
         for i in p:
             self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
 
+        
+        #This button takes you to the full comments manager
+        def goToCommentsPage(*a):
+            def f(x):
+                if x:
+                    self.unsavedDataCallback=None
+                    self.currentPageNewRecordHandler=None
+                    self.gotoStreamPosts(stream,parent=postID)
+            if self.unsavedDataCallback:
+                self.askQuestion("Discard changes?","yes",f)
+            else:
+                f('yes')
+
         btn1 = Button(text='Full Comments',
                       size_hint=(1, None), font_size="14sp")
         btn1.bind(on_release=goToCommentsPage)
@@ -201,8 +219,20 @@ class PostsMixin():
   
         self.screenManager.current = "EditStream"
 
-    def gotoStreamPosts(self, stream, startTime=0, endTime=0, parent='', search=''):
+        def onNewRecord(db,r,sig):
+            if db is daemonconfig.userDatabases[stream]:
+                if r.get('parent','')==document.get('parent','') and r['type']=="post":
+                    self.gotoStreamPost(stream,postID,noBack=True)
+        self.currentPageNewRecordHandler = onNewRecord
+
+    def gotoStreamPosts(self, stream, startTime=0, endTime=0, parent='', search='',noBack=False):
         "Handles both top level stream posts and comments, and searches.  So we can search comments if we want."
+
+        #We MUST ensure we clear this when leaving the page. Pst widgets do ut for us.
+        #If we do not, incomimg records may randomly take us back here.
+        #We need a better way of handling this!!!!!
+        self.currentPageNewRecordHandler=None
+
         self.streamEditPanel.clear_widgets()
         s = daemonconfig.userDatabases[stream]
         if not parent:
@@ -223,17 +253,21 @@ class PostsMixin():
         searchBar.add_widget(searchQuery)
         searchBar.add_widget(searchButton)
 
+
+
         def doSearch(*a):
             self.gotoStreamPosts(stream, startTime, endTime, parent,searchQuery.text.strip())
         searchButton.bind(on_release=doSearch)
 
-        def goHere():
-            self.gotoStreamPosts( stream, startTime, endTime, parent,search)
-        self.backStack.append(goHere)
-        self.backStack = self.backStack[-50:]
+        if not noBack:
+            def goHere():
+                self.gotoStreamPosts( stream, startTime, endTime, parent,search)
+            self.backStack.append(goHere)
+            self.backStack = self.backStack[-50:]
 
 
         def write(*a):
+            self.currentPageNewRecordHandler=None
             self.gotoNewStreamPost(stream,parent)
         btn1 = Button(text='Write a post',
                 size_hint=(1, None), font_size="14sp")
@@ -248,9 +282,9 @@ class PostsMixin():
 
         
         if not search:
-            p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=100, parent=parent))
+            p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parent))
         else:
-            p=list(s.searchDocuments(search,"post",startTime=startTime, endTime=endTime or 10**18, limit=100, parent=parent))
+            p=list(s.searchDocuments(search,"post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parent))
 
         if p:
             newest=p[0]['time']
@@ -319,11 +353,28 @@ class PostsMixin():
        
         for i in p:
             self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
+        
+        def onNewRecord(db,r,sig):
+            if db is daemonconfig.userDatabases[stream]:
+                if r.get('parent','')==parent and r['type']=="post":
+                    self.gotoStreamPosts(stream,startTime,endTime,parent, search,noBack=True)
+        self.currentPageNewRecordHandler = onNewRecord
+
         self.screenManager.current = "EditStream"
 
     def makePostWidget(self,stream, post):
         def f(*a):
-            self.gotoStreamPost(stream,post['id'])
+            def f2(d):
+                if d:
+                    self.currentPageNewRecordHandler=None
+                    self.unsavedDataCallback = False
+                    self.gotoStreamPost(stream,post['id'])
+
+            # If they have an unsaved post, ask them if they really want to leave.
+            if self.unsavedDataCallback:
+                self.askQuestion("Discard unsaved data?", 'yes', cb=f2)
+            else:
+                f2(True)
 
         #Chop to a shorter length, then rechop to even shorter, to avoid cutting off part of a long template and being real ugly.
         body=post.get('body',"?????")[:240].strip()
@@ -349,6 +400,7 @@ class PostsMixin():
         return l
 
     def gotoNewStreamPost(self, stream,parent=''):
+        self.currentPageNewRecordHandler=None
         self.streamEditPanel.clear_widgets()
         self.streamEditPanel.add_widget(MDToolbar(title="Posting in: "+stream+"(Autosave on)"))
 
@@ -375,10 +427,8 @@ class PostsMixin():
 
                 self.unsavedDataCallback=None
                 if goto:
-                    #Done with this, don't need it in back history
-                    if self.backStack:
-                        self.backStack.pop()
-                    self.gotoStreamPosts(stream)
+                    self.goBack()
+
         def post(*a):
             savepost(goto=True)
 
@@ -446,7 +496,7 @@ class PostsMixin():
 
         return screen
 
-    def gotoPostMetadata(self, stream, docID, document):
+    def gotoPostMetadata(self, stream, docID, document, autosavecallback):
         "Handles both top level stream posts and comments"
         self.postMetaPanel.clear_widgets()
         s = document
@@ -478,6 +528,7 @@ class PostsMixin():
                             s['lat']=lat
                             s['lon']=lon
                             location.text="Location: "+str(s.get("lat",0))+','+str(s.get('lon',0))
+                            self.unsavedDataCallback=autosavecallback
                     
                             return
                         except:
@@ -511,6 +562,7 @@ class PostsMixin():
             def f(selection):
                 s['icon'] = selection[len(directories.assetLibPath)+1:] if selection else ''
                 s['time']=None
+                self.unsavedDataCallback=autosavecallback
                 icon.text = "Icon: "+os.path.basename(s.get("icon",''))
 
                 #Immediately update the image as seen in the post editor window

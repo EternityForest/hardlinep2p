@@ -47,14 +47,6 @@ logging.Logger.manager.root = Logger
 Logger.setLevel(LOG_LEVELS["info"])
 
 
-# On android the service that will actually be handling these databases is in the background in a totally separate
-# process.  So we open an SECOND drayer database object for each, with the same physical storage, using the first as the server.
-# just for use in the foreground app.
-
-# Because of this, two connections to the same DB file is a completetely supported use case that drayerDB has optimizations for.
-if platform == 'android':
-    daemonconfig.loadUserDatabases(None, forceProxy='localhost:7004')
-
 
 # In this mode, we are just acting as a viewer for a file
 oneFileMode = False
@@ -69,6 +61,10 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         else:
             hardline.stop()
 
+    def onDrayerRecordChange(self,db,record,sig):
+        if self.currentPageNewRecordHandler:
+            self.currentPageNewRecordHandler(db,record,sig)
+
     def start_service(self, foo=None):
         if self.service:
             self.service.stop()
@@ -79,6 +75,12 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
             service = AndroidService('HardlineP2P Service', 'running')
             service.start('service started')
             self.service = service
+            # On android the service that will actually be handling these databases is in the background in a totally separate
+            # process.  So we open an SECOND drayer database object for each, with the same physical storage, using the first as the server.
+            # just for use in the foreground app.
+
+            # Because of this, two connections to the same DB file is a completetely supported use case that drayerDB has optimizations for.
+            daemonconfig.loadUserDatabases(None, forceProxy='localhost:7004',callbackFunction=self.onDrayerRecordChange)
         else:
             def f():
                 # Ensure stopped
@@ -88,9 +90,9 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
                     None)
 
                 daemonconfig.loadDrayerServerConfig()
-
+                self.currentPageNewRecordHandler=None
                 db = daemonconfig.loadUserDatabases(
-                    None)
+                    None,callbackFunction=self.onDrayerRecordChange)
                 hardline.start(7009)
                 # Unload them at exit because we will be loading them again on restart
                 for i in loadedServices:
@@ -116,7 +118,8 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         sm.add_widget(self.makeStreamEditPage())
         sm.add_widget(self.makeLogsPage())
         sm.add_widget(self.makePostMetaDataPage())
-
+        from kivy.base import EventLoop
+        EventLoop.window.bind(on_keyboard=self.hook_keyboard)
 
         self.theme_cls.primary_palette = "Green"
 
@@ -183,65 +186,41 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
 
         return mainScreen
 
+
+
+    def goBack(self,*a):
+        def f(d):
+            if d:
+                self.currentPageNewRecordHandler=None
+                self.unsavedDataCallback = False
+                # Get rid of the first one representing the current page
+                if self.backStack:
+                    self.backStack.pop()
+
+                # Go to the previous page, if that page left an instruction for how to get back to it
+                if self.backStack:
+                    self.backStack.pop()()
+                else:
+                    self.screenManager.current = "Main"
+
+        # If they have an unsaved post, ask them if they really want to leave.
+        if self.unsavedDataCallback:
+            self.askQuestion("Discard unsaved data?", 'yes', cb=f)
+        else:
+            f(True)
+
     def makeBackButton(self):
         btn1 = Button(text='Back',
                       size_hint=(1, None), font_size="14sp")
 
-        def back(*a):
-            def f(d):
-                if d:
-                    self.unsavedDataCallback = False
-                    # Get rid of the first one representing the current page
-                    if self.backStack:
-                        self.backStack.pop()
-
-                    # Go to the previous page, if that page left an instruction for how to get back to it
-                    if self.backStack:
-                        self.backStack.pop()()
-                    else:
-                        self.screenManager.current = "Main"
-
-            # If they have an unsaved post, ask them if they really want to leave.
-            if self.unsavedDataCallback:
-                self.askQuestion("Discard unsaved data?", 'yes', cb=f)
-            else:
-                f(True)
-
-        btn1.bind(on_press=back)
+        btn1.bind(on_press=self.goBack)
         return btn1
+    
+    def hook_keyboard(self, window, key, *largs):
+        if key == 27:
+            self.goBack()
+            return True 
 
-    def makeDataTablePage(self):
-        screen = Screen(name='TableView')
-        self.servicesScreen = screen
-
-        layout = BoxLayout(orientation='vertical', spacing=10)
-        screen.add_widget(layout)
-
-        layout.add_widget(MDToolbar(title="My Streams"))
-
-        def goMain(*a):
-            self.screenManager.current = "Main"
-
-        layout.add_widget(self.makeBackButton())
-
-        btn2 = Button(text='Create a Stream',
-                      size_hint=(1, None), font_size="14sp")
-
-        btn2.bind(on_press=self.promptAddStream)
-        layout.add_widget(btn2)
-
-        self.streamsListBoxScroll = ScrollView(size_hint=(1, 1))
-
-        self.streamsListBox = BoxLayout(
-            orientation='vertical', size_hint=(1, None), spacing=10)
-        self.streamsListBox.bind(
-            minimum_height=self.streamsListBox.setter('height'))
-
-        self.streamsListBoxScroll.add_widget(self.streamsListBox)
-
-        layout.add_widget(self.streamsListBoxScroll)
-
-        return screen
 
     def getPermission(self, type='all'):
         """

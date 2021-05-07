@@ -431,6 +431,20 @@ class DocumentDatabase():
 
         self.useSyncServer(forceProxy or self.config.get('Sync', 'server', fallback=None))
 
+    def close(self):
+        self.useSyncServer("")
+        try:
+            self.threadlocal.conn.close()
+        except:
+            pass
+        try:
+            if self.syncKey:
+                del databaseBySyncKeyHash[libnacl.crypto_generichash(
+                    libnacl.crypto_generichash(base64.b64decode(self.syncKey)))[:16]]
+        except KeyError:
+            pass
+
+
     def scanForDirectChanges():
         "Check the DB for any records that have been changed, but which "
         with self.lock:
@@ -1091,11 +1105,11 @@ class DocumentDatabase():
         else:
             docObj = doc
 
-        if 'parent' in doc:
-            if isinstance(doc['parent'],dict):
-                doc['parent']= self.getFullPath(doc['parent'])
+        if 'parent' in docObj:
+            if isinstance(docObj['parent'],dict):
+                docObj['parent']= self.getFullPath(docObj['parent'])
             else:
-                if doc['parent'].endswith("/"):
+                if docObj['parent'].endswith("/"):
                     raise ValueError("Parent cannot end with slash")
 
         logging.info("Setting record, recieved from: "+receivedFrom+" and local ID is "+base64.b64encode(self.localNodeVK).decode())
@@ -1261,6 +1275,13 @@ class DocumentDatabase():
             if arrival > self.lastDidOnRecordChange: 
                 self.onRecordChange(record, signature)
             self.lastDidOnRecordChange = arrival
+        
+            try:
+                if hasattr(self,"dataCallback"):
+                    if self.dataCallback:
+                        self.dataCallback(self,record,signature)
+            except:
+                logging.exception()
 
     def onRecordChange(self,record, signature):
         pass

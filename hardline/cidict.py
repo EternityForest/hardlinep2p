@@ -28,3 +28,7 @@ class CaseInsensitiveDict(collections.MutableMapping):
             if i.lower()==k:
                 del self._d[i]
 
+    def copy(self):
+        d = CaseInsensitiveDict()
+        d._d = self._d.copy()
+        return d

@@ -300,7 +300,7 @@ class TablesMixin():
                 daemonconfig.userDatabases[stream].commit()
                 self.unsavedDataCallback=None
 
-            self.gotoStreamPosts(stream)
+            self.goBack()
       
         btn1 = Button(text='Save Changes',
                       size_hint=(0.48, None), font_size="14sp")
