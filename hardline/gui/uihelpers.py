@@ -15,7 +15,7 @@ from kivy.utils import platform
 class AppHelpers():
     def showText(self, text,title="QR"):
        
-        t= MDTextField(text=text, multiline=True,size_hint=(1,None),mode="rectangle")
+        t= MDTextField(text=text, multiline=True,size_hint=(1,1),mode="rectangle")
         
         def cbr_yes(*a):
             print("Accept Button")
@@ -40,7 +40,7 @@ class AppHelpers():
         except:
             logging.exception("Could not get QR lib")
             return self.showText(text,title)
-        t =QRCodeWidget(data=text, size_hint=(1,None))
+        t =QRCodeWidget(data=text, size_hint=(1,1))
         
         def cbr_yes(*a):
             print("Accept Button")

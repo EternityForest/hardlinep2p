@@ -1301,7 +1301,7 @@ class DocumentDatabase():
             return x
         cur.close()
 
-    def getDocumentsByType(self, key, startTime=0, endTime=10**18, limit=100,parent=None):
+    def getDocumentsByType(self, key, startTime=0, endTime=10**18, limit=100,parent=None,descending=True):
         "Return documents meeting the filter criteria. Parent must by the full path of the parent record, to limit the results to children of that record."
         if isinstance(parent,str):
             pass
@@ -1311,12 +1311,21 @@ class DocumentDatabase():
 
         self.dbConnect()
         cur = self.threadLocal.conn.cursor()
-        if parent is None:
-            cur.execute(
-                "SELECT json from document WHERE json_extract(json,'$.type')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))>=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))<=? ORDER BY IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time')) desc LIMIT ?", (key,startTime,endTime, limit))
+
+        if descending:
+            if parent is None:
+                cur.execute(
+                    "SELECT json from document WHERE json_extract(json,'$.type')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))>=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))<=? ORDER BY IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time')) desc LIMIT ?", (key,startTime,endTime, limit))
+            else:
+                cur.execute(
+                    "SELECT json from document WHERE json_extract(json,'$.type')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))>=? AND ifnull(json_extract(json,'$.parent'),'')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))<=? ORDER BY IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time')) desc LIMIT ?", (key,startTime,parent,endTime, limit))
         else:
-            cur.execute(
-                "SELECT json from document WHERE json_extract(json,'$.type')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))>=? AND ifnull(json_extract(json,'$.parent'),'')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))<=? ORDER BY IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time')) desc LIMIT ?", (key,startTime,parent,endTime, limit))
+            if parent is None:
+                cur.execute(
+                    "SELECT json from document WHERE json_extract(json,'$.type')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))>=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))<=? ORDER BY IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time')) asc LIMIT ?", (key,startTime,endTime, limit))
+            else:
+                cur.execute(
+                    "SELECT json from document WHERE json_extract(json,'$.type')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))>=? AND ifnull(json_extract(json,'$.parent'),'')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))<=? ORDER BY IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time')) asc LIMIT ?", (key,startTime,parent,endTime, limit))
         
         for i in cur:
             try:

@@ -42,7 +42,7 @@ class PostsMixin():
     def gotoStreamPost(self, stream,postID,noBack=True):
         "Editor/viewer for ONE specific post"
         self.unsavedDataCallback=None
-        
+
         self.streamEditPanel.clear_widgets()
         self.streamEditPanel.add_widget(MDToolbar(title="Post in "+stream+"(Autosave on)"))
 
@@ -282,7 +282,12 @@ class PostsMixin():
 
         
         if not search:
-            p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parent))
+            if startTime:
+                #If we have a start time the initial search has to be ascending or we will just always get the very latest.
+                #So then we have to reverse it to give a consistent ordering
+                p = list(reversed(list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parent,descending=False))))
+            else:
+                p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parent))
         else:
             p=list(s.searchDocuments(search,"post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parent))
 
