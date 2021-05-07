@@ -39,7 +39,7 @@ from . import tables
 class PostsMixin():
 
 
-    def gotoStreamPost(self, stream,postID,noBack=True):
+    def gotoStreamPost(self, stream,postID,noBack=False):
         "Editor/viewer for ONE specific post"
         self.unsavedDataCallback=None
 
@@ -86,18 +86,25 @@ class PostsMixin():
         sourceText= [document.get("body",'')]
 
         newp = MDTextField(text=renderedText, multiline=True,size_hint=(1,0.5),mode="rectangle")
-
+        
+        #Keeps android virtual keyboard from covering us up
+        buffer = Widget(size_hint=(1,None),height=0)
 
         def f(instance, focus):
+            
             if focus:
+                buffer.height=640
                 newp.text = sourceText[0]
 
                 #Mark invalid because it can now change
                 sourceText[0]=None
             else:
+                buffer.height=0
                 sourceText[0] =newp.text
                 newp.text = tables.renderPostTemplate(daemonconfig.userDatabases[stream],postID, newp.text)
         newp.bind(focus=f)
+
+
 
 
 
@@ -128,7 +135,10 @@ class PostsMixin():
 
 
         self.streamEditPanel.add_widget(titleBar)
-        self.streamEditPanel.add_widget(newp)        
+        self.streamEditPanel.add_widget(newp)
+        self.streamEditPanel.add_widget(buffer)
+
+        
         
         buttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
 
@@ -199,6 +209,7 @@ class PostsMixin():
         for i in p:
             self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
 
+        commentsbuttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
         
         #This button takes you to the full comments manager
         def goToCommentsPage(*a):
@@ -212,10 +223,33 @@ class PostsMixin():
             else:
                 f('yes')
 
-        btn1 = Button(text='Full Comments',
-                      size_hint=(1, None), font_size="14sp")
+        btn1 = Button(text='Comments',
+                      size_hint=(0.4, None), font_size="14sp")
         btn1.bind(on_release=goToCommentsPage)
-        self.streamEditPanel.add_widget(btn1)
+        commentsbuttons.add_widget(btn1)
+
+
+
+
+      #This button takes you to the full comments manager
+        def writeComment(*a):
+            def f(x):
+                if x:
+                    self.unsavedDataCallback=None
+                    self.currentPageNewRecordHandler=None
+                    self.gotoNewStreamPost(stream,postID)
+            if self.unsavedDataCallback:
+                self.askQuestion("Discard changes?","yes",f)
+            else:
+                f('yes')
+
+        btn1 = Button(text='Add',
+                      size_hint=(0.4, None), font_size="14sp")
+        btn1.bind(on_release=writeComment)
+        commentsbuttons.add_widget(btn1)
+
+
+        self.streamEditPanel.add_widget(commentsbuttons)
   
         self.screenManager.current = "EditStream"
 
@@ -412,7 +446,7 @@ class PostsMixin():
         self.streamEditPanel.add_widget(self.makeBackButton())
         
         def goHere():
-            self.gotoStreamPost(stream,parent)
+            self.gotoNewStreamPost(stream,parent)
         self.backStack.append(goHere)
         self.backStack = self.backStack[-50:]
 
@@ -432,7 +466,15 @@ class PostsMixin():
 
                 self.unsavedDataCallback=None
                 if goto:
-                    self.goBack()
+                    self.backStack.pop()
+                    try:
+                        if parent:
+                            self.gotoStreamPost(stream,parent)
+                        else:
+                            self.gotoStreamPosts(stream)
+                    except:
+                        logging.exception("Error going to root of where we just put comment")
+                        self.goBack()
 
         def post(*a):
             savepost(goto=True)
@@ -577,17 +619,17 @@ class PostsMixin():
                     self.currentlyViewedPostImage.source = src
                 self.openFM.close()
             
-            def e(selection):
+            def e(*a):
                 self.openFM.close()
 
             #Autocorrect had some fun with the kivymd devs
             try:
-                self.openFM= MDFileManager(select_path=f,preview=True)
+                self.openFM= MDFileManager(select_path=f,preview=True,exit_manager=e)
             except:
                 try:
-                    self.openFM= MDFileManager(select_path=f,previous=True)
+                    self.openFM= MDFileManager(select_path=f,previous=True,exit_manager=e)
                 except:
-                    self.openFM= MDFileManager(select_path=f)
+                    self.openFM= MDFileManager(select_path=f,exit_manager=e)
 
             self.openFM.show(os.path.join(directories.assetLibPath,'icons'))
 

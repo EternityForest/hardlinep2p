@@ -130,6 +130,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
 
         self.screenManager = sm
 
+
         Clock.schedule_interval(self.flushUnsaved, 60*5)
 
         return sm
@@ -190,6 +191,10 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
 
     def goBack(self,*a):
         def f(d):
+            try:
+                self.openFM.close()
+            except:
+                pass
             if d:
                 self.currentPageNewRecordHandler=None
                 self.unsavedDataCallback = False
