@@ -38,7 +38,7 @@ from .cidict import CaseInsensitiveDict
 
 databaseBySyncKeyHash = weakref.WeakValueDictionary()
 
-from os import environ
+from os import environ, write
 
 def getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
     """Resolve host and port into list of address info entries.
@@ -245,6 +245,10 @@ class DocumentDatabase():
         self.filename = os.path.abspath(filename)
         self.threadLocal = threading.local()
 
+
+        #Track pending null records so we know to also null out any child records when we commit.
+        self.uncommittedNullRecordsIDs={}
+
         # A hint to know when to do real rescan
         self.lastChange = 0
 
@@ -290,7 +294,9 @@ class DocumentDatabase():
                 #Preferentially use documentTime, if htat is not available use the low level data timestamp.
                 #documentTime is a user-settable field that can go backwards, wheras time must be the raw record creation time
                 self.threadLocal.conn.execute(
-                    '''CREATE INDEX IF NOT EXISTS document_type_parent_time ON document(json_extract(json,"$.type"),IFNULL(json_extract(json,"$.parent"),""), IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))) ''')
+                    '''CREATE INDEX IF NOT EXISTS document_parent_type_time ON document(IFNULL(json_extract(json,"$.parent"),"")  ,json_extract(json,"$.type"), IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))) ''')
+                
+                
                 self.threadLocal.conn.execute(
                     '''CREATE INDEX IF NOT EXISTS document_link ON document(json_extract(json,"$.link")) WHERE json_extract(json,"$.link") IS NOT null''')
                 self.threadLocal.conn.execute(
@@ -408,6 +414,9 @@ class DocumentDatabase():
         if self.config['Sync'].get("serve",'').strip():
             servable= self.config['Sync'].get("serve").lower() in ("true",'yes','on','enable')
 
+
+
+    
         if self.syncKey and servable:
             databaseBySyncKeyHash[libnacl.crypto_generichash(
                 libnacl.crypto_generichash(base64.b64decode(self.syncKey)))[:16]] = self
@@ -430,6 +439,15 @@ class DocumentDatabase():
         cur.close()
 
 
+        # #Legacy Fixup!!!
+
+        # for j in ('row','post','row.template'):
+        #     for i in self.getDocumentsByType(j):
+        #         if 'parent' in i:
+        #             i['time']+=1
+        #             i['parent']=i['parent'].split("/")[-1].replace('.$','')
+        #             self.setDocument(i)
+        # self.commit()
 
         self.useSyncServer(forceProxy or self.config.get('Sync', 'server', fallback=None))
 
@@ -916,7 +934,7 @@ class DocumentDatabase():
             logging.info("Not fully connected yet")
 
     def getAllRelatedRecords(self,record,r=None,children=True):
-        "Get all children of this record, and all ancestors, as (json, signature, arrival) indexed by ID"
+        "Get all children of this record, and all ancestors, as (json, signature, arrival) indexed by ID.  Note that we want all the null records so we can export deletions."
         records = {}
         r = r or {}
         with self.lock:
@@ -925,17 +943,17 @@ class DocumentDatabase():
             cur.execute(
                 'SELECT json,signature,arrival FROM document WHERE  json_extract(json,"$.id")=?', (record,))
 
+            #Expect exactly one result here
             for i in cur:
                 d =json.loads(i[0])
+
                 id = d['id']
                 r[id]=i
 
                 if children:
                     cur2 = self.threadLocal.conn.cursor()
-                    fullpath = self.getFullPath(d)
-
                     cur2.execute(
-                        'SELECT json,signature,arrival FROM document WHERE  json_extract(json,"$.parent") LIKE ? COLLATE NOCASE', (fullpath+'%',))
+                        'SELECT json,signature,arrival FROM document WHERE  json_extract(json,"$.parent")=?', (d['id'],))
 
                     for j in cur2:
                         d2 =json.loads(j[0])
@@ -945,7 +963,7 @@ class DocumentDatabase():
                 if d.get('parent',''):
                     cur.close()
                     #Last element of the parent is the direct ID of the parent element
-                    return self.getAllRelatedRecords(d['parent'].split("/")[-1],r,children=False)
+                    return self.getAllRelatedRecords(d['parent'],r,children=False)
                 cur.close()
                 return r
             cur.close()
@@ -1053,6 +1071,10 @@ class DocumentDatabase():
     def commit(self):
         with self.lock:
             self.dbConnect()
+            for i in self.uncommittedNullRecordsIDs:
+                self.propagateNulls(i)
+                self.uncommittedNullRecordsIDs={}
+
             self.threadLocal.conn.commit()
         r = self.earliestUncommittedRecord
         self.earliestUncommittedRecord = 0
@@ -1098,20 +1120,11 @@ class DocumentDatabase():
             else:
                 return time.time()*10**6
 
-    def setDocument(self, doc, signature=None,receivedFrom = '',remoteArrivalTime=0):
+    def setDocument(self, doc, signature=None,receivedFrom = '',remoteArrivalTime=0,parentIsNull=False):
         with self.lock:
-            self._setDocument(doc, signature,receivedFrom,remoteArrivalTime)
+            self._setDocument(doc, signature,receivedFrom,remoteArrivalTime,parentIsNull)
 
-    def getFullPath(self, doc):
-        if doc.get('parent',''):
-            p= doc['parent']
-            if p[-1]=='/':
-                p=p[:-1]
-            return p+"/"+doc['id']
-        else:
-            return doc['id']
-
-    def _setDocument(self, doc, signature=None,receivedFrom = '',remoteArrivalTime=0):
+    def _setDocument(self, doc, signature=None,receivedFrom = '',remoteArrivalTime=0,parentIsNull=False):
         """Two modes: Locally generate a signature, or use the existing sig data.
             When the record is remotely recieved, you must specify what arrival time the remote node thinks it came in at.        
         """
@@ -1123,17 +1136,30 @@ class DocumentDatabase():
 
         if 'parent' in docObj:
             if isinstance(docObj['parent'],dict):
-                docObj['parent']= self.getFullPath(docObj['parent'])
-            else:
-                if docObj['parent'].endswith("/"):
-                    raise ValueError("Parent cannot end with slash")
+                docObj['parent']= docObj['parent']['id']
+
+
+            #Detect if we have a deleted ancestor newer than we are, and if so, insert a null instead of this record.
+
+            #TODO: All descendants of a deleted node become orphans that just hang around forever if they happen to be newer than
+            #The deleted ancestor. Bad news!
+
+
+            if 'id' in docObj:
+                if self.writePassword:
+                    x= self.getDocumentByID(docObj['parent'],returnAncestorNull=True)
+                    if x and isinstance(x,dict) and x['type']=='null' and x['time']>docObj.get('time',time.time()*10**6):
+                        return self._setDocument({'type':'null','id':docObj['id'], 'time': x['time']})
+
+
+
 
         logging.info("Setting record, recieved from: "+receivedFrom+" and local ID is "+base64.b64encode(self.localNodeVK).decode())
 
 
         
         self.dbConnect()
-        
+        oldVersionData={}
         if 'id' in docObj:
             uid = docObj['id']
             #Ensure corrrectness of UUID representation
@@ -1248,8 +1274,20 @@ class DocumentDatabase():
                 else:
                     return docObj['id']
 
-            c = self.threadLocal.conn.execute(
-                "INSERT INTO document VALUES (null,?,?,?,?,?)", (d, signature,self.makeNewArrivalTimestamp(),receivedFrom,'{}'))
+            #If the previous document was marked as a leaf node, and we are deleting it, the parent tombstone is enough,
+            #We have no children that we need to have a tombstone to make sure they stay orphans.
+            #We already deleted the old record, so just don't insert the new one in that specific case.
+            if not(parentIsNull and oldVersionData.get('leafNode',True) and docObj['type']=='null'):
+                if docObj['type']=='null':
+                    self.uncommittedNullRecordsIDs[docObj['id']]=True
+                else:
+                    try:
+                        del self.uncommittedNullRecordsIDs[docObj['id']]
+                    except KeyError:
+                        pass
+
+                c = self.threadLocal.conn.execute(
+                    "INSERT INTO document VALUES (null,?,?,?,?,?)", (d, signature,self.makeNewArrivalTimestamp(),receivedFrom,'{}'))
 
         #Delete the cache item right after we insert it.
         try:
@@ -1257,22 +1295,16 @@ class DocumentDatabase():
         except KeyError:
             pass
 
-        # If we are marking this as deleted, we can ditch everything that depends on it.
-        # We don't even have to just set them as deleted, we can relly delete them, the deleted parent record
-        # is enough for other nodes to know this shouldn't exist anymore.
-        if docObj['type'] == "null":
-            fullpath=self.getFullPath(docObj)
 
-            self.threadLocal.conn.execute(
-                "DELETE FROM document WHERE json_extract(json,'$.parent') LIKE ? COLLATE NOCASE", (fullpath+'%',))
 
 
         #We don't have RETURNING yet, so we just read back the thing we just wrote to see what the DB set it's arrival to
         c = self.threadLocal.conn.execute("SELECT json, signature, arrival FROM document WHERE json_extract(json,'$.id')=?",(docObj['id'],)).fetchone()
-        docObj = json.loads(c[0])
-        self.earliestUncommittedRecord = c[2]
-        self._onRecordChange(docObj, c[1],c[2])
-
+        if c:
+            docObj = json.loads(c[0])
+            self.earliestUncommittedRecord = c[2]
+            self._onRecordChange(docObj, c[1],c[2])
+            
 
 
         self.lastChange = time.time()
@@ -1286,6 +1318,53 @@ class DocumentDatabase():
                     c = self.threadLocal.conn.execute("DELETE FROM document WHERE json_extract(json,'$.autoclean')=? AND ifnull(json_extract(json,'$.parent'),'')=? AND json_extract(json,'$.time')<?",(docObj['autoclean'],docObj.get('parent',''), horizon )).fetchone()
 
         return docObj['id']
+
+
+    def propagateNulls(self, record,propagateTime=0):
+        "On getting a batch of records, null out the children of any records that are null"
+
+        with self.lock:
+            #Heavy duty defensive programming for such a dangerous function.
+            r = self.getDocumentByID(record,returnAncestorNull=True)
+            if not r:
+                return
+            
+            if not propagateTime:
+                propagateTime=r['time']
+
+            if not r['type']=='null':
+                return
+
+            if self.writePassword:
+                # If we are marking this as deleted, we can ditch everything that depends on it.
+                # We don't even have to just set them as deleted, we can relly delete them, the deleted parent record
+                # is enough for other nodes to know this shouldn't exist anymore.
+                l = []
+                lastround = {}
+                for i in range(100000):
+                    #Only children that are older than the deletion of the parent should be null propagated in this way.  
+                    #The rest we consider blocked. They become an orphan record.
+                    thisround = {}
+                    c=self.threadLocal.conn.execute(
+                        "SELECT json FROM document WHERE json_extract(json,'$.parent')=? AND json_extract(json,'$.time')<? LIMIT 1000", (record,r['time']))
+                    for i in c:
+                        x = json.loads(i[0])
+                        l.append((x['id'],x['time']))
+                        thisround[x['id']]=True
+
+                    #Look to see if this query has anything last did not
+                    shouldbreak=True
+
+                    for i in l:
+                        #Note that we propagate the timestamp of the null.
+                        self.setDocument({'type':'null', 'id':i[0], 'time':propagateTime},parentIsNull=True)
+                        self.propagateNulls(i[0])
+                        if not i[0] in lastround:
+                            shouldbreak=False
+                    if shouldbreak:
+                        break
+                    lastround=thisround
+        
 
     def _onRecordChange(self,record, signature, arrival):
         #Ensure once and only once, at least within a session.
@@ -1306,32 +1385,75 @@ class DocumentDatabase():
     def onRecordChange(self,record, signature):
         pass
 
-    def getDocumentByID(self, key):
-        if key in self.documentCache:
-            try:
-                return self.documentCache[key]
-            except KeyError:
-                pass
+    def getDocumentByID(self, key, recursionLimit=1024,returnAncestorNull=False):
+        """Returns null on orphan documents.  Uses a cache to check for that.  
+        
+        returnAncestorNull is a special mode that returns the actual node that made the key an orphan if possible,
+        if it is an orphan.  It will return the first null up the whole chain.
 
-        "Return None or one document by exact ID match. ID may be string or UUID instance"
-        key=str(key)
-        self.dbConnect()
-        cur = self.threadLocal.conn.cursor()
-        cur.execute(
-            "SELECT json from document WHERE json_extract(json,'$.id')=?", (key,))
-        x = cur.fetchone()
-        if x:
-            x= json.loads(x[0])
-            if x.get("type",'')=='null':
-                return None
-            self.documentCache[key]=x
-            if len(self.documentCache)>32:
+        None is for "temp orphans" which might hjust have not had the parent record come in yet.  That is when
+        eeither the record itself or one of the ancestors is missing.
+        
+        """
+
+
+        with self.lock:
+            x=None
+            r=None
+            #We have to check the whole entire chain of parent records right up to the very top.
+            #If there is a garbage cycle we have a big problem.
+            if recursionLimit<0:
+                raise RuntimeError("Reference cycle is likely in this document.")
+
+            recursionLimit-=1
+
+            if key in self.documentCache:
+                try:
+                    x= self.documentCache[key]
+                    #lru renew
+                    self.documentCache[key]=x
+                except KeyError:
+                    pass
+
+            if not x:
+                "Return None or one document by exact ID match. ID may be string or UUID instance"
+                key=str(key)
+                self.dbConnect()
+                cur = self.threadLocal.conn.cursor()
+                cur.execute(
+                    "SELECT json from document WHERE json_extract(json,'$.id')=?", (key,))
+                x = cur.fetchone()
+                cur.close()
+                if x:
+                    x= json.loads(x[0])
+                self.documentCache[key]=x
+
+
+            if x:
+                r=x
+                if x.get("type",'')=='null':
+                    if returnAncestorNull:
+                        return x
+
+                else:
+                    #Record has a parent.  If it is False/deleted, so are we.
+                    #If it is None/just plain not found, we are a(possibly temporary)
+                    #orphan, so the status propagates
+                    if 'parent' in x and x['parent']:
+                        p = self.getDocumentByID(x['parent'],recursionLimit=recursionLimit,returnAncestorNull=returnAncestorNull)
+                        if not p:
+                            r=p
+                            x=p
+
+            while len(self.documentCache)>64:
                 try:
                     self.documentCache.pop(True)
                 except:
-                    logging.exception("cleanup error, ignorinf")
-            return x
-        cur.close()
+                    logging.exception("cleanup error, ignoring")
+            
+            return r
+
+   
 
     def getDocumentsByType(self, key, startTime=0, endTime=10**18, limit=100,parent=None,descending=True):
         """Return documents meeting the filter criteria. Parent should by the full path of the parent record, to limit the results to children of that record.
@@ -1340,23 +1462,9 @@ class DocumentDatabase():
         if not parent:
             parentPath=parent
         elif isinstance(parent,str):
-
-            #Detect that someone may be giving us a raw ID not a full path.
-            #More defensive than anything else really, only works if we actually have the parent record.  But most of the time we do
-            if parent and not '.' in parent:
-                x = self.getDocumentByID(parent)
-                if x:
-                    parentPath=self.getFullPath(x)
-
-                #Record does not exist, assume the
-                else:
-                    parentPath=parent
-            else:
-                parentPath=parent
-        elif parent is None:
-            parentPath=parent
+           parentPath=parent
         else:
-            parent=self.getFullPath(parent)
+            parentPath=parent['id']
 
 
         self.dbConnect()
@@ -1382,7 +1490,12 @@ class DocumentDatabase():
                 x = json.loads(i[0])
             except:
                 continue
+
             if not x.get('type','')=='null':
+                #Look for orphan records that have been 'deleted'
+                if parent is None and 'parent' in x:
+                    if not self.getDocumentByID(x['parent'].split("/")[-1]):
+                        continue
                 yield x
         cur.close()
 
@@ -1397,21 +1510,11 @@ class DocumentDatabase():
         if not parent:
             parentPath=parent
         elif isinstance(parent,str):
-            #Detect that someone may be giving us a raw ID not a full path.
-            #More defensive than anything else really, only works if we actually have the parent record.  But most of the time we do
-            if parent and not '.' in parent:
-                x = self.getDocumentByID(parent)
-                if x:
-                    parentPath=self.getFullPath(x)
-
-                #Record does not exist, assume the
-                else:
-                    parentPath=parent
-            else:
-                parentPath=parent
+           parentPath=parent
         else:
-            parentPath=self.getFullPath(parent)
-            
+            parentPath=parent['id']
+
+
         self.dbConnect()
         cur = self.threadLocal.conn.cursor()
         r=[]

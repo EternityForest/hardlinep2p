@@ -144,10 +144,9 @@ def renderPostTemplate(db, postID,text, limit=100000000):
     d = db.getDocumentByID(postID)
     if not d:
         return ''
-    path = db.getFullPath(d)
 
     #Need to be able to go slightly 
-    rows = db.getDocumentsByType('row',parent=path)
+    rows = db.getDocumentsByType('row',parent=postID)
 
     ctx = {}
     
@@ -158,7 +157,7 @@ def renderPostTemplate(db, postID,text, limit=100000000):
             return text
         for j in i:
             if j.startswith("row."):
-                ctx[j[4:]]=ColumnIterator(db,path, j)
+                ctx[j[4:]]=ColumnIterator(db,postID, j)
                 
     replacements ={}
     for i in search:
@@ -189,7 +188,6 @@ class TablesMixin():
         self.streamEditPanel.clear_widgets()
         s = daemonconfig.userDatabases[stream]
         parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent)
-        fullpath = daemonconfig.userDatabases[stream].getFullPath(parentDoc)
         self.streamEditPanel.add_widget(self.makeBackButton())
 
         postWidget=self.makePostWidget(stream,parentDoc)
@@ -236,8 +234,8 @@ class TablesMixin():
             else:
                 id=str(uuid.uuid4())
             
-            x = daemonconfig.userDatabases[stream].getDocumentsByType("row.template", parent=fullpath,limit=1) 
-            newDoc = {'parent': fullpath,'id':id, 'name':newRowName.text.strip() or id, 'type':'row'}
+            x = daemonconfig.userDatabases[stream].getDocumentsByType("row.template", parent=parent,limit=1) 
+            newDoc = {'parent': parent,'id':id, 'name':newRowName.text.strip() or id, 'type':'row', 'leafNode':True}
 
             #Use the previously created or modified row as the template
             for i in x:
@@ -261,9 +259,9 @@ class TablesMixin():
         self.streamEditPanel.add_widget(topbar)
         
         if not search:
-            p = s.getDocumentsByType("row", limit=1000, parent=fullpath)
+            p = s.getDocumentsByType("row", limit=1000, parent=parent)
         else:
-            p = s.searchDocuments(search,"row", limit=1000, parent=fullpath)
+            p = s.searchDocuments(search,"row", limit=1000, parent=parent)
 
 
 
@@ -343,7 +341,7 @@ class TablesMixin():
         #Give it a name because eventually we may want to have multiple templates.
         #Give it an ID so it can override any existing children of that template.
         #Use only the direct ID of the parent record in cade we want to move it eventually.
-        oldTemplate= {'type':"row.template",'parent':document['parent'], 'name': 'default', 'id':uuid.uuid5(uuid.UUID(document['parent'].split("/")[-1]),".rowtemplate.default")}
+        oldTemplate= {'type':"row.template",'leafNode':True, 'parent':document['parent'], 'name': 'default', 'id':uuid.uuid5(uuid.UUID(document['parent'].split("/")[-1]),".rowtemplate.default")}
 
         for i in daemonconfig.userDatabases[stream].getDocumentsByType("row.template", parent=document['parent'],limit=1):
             oldTemplate=i

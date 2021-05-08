@@ -57,7 +57,6 @@ class PostsMixin():
         
         document = daemonconfig.userDatabases[stream].getDocumentByID(postID)
 
-        fullpath =  daemonconfig.userDatabases[stream].getFullPath(document)
 
         #Don't pollute history with timewaasters for every refresh
         if not noBack:
@@ -215,7 +214,7 @@ class PostsMixin():
             1, None), halign="center", text="Recent Comments:"))
 
         s = daemonconfig.userDatabases[stream]
-        p = s.getDocumentsByType("post", limit=5,parent=fullpath)
+        p = s.getDocumentsByType("post", limit=5,parent=postID)
         for i in p:
             self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
 
@@ -338,7 +337,7 @@ class PostsMixin():
 
 
         if parent:
-            parentPath=s.getFullPath(s.getDocumentByID(parent))
+            parentPath=s.getDocumentByID(parent)['id']
         else:
             parentPath=''
 
@@ -503,7 +502,7 @@ class PostsMixin():
                 with daemonconfig.userDatabases[stream]:
                     d = {'body': newp.text,'title':newtitle.text,'type':'post'}
                     if parent:
-                        d['parent'] = daemonconfig.userDatabases[stream].getFullPath(daemonconfig.userDatabases[stream].getDocumentByID(parent))
+                        d['parent'] = parent
 
                     daemonconfig.userDatabases[stream].setDocument(d)
                     daemonconfig.userDatabases[stream].commit()
