@@ -237,7 +237,7 @@ def readNodeID():
         return base64.b64decode(f.read().strip())
 
 
-
+import collections
 
 class DocumentDatabase():
     def __init__(self, filename, keypair=None, servable=True,forceProxy=None):
@@ -248,6 +248,7 @@ class DocumentDatabase():
         # A hint to know when to do real rescan
         self.lastChange = 0
 
+        self.documentCache=collections.OrderedDict()
 
         #Android apparently doesbn't accept multiple cursors doimf stuff so we have to be ultra careful about that
         self.lock = threading.RLock()
@@ -267,6 +268,7 @@ class DocumentDatabase():
 
         if os.path.exists(filename+".ini"):
             self.config.read(filename+".ini")
+
 
         self.threadLocal.conn.row_factory = sqlite3.Row
         with self:
@@ -445,7 +447,7 @@ class DocumentDatabase():
             pass
 
 
-    def scanForDirectChanges():
+    def scanForDirectChanges(self):
         "Check the DB for any records that have been changed, but which "
         with self.lock:
             cur = self.threadLocal.conn.cursor()
@@ -453,7 +455,13 @@ class DocumentDatabase():
             cur.execute(
                 "SELECT json,signature,arrival FROM document WHERE arrival>?", (self.lastDidOnRecordChange,))
             for i in cur:
-                self._onRecordChange(json.loads(i[0]),i[1],i[2])
+                r = json.loads(i[0])
+                try:
+                    del self.documentCache[r['id']]
+                except KeyError:
+                    pass
+
+                self._onRecordChange(r,i[1],i[2])
             cur.close()
 
     def useSyncServer(self, server, permanent=False):
@@ -846,6 +854,14 @@ class DocumentDatabase():
                         rt = i[2]
                     else:
                         rt= min(rt,i[2])
+                    docObj = json.loads(i[0])
+                    try:
+                        del self.documentCache[docObj['id']]
+                    except KeyError:
+                        pass
+                    #onRecordChange is not guaranteed to be once and only once!!!
+                    self._onRecordChange(docObj, i[1],i[2])
+
 
                 try:
                     for i in self.subscribers:
@@ -1235,7 +1251,11 @@ class DocumentDatabase():
             c = self.threadLocal.conn.execute(
                 "INSERT INTO document VALUES (null,?,?,?,?,?)", (d, signature,self.makeNewArrivalTimestamp(),receivedFrom,'{}'))
 
-
+        #Delete the cache item right after we insert it.
+        try:
+            del self.documentCache[docObj['id']]
+        except KeyError:
+            pass
 
         # If we are marking this as deleted, we can ditch everything that depends on it.
         # We don't even have to just set them as deleted, we can relly delete them, the deleted parent record
@@ -1287,6 +1307,12 @@ class DocumentDatabase():
         pass
 
     def getDocumentByID(self, key):
+        if key in self.documentCache:
+            try:
+                return self.documentCache[key]
+            except KeyError:
+                pass
+
         "Return None or one document by exact ID match. ID may be string or UUID instance"
         key=str(key)
         self.dbConnect()
@@ -1298,13 +1324,37 @@ class DocumentDatabase():
             x= json.loads(x[0])
             if x.get("type",'')=='null':
                 return None
+            self.documentCache[key]=x
+            if len(self.documentCache)>32:
+                try:
+                    self.documentCache.pop(True)
+                except:
+                    logging.exception("cleanup error, ignorinf")
             return x
         cur.close()
 
     def getDocumentsByType(self, key, startTime=0, endTime=10**18, limit=100,parent=None,descending=True):
-        "Return documents meeting the filter criteria. Parent must by the full path of the parent record, to limit the results to children of that record."
-        if isinstance(parent,str):
-            pass
+        """Return documents meeting the filter criteria. Parent should by the full path of the parent record, to limit the results to children of that record.
+            You can try to just use the direct parent ID but that is not a guarantee, it returns nothing if we don't have the parent record.
+        """
+        if not parent:
+            parentPath=parent
+        elif isinstance(parent,str):
+
+            #Detect that someone may be giving us a raw ID not a full path.
+            #More defensive than anything else really, only works if we actually have the parent record.  But most of the time we do
+            if parent and not '.' in parent:
+                x = self.getDocumentByID(parent)
+                if x:
+                    parentPath=self.getFullPath(x)
+
+                #Record does not exist, assume the
+                else:
+                    parentPath=parent
+            else:
+                parentPath=parent
+        elif parent is None:
+            parentPath=parent
         else:
             parent=self.getFullPath(parent)
 
@@ -1343,10 +1393,24 @@ class DocumentDatabase():
 
     
     def searchDocuments(self, key, type,startTime=0,  endTime=10**18, limit=100,parent=None):
-        if isinstance(parent,str):
-            pass
+        
+        if not parent:
+            parentPath=parent
+        elif isinstance(parent,str):
+            #Detect that someone may be giving us a raw ID not a full path.
+            #More defensive than anything else really, only works if we actually have the parent record.  But most of the time we do
+            if parent and not '.' in parent:
+                x = self.getDocumentByID(parent)
+                if x:
+                    parentPath=self.getFullPath(x)
+
+                #Record does not exist, assume the
+                else:
+                    parentPath=parent
+            else:
+                parentPath=parent
         else:
-            parent=self.getFullPath(parent)
+            parentPath=self.getFullPath(parent)
             
         self.dbConnect()
         cur = self.threadLocal.conn.cursor()
@@ -1357,7 +1421,7 @@ class DocumentDatabase():
                     "SELECT json from ((select rowid as id from search WHERE search MATCH ?) INNER JOIN document ON id=rowid)  WHERE json_extract(json,'$.type')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))>=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))<=? ORDER BY IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time')) DESC LIMIT ?", (key,type, startTime, endTime, limit))
             else:
                 cur.execute(
-                    "SELECT json from ((select rowid as id from search WHERE search MATCH ?) INNER JOIN document ON id=rowid)  WHERE ifnull(json_extract(json,'$.parent'),'')=? AND json_extract(json,'$.type')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))>=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))<=? ORDER BY IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time')) DESC LIMIT ?", (key,parent, type, startTime, endTime, limit))
+                    "SELECT json from ((select rowid as id from search WHERE search MATCH ?) INNER JOIN document ON id=rowid)  WHERE ifnull(json_extract(json,'$.parent'),'')=? AND json_extract(json,'$.type')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))>=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))<=? ORDER BY IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time')) DESC LIMIT ?", (key,parentPath, type, startTime, endTime, limit))
             for i in cur:
                 r.append(i[0])
 

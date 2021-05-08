@@ -325,16 +325,20 @@ class PostsMixin():
 
 
 
-        
+        if parent:
+            parentPath=s.getFullPath(s.getDocumentByID(parent))
+        else:
+            parentPath=''
+
         if not search:
             if startTime:
                 #If we have a start time the initial search has to be ascending or we will just always get the very latest.
                 #So then we have to reverse it to give a consistent ordering
-                p = list(reversed(list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parent,descending=False))))
+                p = list(reversed(list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parentPath,descending=False))))
             else:
-                p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parent))
+                p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parentPath))
         else:
-            p=list(s.searchDocuments(search,"post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parent))
+            p=list(s.searchDocuments(search,"post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parentPath))
 
         if p:
             newest=p[0]['time']
@@ -428,7 +432,7 @@ class PostsMixin():
 
         #Chop to a shorter length, then rechop to even shorter, to avoid cutting off part of a long template and being real ugly.
         body=post.get('body',"?????")[:240].strip()
-        body = tables.renderPostTemplate(daemonconfig.userDatabases[stream], post, body, 4096)
+        body = tables.renderPostTemplate(daemonconfig.userDatabases[stream], post['id'], body, 4096)
         body=body[:140].replace("\r",'').replace("\n",'_NEWLINE',2).replace("\n","").replace("_NEWLINE","\r\n")
 
         l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))

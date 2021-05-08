@@ -64,6 +64,10 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
     def onDrayerRecordChange(self,db,record,sig):
         if self.currentPageNewRecordHandler:
             self.currentPageNewRecordHandler(db,record,sig)
+        
+        #Only deleting or changing as data row can affect this
+        if record['type'] in ('null','row'):
+            self.clearSpreadsheetCache()
 
     def start_service(self, foo=None):
         if self.service:

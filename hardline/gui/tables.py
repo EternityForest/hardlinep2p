@@ -1,3 +1,4 @@
+import collections
 import configparser
 from hardline import daemonconfig
 from .. import daemonconfig, hardline
@@ -28,13 +29,30 @@ import traceback
 import os
 import sys
 import re
+import random
 from .. daemonconfig import makeUserDatabase
 from .. import drayerdb, cidict
 
 from kivymd.uix.picker import MDDatePicker
 
+import functools
+
+#Regex used to spot FORM expressions 
+forms_regex = r'''FORM *\( *['"](.*?)['"] *\)'''
+
+def cacheWrap(f):
+    w = functools.lru_cache(maxsize=128, typed=False)
+    f = w(f)
+
+    def f2(*a):
+        if not hasattr(f, 'cacheClearTime') or  (cacheClearTime[0] > f.cacheClearTime) or (cacheClearTime[0]<time.time()-1200):
+            f.cache_clear()
+            f.cacheClearTime = cacheClearTime[0]
+        return f(*a)
+    return f2
 
 def makePostRenderingFuncs(limit=1024*1024):
+    @cacheWrap
     def spreadsheetSum(p):
         t=0
         n=0
@@ -49,11 +67,23 @@ def makePostRenderingFuncs(limit=1024*1024):
             t+=i
         return t
     
+    @cacheWrap
     def spreadsheetLatest(p):
         for i in p:
             return t
 
+    @cacheWrap
+    def spreadsheetRandSelect(p):
+        l = []
+        v=limit
+        for i in p:
+            v-=1
+            if v<0:
+                break
+            l.append(i)
+        return random.choice(l)
 
+    @cacheWrap
     def spreadsheetAvg(p):
         t=0
         n =0
@@ -69,9 +99,17 @@ def makePostRenderingFuncs(limit=1024*1024):
             t+=i
         return t/n
     
-    funcs = {'SUM':spreadsheetSum, 'AVG':spreadsheetAvg,'LATEST':spreadsheetLatest}
+    funcs = {'SUM':spreadsheetSum, 'AVG':spreadsheetAvg,'LATEST':spreadsheetLatest,'RANDSELECT':spreadsheetRandSelect}
     return funcs
 
+prf_full = makePostRenderingFuncs()
+prf_limit = makePostRenderingFuncs(8193)
+
+def getPostRenderingFunctions(limit):
+    if limit:
+        return prf_limit
+    else:
+        return prf_full
 
 class ColumnIterator():
     def __init__(self, db,postPath, col):
@@ -89,9 +127,15 @@ class ColumnIterator():
                 return i[self.col]
         raise StopIteration
 
+    def __hash__(self):
+        return hash((self.col, self.db.filename))
+
+    def __eq__(self, other):
+        return (self.col, self.db.filename) == (self.col, self.db.filename)
+
 
 def renderPostTemplate(db, postID,text, limit=100000000):
-    "Render any {{expressions}} in a post based on that post's child data row objects"
+    "Render any {{expressions}} in a post based on that post's child data row objects.  Currentlt limit is rounded to just above or below 8192"
 
     search=list(re.finditer(r'\{\{(.*?)\}\}',text))
     if not search:
@@ -123,7 +167,7 @@ def renderPostTemplate(db, postID,text, limit=100000000):
                 from ..simpleeval import simple_eval
                 from .. import simpleeval
                 simpleeval.POWER_MAX = 512
-                replacements[i.group()] = simple_eval(i.group(1), names= ctx, functions=makePostRenderingFuncs(limit))
+                replacements[i.group()] = simple_eval(i.group(1), names= ctx, functions=getPostRenderingFunctions(limit>8193))
             except Exception as e:
                 logging.exception("Error in template expression in a post")
                 replacements[i.group()] = e
@@ -133,9 +177,11 @@ def renderPostTemplate(db, postID,text, limit=100000000):
     
     return text
 
-
-
+cacheClearTime=[time.time()]
 class TablesMixin():
+
+    def clearSpreadsheetCache(self):
+        cacheClearTime[0]=time.time()
 
     def gotoTableView(self, stream, parent='', search=''):
         "Data records can be attatched to a post."
