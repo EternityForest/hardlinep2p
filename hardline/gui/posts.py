@@ -3,6 +3,7 @@ import json
 from hardline import daemonconfig
 from .. import daemonconfig, hardline
 
+from kivy.metrics import cm
 
 import configparser,logging,datetime
 
@@ -431,22 +432,26 @@ class PostsMixin():
         body=body[:140].replace("\r",'').replace("\n",'_NEWLINE',2).replace("\n","").replace("_NEWLINE","\r\n")
 
         l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
-        l.add_widget(Button(text=post.get('title',"?????") + " "+time.strftime('(%a %b %d, %Y)',time.localtime(post.get('time',0)/10**6)), size_hint=(1,None), on_release=f))
-        l2 = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None))
+        btn=Button(text=post.get('title',"?????") + " "+time.strftime('(%a %b %d, %Y)',time.localtime(post.get('time',0)/10**6)), size_hint=(1,None), on_release=f)
+        l.add_widget(btn)
+        l2 = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None),minimum_height=cm(1.5))
         
    
         src = os.path.join(directories.assetLibPath, post.get("icon","INVALID"))
         useIcon=False
-        img = Image(size_hint=(0.3,1))            
+        img = Image(size_hint=(0.2,1))
+        img.size_hint_min_y=cm(1.5)   
         img.source= src
         l2.add_widget(img)
         l.image = img
-        bodyText =Label(text=body,size_hint=(1,None),valign="top")
+        bodyText =Label(text=body.strip(),size_hint=(0.8,1),valign="top")
        
         def setWidth(obj,w):
-            bodyText.text_size=w,None
+            bodyText.text_size=(w-(img.width+4)),None
             bodyText.texture_update()
-            bodyText.size = (bodyText.texture_size[0],max(bodyText.texture_size[1],80))
+            bodyText.width = (bodyText.texture_size[0],max(bodyText.texture_size[1],cm(1.5)))
+            l2.minimum_height=max(bodyText.texture_size[1],cm(1.5))
+            l.minimum_height=l2.height+btn.height+4
 
         l2.bind(width=setWidth)
 
