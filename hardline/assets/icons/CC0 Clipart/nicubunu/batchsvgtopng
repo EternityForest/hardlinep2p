@@ -1,1 +1,2 @@
-for i in *.svg; do inkscape -f "$i" -e "$i.png" -w 256; done
+#for i in **.svg; do inkscape -f "$i" -e "$i.png" -w 256; done
+for i in *.svg; do echo $i; done
