@@ -111,6 +111,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
 
         # Create the manager
         sm = ScreenManager()
+        self.currentPageNewRecordHandler=None
         sm.add_widget(self.makeMainScreen())
         sm.add_widget(self.makeDiscoveryPage())
         sm.add_widget(self.makeSettingsPage())

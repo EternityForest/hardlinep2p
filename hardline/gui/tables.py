@@ -185,12 +185,15 @@ class TablesMixin():
 
     def gotoTableView(self, stream, parent='', search=''):
         "Data records can be attatched to a post."
+        self.currentPageNewRecordHandler=None
         self.streamEditPanel.clear_widgets()
         s = daemonconfig.userDatabases[stream]
         parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent)
         fullpath = daemonconfig.userDatabases[stream].getFullPath(parentDoc)
         self.streamEditPanel.add_widget(self.makeBackButton())
-        self.streamEditPanel.add_widget(self.makePostWidget(stream,parentDoc))
+
+        postWidget=self.makePostWidget(stream,parentDoc)
+        self.streamEditPanel.add_widget(postWidget)
         self.streamEditPanel.add_widget((MDToolbar(title="Data Table View")))
             
 
@@ -204,10 +207,12 @@ class TablesMixin():
         searchBar.add_widget(searchButton)
 
         def doSearch(*a):
+            self.currentPageNewRecordHandler=None
             self.gotoTableView(stream, parent,searchQuery.text.strip())
         searchButton.bind(on_release=doSearch)
 
         def goHere():
+            self.currentPageNewRecordHandler=None
             self.gotoTableView( stream, parent,search)
         self.backStack.append(goHere)
         self.backStack = self.backStack[-50:]
@@ -225,6 +230,7 @@ class TablesMixin():
                 id = uuid.uuid5(uuid.UUID(parent),newRowName.text.strip().lower().replace(' ',""))
                 #That name already exists, jump to it
                 if daemonconfig.userDatabases[stream].getDocumentByID(id):
+                    self.currentPageNewRecordHandler=None
                     self.gotoStreamRow(stream, id)
                     return
             else:
@@ -238,7 +244,8 @@ class TablesMixin():
                 for j in i:
                     if j.startswith('row.'):
                         newDoc[j]= ''
-           
+
+            self.currentPageNewRecordHandler=None
             self.gotoStreamRow(stream, id, newDoc)
 
         btn1 = Button(text='New Entry',
@@ -271,7 +278,19 @@ class TablesMixin():
             self.streamEditPanel.add_widget(self.makeRowWidget(stream,i))
         self.screenManager.current = "EditStream"
 
+        def onNewRecord(db,r,sig):
+            if db is daemonconfig.userDatabases[stream]:
+                if r.get('parent','')==parentDoc.get('parent','') and r['type']=="post":
+                    if not self.unsavedDataCallback:
+                        self.gotoStreamPost(stream,postID,noBack=True)
 
+ 
+                elif parentDoc['id'] in r.get("parent",''):
+                    postWidget.body.text = renderPostTemplate(daemonconfig.userDatabases[stream],parentDoc['id'], parentDoc.get("body",''))
+
+  
+
+        self.currentPageNewRecordHandler = onNewRecord
 
 
 
@@ -279,6 +298,7 @@ class TablesMixin():
     
     def makeRowWidget(self,stream, post):
         def f(*a):
+            self.currentPageNewRecordHandler=None
             self.gotoStreamRow(stream,post['id'])
 
         l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))

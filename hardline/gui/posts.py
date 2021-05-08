@@ -268,6 +268,18 @@ class PostsMixin():
                 if r.get('parent','')==document.get('parent','') and r['type']=="post":
                     if not self.unsavedDataCallback:
                         self.gotoStreamPost(stream,postID,noBack=True)
+
+                #Not sourcetext==we check to make sure we have a static copy of the text and we are not
+                #editing it at the momemt
+                elif sourceText[0] and document['id'] in r.get("parent",''):
+                    backup = newp.text
+                    #Rerender on incoming table records 
+                    newp.text = tables.renderPostTemplate(daemonconfig.userDatabases[stream],postID, sourceText[0])
+
+                    #We could have started editing in that millisecond window. Restore the source text so we don't overwrite it with the rendered text
+                    if not sourceText[0]:
+                        newp.text=backup
+
         self.currentPageNewRecordHandler = onNewRecord
 
     def gotoStreamPosts(self, stream, startTime=0, endTime=0, parent='', search='',noBack=False):
@@ -449,6 +461,7 @@ class PostsMixin():
         l2.add_widget(img)
         l.image = img
         bodyText =Label(text=body.strip(),size_hint=(0.8,1),valign="top")
+        l.body = bodyText
        
         def setWidth(obj,w):
             bodyText.text_size=(w-(img.width+4)),None
