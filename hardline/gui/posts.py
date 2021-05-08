@@ -108,7 +108,7 @@ class PostsMixin():
 
 
 
-        def post(*a):
+        def post(*a,goBack=False):
             with daemonconfig.userDatabases[stream]:
                 if self.unsavedDataCallback:
                     document['title']=newtitle.text
@@ -121,8 +121,11 @@ class PostsMixin():
                     daemonconfig.userDatabases[stream].setDocument(document)
                     daemonconfig.userDatabases[stream].commit()
                     self.unsavedDataCallback=None
+            if goBack:
+                self.goBack()
 
-            self.goBack()
+        def saveButtonHandler(*a):
+            post(goBack=True)
         
         def setUnsaved(*a):
             self.unsavedDataCallback = post
@@ -131,7 +134,7 @@ class PostsMixin():
 
         btn1 = Button(text='Save',
                       size_hint=(0.28, None), font_size="14sp")
-        btn1.bind(on_release=post)
+        btn1.bind(on_release=saveButtonHandler)
 
 
         self.streamEditPanel.add_widget(titleBar)
@@ -256,7 +259,8 @@ class PostsMixin():
         def onNewRecord(db,r,sig):
             if db is daemonconfig.userDatabases[stream]:
                 if r.get('parent','')==document.get('parent','') and r['type']=="post":
-                    self.gotoStreamPost(stream,postID,noBack=True)
+                    if not self.unsavedDataCallback:
+                        self.gotoStreamPost(stream,postID,noBack=True)
         self.currentPageNewRecordHandler = onNewRecord
 
     def gotoStreamPosts(self, stream, startTime=0, endTime=0, parent='', search='',noBack=False):
@@ -423,18 +427,30 @@ class PostsMixin():
         l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
         l.add_widget(Button(text=post.get('title',"?????") + " "+time.strftime('(%a %b %d, %Y)',time.localtime(post.get('time',0)/10**6)), size_hint=(1,None), on_release=f))
         l2 = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None))
-        img = Image(size_hint=(0.3,1))
-        l2.add_widget(img)
         
+   
         src = os.path.join(directories.assetLibPath, post.get("icon","INVALID"))
-        if os.path.exists(src):
-            img.source= src
+        useIcon=False
+        img = Image(size_hint=(0.3,1))            
+        img.source= src
+        l2.add_widget(img)
+        l.image = img
+        bodyText =Label(text=body,size_hint=(1,None),valign="top")
+       
+        def setWidth(obj,w):
+            bodyText.text_size=w,None
+            bodyText.texture_update()
+            bodyText.size = (bodyText.texture_size[0],max(bodyText.texture_size[1],80))
 
-        w = MDTextField(text=body, multiline=True,size_hint=(1,0.5),mode="rectangle",readonly=True)
+        l2.bind(width=setWidth)
+
+        #w = MDTextField(text=body, multiline=True,size_hint=(1,0.5),mode="rectangle",readonly=True)
+        w=bodyText
+        
         l2.add_widget(w)
         l.add_widget(l2)
 
-        l.image = img
+       
 
         return l
 
