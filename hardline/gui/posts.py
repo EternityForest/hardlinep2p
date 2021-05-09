@@ -127,8 +127,8 @@ class PostsMixin():
                     daemonconfig.userDatabases[stream].setDocument(document)
                     daemonconfig.userDatabases[stream].commit()
                     self.unsavedDataCallback=None
-            if goBack:
-                self.goBack()
+                    if goBack:
+                        self.goBack()
 
         def saveButtonHandler(*a):
             post(goBack=True)
@@ -684,6 +684,44 @@ class PostsMixin():
         icon.bind(on_release=promptSet)
         self.postMetaPanel.add_widget(icon)
 
+
+
+        idButton = Button(size_hint=(1,None), text="Show Post ID")
+        def promptSet(*a):
+            self.askQuestion("You can't change this",docID)
+            
+        idButton.bind(on_release=promptSet)
+        self.postMetaPanel.add_widget(idButton)
+
+
+
+        parentButton = Button(size_hint=(1,None), text="Set post parent")
+        def promptSet(*a):
+            def f(p):
+                if not p is None:
+                    #Stop the obvious case of the loops
+                    if p.strip()==docID:
+                        return
+
+                    if p:
+                        r, a =daemonconfig.userDatabases[stream].getDocumentByID(p.strip(), returnAllAncestors=True)
+
+                        if not r:
+                            parentButton.text="Parent:nonexistent"
+                            return
+                        if docID in a:
+                            parentButton.text="Parent:Cannot be own ancestor"
+                            return
+
+                    parentButton.text="Set post parent"
+
+                    s['parent']=p.strip()
+                    self.unsavedDataCallback=autosavecallback
+
+            self.askQuestion("Move record to this post ID?",s.get('parent',''),f)
+            
+        parentButton.bind(on_release=promptSet)
+        self.postMetaPanel.add_widget(parentButton)
 
 
         export = Button(size_hint=(1,None), text="Export Raw Data")

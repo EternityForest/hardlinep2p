@@ -1386,7 +1386,7 @@ class DocumentDatabase():
     def onRecordChange(self,record, signature):
         pass
 
-    def getDocumentByID(self, key, recursionLimit=1024,returnAncestorNull=False):
+    def getDocumentByID(self, key, recursionLimit=64,returnAncestorNull=False,returnAllAncestors=False,_ancestors=None):
         """Returns null on orphan documents.  Uses a cache to check for that.  
         
         returnAncestorNull is a special mode that returns the actual node that made the key an orphan if possible,
@@ -1397,7 +1397,11 @@ class DocumentDatabase():
         
         """
 
+        if returnAllAncestors and returnAncestorNull:
+            raise ValueError("Cannot combine those")
 
+        _ancestors=_ancestors or {}
+        
         with self.lock:
             x=None
             r=None
@@ -1441,17 +1445,22 @@ class DocumentDatabase():
                     #If it is None/just plain not found, we are a(possibly temporary)
                     #orphan, so the status propagates
                     if 'parent' in x and x['parent']:
-                        p = self.getDocumentByID(x['parent'],recursionLimit=recursionLimit,returnAncestorNull=returnAncestorNull)
+                        p = self.getDocumentByID(x['parent'],recursionLimit=recursionLimit,_ancestors=_ancestors)
+
                         if not p:
                             r=p
                             x=p
+                        else:
+                            _ancestors[p['id']]=p
+                        
 
             while len(self.documentCache)>64:
                 try:
                     self.documentCache.pop(True)
                 except:
                     logging.exception("cleanup error, ignoring")
-            
+            if returnAllAncestors:
+                return r, _ancestors
             return r
 
    

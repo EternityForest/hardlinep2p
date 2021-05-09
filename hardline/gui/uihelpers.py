@@ -85,6 +85,10 @@ class AppHelpers():
 
         t = MDTextField(text='', size_hint=(1,None),multiline=multiline,mode="rectangle")
 
+        def nonsense(a):
+            pass
+        cb = cb or nonsense
+
         def cbr_yes(*a):
             print("Accept Button")
             cb(t.text)
