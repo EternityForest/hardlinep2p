@@ -602,18 +602,20 @@ class DocumentDatabase():
                         if session.remoteNodeID and not session.alreadyDidInitialSync:
                             r = {}
                             with self.lock:
-                                cur = self.threadLocal.conn.cursor()
-                                cur.execute(
-                                    "SELECT lastArrival FROM peers WHERE peerID=?", (base64.b64encode(session.remoteNodeID),))
+                                #Don't request from ourself and thereby waste time
+                                if not session.remoteNodeID==self.localNodeVK:
+                                    cur = self.threadLocal.conn.cursor()
+                                    cur.execute(
+                                        "SELECT lastArrival FROM peers WHERE peerID=?", (base64.b64encode(session.remoteNodeID),))
 
-                                c = cur.fetchone()
-                                if c:
-                                    c = c[0]
-                                else:
-                                    c = 0
-                                # No falsy value allowed, that would mean don't get new arrivals
-                                r['getNewArrivals'] = c or 1
-                                cur.close()
+                                    c = cur.fetchone()
+                                    if c:
+                                        c = c[0]
+                                    else:
+                                        c = 0
+                                    # No falsy value allowed, that would mean don't get new arrivals
+                                    r['getNewArrivals'] = c or 1
+                                    cur.close()
 
                             session.alreadyDidInitialSync = True
                             await websocket.send(self.encodeMessage(r))
@@ -1320,8 +1322,11 @@ class DocumentDatabase():
         return docObj['id']
 
 
-    def propagateNulls(self, record,propagateTime=0):
-        "On getting a batch of records, null out the children of any records that are null:burn.  Don't do this for nulls sans burn"
+    def propagateNulls(self, record,propagateTime=0,parentNull=None):
+        """On getting a batch of records, null out the children of any records that are null:burn.  Don't do this for nulls sans burn.
+            parentNull is the root record of the whole thing we are propagating from.
+            propagateTime is the time we use for all the null records down the tree that we get from the parent null
+        """
 
         with self.lock:
             #Heavy duty defensive programming for such a dangerous function.
@@ -1331,8 +1336,9 @@ class DocumentDatabase():
             
             if not propagateTime:
                 propagateTime=r['time']
+            
 
-            if not r['type']=='null':
+            if not r['type']=='null' and not parentNull:
                 return
 
             if self.writePassword:
@@ -1341,7 +1347,10 @@ class DocumentDatabase():
                 # is enough for other nodes to know this shouldn't exist anymore.
                 l = []
                 lastround = {}
-                for i in range(100000):
+
+                #Do in rounds to limit memory usage.
+                #Unfortunately this means we need to always do a second round to see if we got everything.  It is kinda sucky.
+                for i in range(1000000):
                     #Only children that are older than the deletion of the parent should be null propagated in this way.  
                     #The rest we consider blocked. They become an orphan record.
                     thisround = {}
@@ -1357,11 +1366,16 @@ class DocumentDatabase():
 
                     for i in l:
                         #Note that we propagate the timestamp of the null.
-                        if r.get('burn',''):
+                        if r.get('burn','') or (parentNull and parentNull.get('burn','')):
                             self.setDocument({'type':'null', 'id':i[0], 'time':propagateTime,'burn':True},parentIsNull=True)
-                        self.propagateNulls(i[0])
+                        else:
+                            #Silent delete unreachable.
+                            c=self.threadLocal.conn.execute("DELETE FROM document WHERE json_extract(json,'$.id')=? and json_extract(json,'$.time')<=?",(i[0],propagateTime))
+                        self.propagateNulls(i[0],propagateTime,parentNull=parentNull)
+
                         if not i[0] in lastround:
                             shouldbreak=False
+
                     if shouldbreak:
                         break
                     lastround=thisround
