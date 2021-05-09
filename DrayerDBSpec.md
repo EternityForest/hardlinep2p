@@ -162,6 +162,13 @@ it's data, and changes to a record in an old place carry over to the record in h
 Indicates that the record is of a type that should never have any children, and therefore can be silently deleted in some cases with no
 disk space.
 
+
+## Unreachable Records
+
+We do not always delete them, but all APIs must pretend they don't exist unless specifically asked.
+
+There is potential to leak data by deleting something that leaves unreachable records around forever on other nodes.
+
 ## Core Record Types
 
 ### post
@@ -185,6 +192,37 @@ Rows have data fields beginning with row. which can only be strings or numbers. 
 ### null
 
 This is how we solve tombstoning.  You don't usually erase you set to null.
+
+#### Null Propagation
+When you set to null, all descendants are unreachable, and you CAN silent delete them(actually delete the physical DB row).
+
+
+HOWEVER, when you set to null because of an external sync, you can only silent delete the direct descendants.  The rest become orphans.
+
+The reason is the Malicious Reordering Attack.
+
+#Locally generated records have unlimited propagation.  Externals are limited to 1.
+#Thid is because we could move B out of A than delete A.
+#An attacker could make the delete happen before the move.
+
+#With no propagation limit, children of B would be silent deleted.
+#We might still have them, but we would not know we needed to send them because they never changed.
+
+#With a limit of 1, if the move happens afterward, the move will restore B's existence in a new place,
+#Making all it's children that never got deleted to begin with no longer orphans.
+
+#### Data Leak
+This has the problematic property that you would delete more on your node than others would.  This would leave you without any
+way to list what unreachable records others have!!!!
+
+To prevent this, it is therefore best to to only EVER use a depth of 1.
+
+This keeps our state consistent with the global state and lets us manually look through unreachables and null them out if they are sensitive.
+
+
+
+
+
 
 Nulls can have these properties:
 

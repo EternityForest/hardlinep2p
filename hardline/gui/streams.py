@@ -278,6 +278,18 @@ class StreamsMixin():
         btn2.bind(on_press=delete)
         self.streamEditPanel.add_widget(btn2)
 
+
+
+        def gotoOrphans(*a,**k):
+            self.gotoStreamPosts(name,orphansMode=True)
+
+        oButton = Button(text='Show Unreachable Garbage',
+                        size_hint=(1, None), font_size="14sp")
+        oButton.bind(on_press=gotoOrphans)
+        self.streamEditPanel.add_widget(oButton)
+
+
+
         self.screenManager.current = "EditStream"
 
     def makeStreamsPage(self):

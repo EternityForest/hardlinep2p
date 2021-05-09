@@ -1074,7 +1074,7 @@ class DocumentDatabase():
         with self.lock:
             self.dbConnect()
             for i in self.uncommittedNullRecordsIDs:
-                self.propagateNulls(i)
+                self.propagateNulls(i,self.uncommittedNullRecordsIDs[i])
                 self.uncommittedNullRecordsIDs={}
 
             self.threadLocal.conn.commit()
@@ -1196,33 +1196,6 @@ class DocumentDatabase():
         else:
             docObj = doc
 
-        if 'parent' in docObj:
-            if isinstance(docObj['parent'],dict):
-                docObj['parent']= docObj['parent']['id']
-
-
-            #Detect if we have a deleted BURN ancestor newer than we are, and if so, insert a null instead of this record.
-
-            #TODO: All descendants of a deleted node become orphans that just hang around forever if they happen to be newer than
-            #The deleted ancestor. Bad news!
-            #But we can only do this if we have the write password. 
-
-            #Another condition is that we cannot have just gotten moved more recently than the burn record,
-            #As that would be unusual and more likely caused by an accidental move, bug. or race condition.
-            #Keep it as an orphan in that case
-            if 'id' in docObj:
-                x= self.getDocumentByID(docObj['parent'],returnAncestorNull=True)
-
-                if x and isinstance(x,dict) and x['type']=='null' and  x.get('burn',False) and x['time']>docObj.get('time',time.time()*10**6) and x['time']>docObj.get('moveTime',0):
-                    if self.writePassword:
-                        return self._setDocument({'type':'null','id':docObj['id'], 'time': x['time']})
-                    else:
-                        #We can't null it but we sure don't have to keep it around!
-                        return
-
-
-
-
         logging.info("Setting record, recieved from: "+receivedFrom+" and local ID is "+base64.b64encode(self.localNodeVK).decode())
 
 
@@ -1278,6 +1251,45 @@ class DocumentDatabase():
                             remoteArrivalTime=None
                             receivedFrom=None
                             docObj['moveTime']=max( int(oldVersionData.get("moveTime",0)), int(docObj.get("moveTime",0)))
+
+
+
+        #Null propagation happens after any parent correction.
+        if 'parent' in docObj:
+            if isinstance(docObj['parent'],dict):
+                docObj['parent']= docObj['parent']['id']
+
+            #Detect if we have a deleted BURN ancestor newer than we are, and if so, insert a null instead of this record.
+
+            #TODO: All descendants of a deleted node become orphans that just hang around forever if they happen to be newer than
+            #The deleted ancestor. Bad news!
+            #But we can only do this if we have the write password. 
+
+            #Another condition is that we cannot have just gotten moved more recently than the burn record,
+            #As that would be unusual and more likely caused by an accidental move, bug. or race condition.
+            #Keep it as an orphan in that case
+            if 'id' in docObj:
+                x= self.getDocumentByID(docObj['parent'],returnAncestorNull=True)
+
+                if x and isinstance(x,dict) and x['type']=='null':
+
+                    #Only applies to burn records, they have unlimited propagation.
+                    if x.get('burn',False) and x['time']>docObj.get('time',time.time()*10**6) and x['time']>docObj.get('moveTime',0):
+                        if self.writePassword:
+                            #propagate burn
+                            return self._setDocument({'type':'null','id':docObj['id'], 'time': x['time'],'burn':True})
+                        else:
+                            #We can't null it but we sure don't have to keep it around!
+                            return
+                    
+                    #Non-burned only propagates one level
+                    #But we can still discard it
+
+                    elif 'time' in docObj:
+                        if x['id']==docObj['parent'] and  x['time']> docObj['time']:
+                            return 
+
+
 
         #Adding this property could cause all kinds of sync confusion with records that don't actually get deleted on remote nodes.
         #Might be a bit of a problem.
@@ -1373,7 +1385,8 @@ class DocumentDatabase():
             #We already deleted the old record, so just don't insert the new one in that specific case.
             if not(parentIsNull and oldVersionData.get('leafNode',True) and docObj['type']=='null'):
                 if docObj['type']=='null':
-                    self.uncommittedNullRecordsIDs[docObj['id']]=True
+                    #Track recievedFrom because we have to limit propagation depth for externally recieved records, to stop malicious reorder
+                    self.uncommittedNullRecordsIDs[docObj['id']]=receivedFrom
                 else:
                     try:
                         del self.uncommittedNullRecordsIDs[docObj['id']]
@@ -1414,11 +1427,35 @@ class DocumentDatabase():
         return docObj['id']
 
 
-    def propagateNulls(self, record,propagateTime=0,parentNull=None):
+    def propagateNulls(self, record,recievedFrom=None,propagateTime=0,parentNull=None,depth=1):
         """On getting a batch of records, null out the children of any records that are null:burn.  Don't do this for nulls sans burn.
             parentNull is the root record of the whole thing we are propagating from.
             propagateTime is the time we use for all the null records down the tree that we get from the parent null
         """
+
+        #Locally generated records have unlimited propagation.  Externals are limited to 1.
+        #Thid is because we could move B out of A than delete A.
+        #An attacker could make the delete happen before the move.
+
+        #With no propagation limit, children of B would be silent deleted.
+        #We might still have them, but we would not know we needed to send them because they never changed.
+
+        #With a limit of 1, if the move happens afterward, the move will restore B's existence in a new place,
+        #Making all it's children that never got deleted to begin with no longer orphans.
+
+
+        #Don't do this in this implementation!
+
+        #We keep more than we have to for locally generated nulls so that the user who did the delete 
+        #sees the same set of unreachables as anyone else, to aid them in manually nulling out anything sensitive in
+        #that set!!!!
+
+        # if not recievedFrom:
+        #     depth = 128
+
+        depth -=1
+        if depth<0:
+            return
 
         with self.lock:
             #Heavy duty defensive programming for such a dangerous function.
@@ -1432,6 +1469,10 @@ class DocumentDatabase():
 
             if not r['type']=='null' and not parentNull:
                 return
+
+            #Burn has unlimited depth.  Anythiung that ever was a child of a burned record is in danger, and we just accept that.
+            if r.get('burn',False):
+                depth = 128
 
             # If we are marking this as deleted, we can ditch everything that depends on it.
             # We don't even have to just set them as deleted, we can relly delete them, the deleted parent record
@@ -1459,11 +1500,13 @@ class DocumentDatabase():
                     #Note that we propagate the timestamp of the null.
                     #But note the fact that we cannot set documents if we are not an authorized writer.
                     if self.writePassword and r.get('burn','') or (parentNull and parentNull.get('burn','')):
+
+                        #Setdocument knows to ignore this if the time is newer than the burn time
                         self.setDocument({'type':'null', 'id':i[0], 'time':propagateTime,'burn':True},parentIsNull=True)
                     else:
                         #Silent delete unreachable.
                         c=self.threadLocal.conn.execute("DELETE FROM document WHERE json_extract(json,'$.id')=? and json_extract(json,'$.time')<=?",(i[0],propagateTime))
-                    self.propagateNulls(i[0],propagateTime,parentNull=parentNull)
+                    self.propagateNulls(i[0],propagateTime=propagateTime,parentNull=parentNull,depth=depth)
 
                     if not i[0] in lastround:
                         shouldbreak=False
@@ -1492,7 +1535,7 @@ class DocumentDatabase():
     def onRecordChange(self,record, signature):
         pass
 
-    def getDocumentByID(self, key, recursionLimit=64,returnAncestorNull=False,returnAllAncestors=False,_ancestors=None):
+    def getDocumentByID(self, key, recursionLimit=64,returnAncestorNull=False,returnAllAncestors=False,_ancestors=None,allowOrphans=False):
         """Returns null on orphan documents.  Uses a cache to check for that.  
         
         returnAncestorNull is a special mode that returns the actual node that made the key an orphan if possible,
@@ -1505,6 +1548,12 @@ class DocumentDatabase():
 
         if returnAllAncestors and returnAncestorNull:
             raise ValueError("Cannot combine those")
+        if returnAllAncestors and allowOrphans:
+            raise ValueError("Cannot combine those")
+
+        if allowOrphans and returnAncestorNull:
+            raise ValueError("Cannot combine those")
+
 
         _ancestors=_ancestors or {}
         
@@ -1537,6 +1586,8 @@ class DocumentDatabase():
                 cur.close()
                 if x:
                     x= json.loads(x[0])
+                    if allowOrphans:
+                        return x
                 self.documentCache[key]=x
 
 
@@ -1571,17 +1622,22 @@ class DocumentDatabase():
 
    
 
-    def getDocumentsByType(self, key, startTime=0, endTime=10**18, limit=100,parent=None,descending=True):
+
+    def getDocumentsByType(self, key, startTime=0, endTime=10**18, limit=100,parent=None,descending=True, orphansOnly=False,allowOrphans=False):
         """Return documents meeting the filter criteria. Parent should by the full path of the parent record, to limit the results to children of that record.
             You can try to just use the direct parent ID but that is not a guarantee, it returns nothing if we don't have the parent record.
         """
+        if orphansOnly:
+            limit = 10**18
+            allowOrphans=True
+
         if not parent:
             parentPath=parent
         elif isinstance(parent,str):
            parentPath=parent
         else:
             parentPath=parent['id']
-
+        
 
         self.dbConnect()
         cur = self.threadLocal.conn.cursor()
@@ -1601,16 +1657,31 @@ class DocumentDatabase():
                 cur.execute(
                     "SELECT json from document WHERE json_extract(json,'$.type')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))>=? AND ifnull(json_extract(json,'$.parent'),'')=? AND IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))<=? ORDER BY IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time')) asc LIMIT ?", (key,startTime,parent,endTime, limit))
         
+        l =0
         for i in cur:
+            #Have to do our own limiting for the orphans scanner which could be incredible slow
+            l+=1
+            if l>limit:
+                return
+
+       
             try:
                 x = json.loads(i[0])
             except:
                 continue
 
             if not x.get('type','')=='null':
+                isOrphan = False
                 #Look for orphan records that have been 'deleted'
                 if parent is None and 'parent' in x:
-                    if not self.getDocumentByID(x['parent'].split("/")[-1]):
+                    if (not allowOrphans) or orphansOnly:
+                        if not self.getDocumentByID(x['parent']):
+                            isOrphan=True
+                            if not (orphansOnly or allowOrphans):
+                                continue
+
+                if orphansOnly:
+                    if not isOrphan:
                         continue
                 yield x
         cur.close()

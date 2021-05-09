@@ -55,7 +55,7 @@ class PostsMixin():
 
         self.streamEditPanel.add_widget(self.makeBackButton())
         
-        document = daemonconfig.userDatabases[stream].getDocumentByID(postID)
+        document = daemonconfig.userDatabases[stream].getDocumentByID(postID,allowOrphans=True)
 
 
         #Don't pollute history with timewaasters for every refresh
@@ -285,7 +285,7 @@ class PostsMixin():
 
         self.currentPageNewRecordHandler = onNewRecord
 
-    def gotoStreamPosts(self, stream, startTime=0, endTime=0, parent='', search='',noBack=False):
+    def gotoStreamPosts(self, stream, startTime=0, endTime=0, parent='', search='',noBack=False,orphansMode=False):
         "Handles both top level stream posts and comments, and searches.  So we can search comments if we want."
 
         #We MUST ensure we clear this when leaving the page. Pst widgets do ut for us.
@@ -296,7 +296,10 @@ class PostsMixin():
         self.streamEditPanel.clear_widgets()
         s = daemonconfig.userDatabases[stream]
         if not parent:
-            self.streamEditPanel.add_widget(MDToolbar(title="Feed for "+stream))
+            if orphansMode:
+                self.streamEditPanel.add_widget(MDToolbar(title="Unreachable Records in "+stream))
+            else:
+                self.streamEditPanel.add_widget(MDToolbar(title="Feed for "+stream))
         else:
             parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent)
             self.streamEditPanel.add_widget(self.makePostWidget(stream,parentDoc))
@@ -333,7 +336,7 @@ class PostsMixin():
                 size_hint=(1, None), font_size="14sp")
 
         btn1.bind(on_press=write)
-        if s.writePassword:
+        if s.writePassword and not orphansMode:
             topbar.add_widget(btn1)
 
         self.streamEditPanel.add_widget(topbar)
@@ -342,16 +345,20 @@ class PostsMixin():
 
         if parent:
             parentPath=s.getDocumentByID(parent)['id']
+
         else:
             parentPath=''
+        
+        if orphansMode:
+            parentPath=None
 
         if not search:
             if startTime:
                 #If we have a start time the initial search has to be ascending or we will just always get the very latest.
                 #So then we have to reverse it to give a consistent ordering
-                p = list(reversed(list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parentPath,descending=False))))
+                p = list(reversed(list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parentPath,descending=False,orphansOnly=orphansMode))))
             else:
-                p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parentPath))
+                p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parentPath,orphansOnly=orphansMode))
         else:
             p=list(s.searchDocuments(search,"post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parentPath))
 
@@ -413,7 +420,8 @@ class PostsMixin():
         self.streamEditPanel.add_widget(pagebuttons)
         self.streamEditPanel.add_widget(startdate)
 
-        self.streamEditPanel.add_widget(searchBar)
+        if not orphansMode:
+            self.streamEditPanel.add_widget(searchBar)
 
 
         self.streamEditPanel.add_widget(MDToolbar(title="Posts"))
@@ -423,11 +431,13 @@ class PostsMixin():
         for i in p:
             self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
         
+        
         def onNewRecord(db,r,sig):
             if db is daemonconfig.userDatabases[stream]:
                 if r.get('parent','')==parent and r['type']=="post":
                     self.gotoStreamPosts(stream,startTime,endTime,parent, search,noBack=True)
-        self.currentPageNewRecordHandler = onNewRecord
+        if not orphansMode:
+            self.currentPageNewRecordHandler = onNewRecord
 
         self.screenManager.current = "EditStream"
 

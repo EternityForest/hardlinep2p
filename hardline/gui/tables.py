@@ -118,7 +118,7 @@ class ColumnIterator():
         self.postPath= postPath
 
     def __iter__(self):
-        self.cur = self.db.getDocumentsByType("row", parent=self.postPath, limit=10240000000)
+        self.cur = self.db.getDocumentsByType("row", parent=self.postPath, limit=10240000000,allowOrphans=True)
         return self
 
     def __next__(self):
@@ -141,12 +141,12 @@ def renderPostTemplate(db, postID,text, limit=100000000):
     if not search:
         return text
 
-    d = db.getDocumentByID(postID)
+    d = db.getDocumentByID(postID,allowOrphans=True)
     if not d:
         return ''
 
     #Need to be able to go slightly 
-    rows = db.getDocumentsByType('row',parent=postID)
+    rows = db.getDocumentsByType('row',parent=postID,allowOrphans=True)
 
     ctx = {}
     
@@ -187,7 +187,7 @@ class TablesMixin():
         self.currentPageNewRecordHandler=None
         self.streamEditPanel.clear_widgets()
         s = daemonconfig.userDatabases[stream]
-        parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent)
+        parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent,allowOrphans=True)
         self.streamEditPanel.add_widget(self.makeBackButton())
 
         postWidget=self.makePostWidget(stream,parentDoc)
@@ -227,14 +227,14 @@ class TablesMixin():
             if newRowName.text.strip():
                 id = uuid.uuid5(uuid.UUID(parent),newRowName.text.strip().lower().replace(' ',""))
                 #That name already exists, jump to it
-                if daemonconfig.userDatabases[stream].getDocumentByID(id):
+                if daemonconfig.userDatabases[stream].getDocumentByID(id,allowOrphans=True):
                     self.currentPageNewRecordHandler=None
                     self.gotoStreamRow(stream, id)
                     return
             else:
                 id=str(uuid.uuid4())
             
-            x = daemonconfig.userDatabases[stream].getDocumentsByType("row.template", parent=parent,limit=1) 
+            x = daemonconfig.userDatabases[stream].getDocumentsByType("row.template", parent=parent,limit=1,allowOrphans=True) 
             newDoc = {'parent': parent,'id':id, 'name':newRowName.text.strip() or id, 'type':'row', 'leafNode':True}
 
             #Use the previously created or modified row as the template
@@ -259,7 +259,7 @@ class TablesMixin():
         self.streamEditPanel.add_widget(topbar)
         
         if not search:
-            p = s.getDocumentsByType("row", limit=1000, parent=parent)
+            p = s.getDocumentsByType("row", limit=1000, parent=parent,allowOrphans=True)
         else:
             p = s.searchDocuments(search,"row", limit=1000, parent=parent)
 
@@ -330,7 +330,7 @@ class TablesMixin():
             self.backStack.append(goHere)
             self.backStack = self.backStack[-50:]
 
-        document = document or daemonconfig.userDatabases[stream].getDocumentByID(postID)
+        document = document or daemonconfig.userDatabases[stream].getDocumentByID(postID,allowOrphans=True)
         if 'type' in document and not document['type'] == 'row':
             raise RuntimeError("Document is not a row")
         document['type']='row'
@@ -343,7 +343,7 @@ class TablesMixin():
         #Use only the direct ID of the parent record in cade we want to move it eventually.
         oldTemplate= {'type':"row.template",'leafNode':True, 'parent':document['parent'], 'name': 'default', 'id':uuid.uuid5(uuid.UUID(document['parent'].split("/")[-1]),".rowtemplate.default")}
 
-        for i in daemonconfig.userDatabases[stream].getDocumentsByType("row.template", parent=document['parent'],limit=1):
+        for i in daemonconfig.userDatabases[stream].getDocumentsByType("row.template", parent=document['parent'],limit=1,allowOrphans=True):
             oldTemplate=i
 
         template= template or oldTemplate
