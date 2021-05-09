@@ -70,9 +70,12 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
             self.clearSpreadsheetCache()
 
     def start_service(self, foo=None):
-        if self.service:
+        
+        try:
             self.service.stop()
             self.service = None
+        except:
+            logging.exception("Likely no need to stop nonexistent service")
 
         if platform == 'android':
             from android import AndroidService

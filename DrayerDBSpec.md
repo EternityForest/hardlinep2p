@@ -138,6 +138,30 @@ It is so the recierver can be sure they have all records to a point,
 
 
 
+
+## Core Record data elements
+
+### id
+A UUID. 
+
+### parent
+The parent record, this is how we do folders and comments
+
+### moveTime
+Optional, assume 0.  When a write capable node gets a message that would chnge the parent of a record, take the parent value from whichever has the
+newer moveTime, essentially tracing conflict resolution for location separately from data.  Only write capable nodes can do snapback though,
+others must just ignore.
+
+User API implementations must ensure that locally-generated records always have the moveTime supplied by the application, or that of the previous recocord
+if it exists, whichever is greater.
+
+When intentionally moving a record, set this to UNIX time in microseconds. This ensures that one cannot unintentionally move a record while trying to update
+it's data, and changes to a record in an old place carry over to the record in hte new place when everything finally syncs up.
+
+### leafNode
+Indicates that the record is of a type that should never have any children, and therefore can be silently deleted in some cases with no
+disk space.
+
 ## Core Record Types
 
 ### post
@@ -156,3 +180,26 @@ There should only be one item in a list with a name, attempting to create a dupl
 
 Rows have data fields beginning with row. which can only be strings or numbers.  If a string looks like a number it should be treated as such.
 
+
+
+### null
+
+This is how we solve tombstoning.  You don't usually erase you set to null.
+
+Nulls can have these properties:
+
+#### burn:
+If true, any incoming record seen to be a descendant of this record must be replaced with a burned null.
+
+this flag indicated that all current children of this record should be destroyed, and that you dont want to preserve them if they have moved elsewhere.
+
+Committing a burned null propagates down to all children just before the commit.
+
+if not true or not set, incoming records are not deleted in any way just because they have a null ancestor.  They become orphans that could potentially be adopted by the parent coming back to life..
+
+Unburned nulls may leave orphans in general will use less data because of silent deletion, and are slightly safer if things are getting moved around a lot.
+
+#### direct:
+
+Must be set when directly deleting a record.  Indicates that this is the root of the tree that the appplication specifically wanted to delete.  Not used now.
+May be used later in manual cleanup tools.

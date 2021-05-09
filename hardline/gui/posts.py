@@ -701,13 +701,24 @@ class PostsMixin():
                 if not p is None:
                     #Stop the obvious case of the loops
                     if p.strip()==docID:
+                        parentButton.text="Parent:cannot be self"
                         return
 
                     if p:
                         r, a =daemonconfig.userDatabases[stream].getDocumentByID(p.strip(), returnAllAncestors=True)
 
+                        #Detect common scenarios where one does not want to move a post.
                         if not r:
                             parentButton.text="Parent:nonexistent"
+                            return
+                        if not r['type']=='post':
+                            parentButton.text="Parent:is not valid post"
+                            return
+                        if r.get('leafNode',False):
+                            parentButton.text="Parent:Post does not allow children"
+                            return
+                        if 'autoclean' in r:
+                            parentButton.text="Parent:Parent post volatile, refusing to move"
                             return
                         if docID in a:
                             parentButton.text="Parent:Cannot be own ancestor"
@@ -716,6 +727,8 @@ class PostsMixin():
                     parentButton.text="Set post parent"
 
                     s['parent']=p.strip()
+                    #Mark as intentional move, else it would unintentionally snap back.
+                    s['moveTime']= int(time.time()*10**6)
                     self.unsavedDataCallback=autosavecallback
 
             self.askQuestion("Move record to this post ID?",s.get('parent',''),f)

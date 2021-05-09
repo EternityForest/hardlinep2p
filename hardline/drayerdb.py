@@ -1112,6 +1112,66 @@ class DocumentDatabase():
 
         ts = int((time.time())*10**6)
 
+    def exportRecordSetToJSON(self,docs):
+        "Export all records in the list along with all the records in the list to VCable JSON format"
+        data = {}
+        for i in docs:
+            data.update(self.getAllRelatedRecords(i))
+
+        #Get the records as a list, sorted by id for consistency.
+        l = []
+        import json
+        for i in data:
+            d=json.loads(data[i][0])
+            l.append((d['id'],d))
+        l = sorted(l)
+
+        l = [ [i[1]] for i in l]
+        return json.dumps(l, sort_keys=True,indent=2)
+
+    def exportRecordSetToTOML(self,docs):
+        "Export all records in the list along with all the records in the list to VCable TOML format"
+        data = {}
+        for i in docs:
+            data.update(self.getAllRelatedRecords(i))
+        
+
+
+        #Get the records as a list, sorted by time for consistency.
+        l = []
+        import json
+        for i in data:
+            d=json.loads(data[i][0])
+            l.append((d['id'],d))
+        l = sorted(l)
+
+        l = [ [i[1]] for i in l]
+        return json.dumps(l, sort_keys=True,indent=2)
+
+    
+    def getPath(self,record,path = None, useAttribute='id'):
+        """Trace back record ancestry path and return list of uuids 
+        Mostly used to sort toml exports.  Instead of IDs we can also try to get a certain attribute, but ID gets used if missing.
+        Note 
+        
+        """
+        path = path or []
+
+        if isinstance(record,str):
+            record = self.getDocumentByID(record)
+        if not record:
+            return path
+
+        p2 = []
+        if record.get('parent',''):
+            p2.extend(self.getPath(record['parent']))
+            p2.extend(path)
+        p2.append(str(record.get(useAttribute,record['id'])))
+
+        return p2
+
+
+
     def makeNewArrivalTimestamp(self):
         #Have a bit of protection from a clock going backwards to keep things monotonic
         with self.lock:
@@ -1145,13 +1205,20 @@ class DocumentDatabase():
 
             #TODO: All descendants of a deleted node become orphans that just hang around forever if they happen to be newer than
             #The deleted ancestor. Bad news!
+            #But we can only do this if we have the write password. 
 
-
+            #Another condition is that we cannot have just gotten moved more recently than the burn record,
+            #As that would be unusual and more likely caused by an accidental move, bug. or race condition.
+            #Keep it as an orphan in that case
             if 'id' in docObj:
-                if self.writePassword:
-                    x= self.getDocumentByID(docObj['parent'],returnAncestorNull=True)
-                    if x and isinstance(x,dict) and x['type']=='null' and  x.get('burn',False) and x['time']>docObj.get('time',time.time()*10**6):
+                x= self.getDocumentByID(docObj['parent'],returnAncestorNull=True)
+
+                if x and isinstance(x,dict) and x['type']=='null' and  x.get('burn',False) and x['time']>docObj.get('time',time.time()*10**6) and x['time']>docObj.get('moveTime',0):
+                    if self.writePassword:
                         return self._setDocument({'type':'null','id':docObj['id'], 'time': x['time']})
+                    else:
+                        #We can't null it but we sure don't have to keep it around!
+                        return
 
 
 
@@ -1186,6 +1253,31 @@ class DocumentDatabase():
         else:
             oldVersion=None
 
+
+        #Location snapback.  The parent field has it's very own location tracker.
+        if self.writePassword:
+            if oldVersionData.get("moveTime",0) > docObj.get("moveTime",0):
+                if not oldVersionData.get("parent",'')==docObj.get('parent',''):
+                    #Mark as locally generated, we aren't just doing what they ask anymore
+                    signature=None
+                    remoteArrivalTime=None
+                    receivedFrom=None
+                    docObj['parent']=oldVersionData.get("parent",'')
+                    docObj['moveTime']=int(oldVersionData.get("moveTime",0))
+
+                else:
+                    #For locally generated records we always want to keep the move time moving forwards.
+                    #If they don't explicitly specify it, carry it forward.
+                    #Leave it as 0 by default though, we can use the assumed never moved value.
+
+                    #Only if not signature though.  Don't unnecessarily mess with signed records, assume that non-local
+                    #records have the correct time.
+                    if not signature:
+                        if int(oldVersionData.get("moveTime",0)):
+                            signature=None
+                            remoteArrivalTime=None
+                            receivedFrom=None
+                            docObj['moveTime']=max( int(oldVersionData.get("moveTime",0)), int(docObj.get("moveTime",0)))
 
         #Adding this property could cause all kinds of sync confusion with records that don't actually get deleted on remote nodes.
         #Might be a bit of a problem.
@@ -1341,44 +1433,44 @@ class DocumentDatabase():
             if not r['type']=='null' and not parentNull:
                 return
 
-            if self.writePassword:
-                # If we are marking this as deleted, we can ditch everything that depends on it.
-                # We don't even have to just set them as deleted, we can relly delete them, the deleted parent record
-                # is enough for other nodes to know this shouldn't exist anymore.
-                l = []
-                lastround = {}
+            # If we are marking this as deleted, we can ditch everything that depends on it.
+            # We don't even have to just set them as deleted, we can relly delete them, the deleted parent record
+            # is enough for other nodes to know this shouldn't exist anymore.
+            l = []
+            lastround = {}
 
-                #Do in rounds to limit memory usage.
-                #Unfortunately this means we need to always do a second round to see if we got everything.  It is kinda sucky.
-                for i in range(1000000):
-                    #Only children that are older than the deletion of the parent should be null propagated in this way.  
-                    #The rest we consider blocked. They become an orphan record.
-                    thisround = {}
-                    c=self.threadLocal.conn.execute(
-                        "SELECT json FROM document WHERE json_extract(json,'$.parent')=? AND json_extract(json,'$.time')<? LIMIT 1000", (record,r['time']))
-                    for i in c:
-                        x = json.loads(i[0])
-                        l.append((x['id'],x['time']))
-                        thisround[x['id']]=True
+            #Do in rounds to limit memory usage.
+            #Unfortunately this means we need to always do a second round to see if we got everything.  It is kinda sucky.
+            for i in range(1000000):
+                #Only children that are older than the deletion of the parent should be null propagated in this way.  
+                #The rest we consider blocked. They become an orphan record.
+                thisround = {}
+                c=self.threadLocal.conn.execute(
+                    "SELECT json FROM document WHERE json_extract(json,'$.parent')=? AND json_extract(json,'$.time')<? LIMIT 1000", (record,r['time']))
+                for i in c:
+                    x = json.loads(i[0])
+                    l.append((x['id'],x['time']))
+                    thisround[x['id']]=True
 
-                    #Look to see if this query has anything last did not
-                    shouldbreak=True
+                #Look to see if this query has anything last did not
+                shouldbreak=True
 
-                    for i in l:
-                        #Note that we propagate the timestamp of the null.
-                        if r.get('burn','') or (parentNull and parentNull.get('burn','')):
-                            self.setDocument({'type':'null', 'id':i[0], 'time':propagateTime,'burn':True},parentIsNull=True)
-                        else:
-                            #Silent delete unreachable.
-                            c=self.threadLocal.conn.execute("DELETE FROM document WHERE json_extract(json,'$.id')=? and json_extract(json,'$.time')<=?",(i[0],propagateTime))
-                        self.propagateNulls(i[0],propagateTime,parentNull=parentNull)
+                for i in l:
+                    #Note that we propagate the timestamp of the null.
+                    #But note the fact that we cannot set documents if we are not an authorized writer.
+                    if self.writePassword and r.get('burn','') or (parentNull and parentNull.get('burn','')):
+                        self.setDocument({'type':'null', 'id':i[0], 'time':propagateTime,'burn':True},parentIsNull=True)
+                    else:
+                        #Silent delete unreachable.
+                        c=self.threadLocal.conn.execute("DELETE FROM document WHERE json_extract(json,'$.id')=? and json_extract(json,'$.time')<=?",(i[0],propagateTime))
+                    self.propagateNulls(i[0],propagateTime,parentNull=parentNull)
 
-                        if not i[0] in lastround:
-                            shouldbreak=False
+                    if not i[0] in lastround:
+                        shouldbreak=False
 
-                    if shouldbreak:
-                        break
-                    lastround=thisround
+                if shouldbreak:
+                    break
+                lastround=thisround
         
 
     def _onRecordChange(self,record, signature, arrival):
