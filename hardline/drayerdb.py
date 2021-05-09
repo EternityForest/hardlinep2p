@@ -1139,7 +1139,7 @@ class DocumentDatabase():
                 docObj['parent']= docObj['parent']['id']
 
 
-            #Detect if we have a deleted ancestor newer than we are, and if so, insert a null instead of this record.
+            #Detect if we have a deleted BURN ancestor newer than we are, and if so, insert a null instead of this record.
 
             #TODO: All descendants of a deleted node become orphans that just hang around forever if they happen to be newer than
             #The deleted ancestor. Bad news!
@@ -1148,7 +1148,7 @@ class DocumentDatabase():
             if 'id' in docObj:
                 if self.writePassword:
                     x= self.getDocumentByID(docObj['parent'],returnAncestorNull=True)
-                    if x and isinstance(x,dict) and x['type']=='null' and x['time']>docObj.get('time',time.time()*10**6):
+                    if x and isinstance(x,dict) and x['type']=='null' and  x.get('burn',False) and x['time']>docObj.get('time',time.time()*10**6):
                         return self._setDocument({'type':'null','id':docObj['id'], 'time': x['time']})
 
 
@@ -1321,7 +1321,7 @@ class DocumentDatabase():
 
 
     def propagateNulls(self, record,propagateTime=0):
-        "On getting a batch of records, null out the children of any records that are null"
+        "On getting a batch of records, null out the children of any records that are null:burn.  Don't do this for nulls sans burn"
 
         with self.lock:
             #Heavy duty defensive programming for such a dangerous function.
@@ -1357,7 +1357,8 @@ class DocumentDatabase():
 
                     for i in l:
                         #Note that we propagate the timestamp of the null.
-                        self.setDocument({'type':'null', 'id':i[0], 'time':propagateTime},parentIsNull=True)
+                        if r.get('burn',''):
+                            self.setDocument({'type':'null', 'id':i[0], 'time':propagateTime,'burn':True},parentIsNull=True)
                         self.propagateNulls(i[0])
                         if not i[0] in lastround:
                             shouldbreak=False

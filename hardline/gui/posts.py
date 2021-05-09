@@ -162,7 +162,7 @@ class PostsMixin():
             def reallyDelete(v):
                 if v==postID:
                     with daemonconfig.userDatabases[stream]:
-                        daemonconfig.userDatabases[stream].setDocument({'type':'null','id':postID})
+                        daemonconfig.userDatabases[stream].setDocument({'type':'null','id':postID,'direct':True})
                         daemonconfig.userDatabases[stream].commit()
                         self.unsavedDataCallback=None
                         self.currentPageNewRecordHandler=None
@@ -175,6 +175,10 @@ class PostsMixin():
 
         if daemonconfig.userDatabases[stream].writePassword:
             buttons.add_widget(btn1)
+
+
+
+
 
 
         #This button takes you to it
@@ -726,3 +730,24 @@ class PostsMixin():
         self.postMetaPanel.add_widget(export)
         self.postMetaPanel.add_widget(Label(text="Exports this post, all descendants,\nand all ancestors in JSON format\nthat can be imported into\nanother stream.",size_hint=(1,None)))
 
+
+        
+        def burn(*a):
+            def reallyBurn(v):
+                if v==docID:
+                    with daemonconfig.userDatabases[stream]:
+                        daemonconfig.userDatabases[stream].setDocument({'type':'null','id':docID,'direct':True,'burn':True})
+                        daemonconfig.userDatabases[stream].commit()
+                        self.unsavedDataCallback=None
+                        self.currentPageNewRecordHandler=None
+                    self.gotoStreamPosts(stream)
+            self.askQuestion("BURN post permanently on all nodes?", docID, reallyBurn)
+
+        btn1 = Button(text='Burn',
+                      size_hint=(1, None), font_size="14sp")
+        btn1.bind(on_release=burn)
+
+        if daemonconfig.userDatabases[stream].writePassword:
+            self.postMetaPanel.add_widget(btn1)
+            self.postMetaPanel.add_widget(self.saneLabel("Burning a post is less\n likely to leave behind recoverable\nchild comments for spies than just deleting.\nHowever it has a chance of also\nremoving child posts that *used*\nto be stored under the post\nbut were moved.",  self.postMetaPanel))
+            self.postMetaPanel.add_widget(self.saneLabel("Both methods reliably delete this specific post.",  self.postMetaPanel))

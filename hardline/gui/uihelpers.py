@@ -11,6 +11,8 @@ from kivymd.uix.dialog import MDDialog
 from kivy.uix.checkbox import CheckBox
 
 from kivy.utils import platform
+from kivy.metrics import cm
+
 
 class AppHelpers():
     def showText(self, text,title="QR"):
@@ -33,6 +35,16 @@ class AppHelpers():
         )
         self.dialog.set_normal_height()
         self.dialog.open()
+
+    def saneLabel(self,text, container):
+        bodyText =Label(text=text,size_hint=(1,None),valign="top")
+        def setWidth(obj,w):
+            bodyText.text_size=(w),None
+            bodyText.texture_update()
+            bodyText.height = bodyText.texture_size[1]
+           
+        container.bind(width=setWidth)
+        return bodyText
 
     def showQR(self, text,title="QR"):
         try:
