@@ -124,7 +124,7 @@ class ColumnIterator():
         self._postPath= postPath
 
     def __iter__(self):
-        self._cur = self.db.getDocumentsByType("row", parent=self._postPath, limit=10240000000,allowOrphans=True)
+        self._cur = self._db.getDocumentsByType("row", parent=self._postPath, limit=10240000000,allowOrphans=True)
         return self
 
     def __next__(self):
