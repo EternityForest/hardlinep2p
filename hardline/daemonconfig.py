@@ -31,7 +31,7 @@ def loadUserServices(serviceDir, only=None):
                 if not i == only+".ini":
                     continue
             try:
-                config = configparser.ConfigParser(
+                config = configparser.RawConfigParser(
                     dict_type=CaseInsensitiveDict)
                 config.read(os.path.join(serviceDir, i))
 
@@ -81,7 +81,7 @@ def makeUserService(dir, name, title="A service", service="localhost", port='80'
             os.makedirs(dir)
     except:
         logger.info(traceback.format_exception())
-    c = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
+    c = configparser.RawConfigParser(dict_type=CaseInsensitiveDict)
     c.add_section("Service")
     c.add_section("Info")
     c.add_section("Cache")
@@ -136,7 +136,7 @@ def listServices(serviceDir):
             if not i.endswith(".ini"):
                 continue
             try:
-                config = configparser.ConfigParser(
+                config = configparser.RawConfigParser(
                     dict_type=CaseInsensitiveDict)
                 config.read(os.path.join(serviceDir, i))
                 services[i[:-4]] = config
@@ -267,10 +267,14 @@ def loadDrayerServerConfig():
     if ddbservice[0]:
         ddbservice[0].close()
 
-    globalConfig = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
-    globalConfig.read(globalSettingsPath)
+    import toml
+    if os.path.exists(globalSettingsPath):
+        with open(globalSettingsPath) as f:
+            globalConfig=toml.load(f)
+    else:
+        globalConfig={}
     if not "DrayerDB" in globalConfig:
-        globalConfig.add_section("DrayerDB")
+        globalConfig["DrayerDB"]={}
 
     title = globalConfig['DrayerDB'].get('serverName', '').strip()
 
@@ -296,3 +300,58 @@ def loadDrayerServerConfig():
 
         ddbservice[0] = Service(os.path.join(directories.builtinServicesRoot,
                                              "drayerDB.cert"), 'localhost', drayerServerPort, info={'title': title})
+
+import urllib.parse
+
+import logging
+def getBookmarks():
+    "Get drayer server config from the global config file."
+    import toml
+    if os.path.exists(globalSettingsPath):
+        with open(globalSettingsPath) as f:
+            globalConfig=toml.load(f)
+    else:
+        globalConfig={}
+
+    if not "Bookmarks" in globalConfig:
+        globalConfig["Bookmarks"]={}
+
+    x =globalConfig['Bookmarks']
+    r ={}
+
+    for i in x:
+        try:
+            r[i]=  urllib.parse.unquote(x[i].split(':')[0]),urllib.parse.unquote(x[i].split(':')[1])
+        except:
+            logging.exception("Bad Bookmark!!")
+    
+    return r
+
+
+def setBookmark(name, file, index):
+    "Get drayer server config from the global config file."
+    import toml
+    with open(globalSettingsPath) as f:
+        globalConfig=toml.load(f)
+
+    if not "Bookmarks" in globalConfig:
+        globalConfig["Bookmarks"]={}
+
+
+    bmstring = urllib.parse.quote(str(file))+":"+str(index)
+
+    if not file:
+        try:
+            del globalConfig['Bookmarks'][name]
+        except:
+            pass
+    else:
+        if name in globalConfig['Bookmarks']:
+            if globalConfig['Bookmarks']==bmstring:
+                return
+            name=name+"2"
+
+        globalConfig['Bookmarks'][name]=bmstring
+
+    with open(globalSettingsPath, "w") as f:
+        toml.dump(globalConfig,f)

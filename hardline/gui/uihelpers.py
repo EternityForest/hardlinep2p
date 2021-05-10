@@ -151,7 +151,10 @@ class AppHelpers():
         "Return a button representing a setting in a configparser obj which you can press to edit."
 
         try:
-            configObj.add_section(section)
+            if hasattr(configObj,'add_section'):
+                configObj.add_section(section)
+            else:
+                configObj[section]=configObj.get(section,{})
         except:
             pass
 

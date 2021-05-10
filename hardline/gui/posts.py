@@ -9,7 +9,7 @@ import configparser,logging,datetime
 
 from kivy.uix.image import Image
 from kivy.uix.widget import Widget
-
+from kivy.uix.textinput import TextInput
 from typing import Sized, Text
 from kivy.utils import platform
 from kivymd.uix.button import MDFillRoundFlatButton as Button, MDRoundFlatButton
@@ -66,7 +66,18 @@ class PostsMixin():
             self.backStack = self.backStack[-50:]
 
 
-        newtitle = MDTextField(text=document.get("title",''),mode='fill', multiline=False,font_size='22sp')
+        newtitle = MDTextField(text=document.get("title",''),mode='fill', multiline=False,font_size='22sp',hint_text='Title')
+        newtitle.fill_color=(0.8,0.8,0.8,0.2)
+
+                #I kinda hate that the way kivymd does colors.  I have no clue how to change
+        #anything. I am using the Accent color as a sane text color
+        newtitle.color_mode='accent'
+        newtitle.fill_color=(.8,.8,.7,.5)
+        newtitle.bold=True
+
+        #Must set in correct order
+        self.theme_cls.accent_pallete='Brown'
+        self.theme_cls.accent_hue='900'
 
         titleBar = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None))
         innerTitleBar = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(0.7,None))
@@ -90,9 +101,17 @@ class PostsMixin():
         renderedText = tables.renderPostTemplate(daemonconfig.userDatabases[stream],postID, document.get("body",''))
 
         sourceText= [document.get("body",'')]
-
-        newp = MDTextField(text=renderedText, multiline=True,size_hint=(1,0.5),mode="rectangle")
         
+
+        newp = MDTextField(text=renderedText, multiline=True,size_hint=(1,None),mode='fill',color_mode='custom')        
+        
+        #I kinda hate that the way kivymd does colors.  I have no clue how to change
+        #anything. I am using the Accent color as a sane text color
+        newp.fill_color=(.8,.8,.7,.5)
+        newp.line_color_normal=(0,0,0,1)
+        newp.color_mode='accent'
+
+
         #Keeps android virtual keyboard from covering us up
         buffer = Widget(size_hint=(1,None),height=0)
 
@@ -576,6 +595,12 @@ class PostsMixin():
 
 
 
+    def gotoBookmark(self,b):
+        bm = daemonconfig.getBookmarks()[b]
+        for i in daemonconfig.userDatabases:
+            if bm[0]==daemonconfig.userDatabases[i].filename:
+                self.gotoStreamPost(i,bm[1])
+
 
     def makePostMetaDataPage(self):
         "Prettu much just an empty page filled in by the specific goto functions"
@@ -745,6 +770,17 @@ class PostsMixin():
             
         parentButton.bind(on_release=promptSet)
         self.postMetaPanel.add_widget(parentButton)
+
+
+        bmButton = Button(size_hint=(1,None), text="Bookmark")
+        def promptSet(*a):
+            def f(p):
+                if not p is None:
+                    daemonconfig.setBookmark(p,daemonconfig.userDatabases[stream].filename, docID )
+            self.askQuestion("Bookmark Name?",s['title'],f)
+            
+        bmButton.bind(on_release=promptSet)
+        self.postMetaPanel.add_widget(bmButton)
 
 
         export = Button(size_hint=(1,None), text="Export Raw Data")

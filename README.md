@@ -310,7 +310,8 @@ Gets the first in a list, which will be be the most recent.
 ##### RANDSELECT(column)
 Gets a random selection of one of the values from the column.  Note that the value is cached and might not change very often.
 
-
+##### CONVERT(val, unit, to)
+Convert val from unit to to, as in CONVERT(1,'in','mm'). Same as traditional spreadsheets.
 
 ### Sync
 

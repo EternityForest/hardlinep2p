@@ -1,5 +1,6 @@
 # This is the kivy android app.  Maybe ignore it on ither platforms, the code the support them is only for testing.
 
+from kivy.uix.layout import Layout
 from . import tools, servicesUI, discovery, tables, posts, streams, uihelpers
 from kivymd.uix.textfield import MDTextFieldRect, MDTextField
 from kivy.clock import mainthread, Clock
@@ -39,6 +40,14 @@ import logging
 
 from hardline import daemonconfig
 logging.Logger.manager.root = Logger
+
+
+
+
+
+
+
+
 
 
 # Terrible Hacc, because otherwise we cannot iumport hardline on android.
@@ -128,8 +137,19 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         sm.add_widget(self.makePostMetaDataPage())
         from kivy.base import EventLoop
         EventLoop.window.bind(on_keyboard=self.hook_keyboard)
+        import kivymd
+        self.theme_cls.colors=kivymd.color_definitions.colors
 
+        #Horid hacks for material design
+        self.theme_cls.colors['Brown']['900']='050200'
+        self.theme_cls.colors['Green']['600']='83A16C'
+        self.theme_cls.colors['Light']['Background']='E3DFDA'
         self.theme_cls.primary_palette = "Green"
+        self.theme_cls.theme_style = "Light"
+        self.theme_cls.primary_hue='600'
+        self.theme_cls.accent_hue='900'
+        self.theme_cls.accent_palette='Brown'
+
 
         self.backStack = []
 
@@ -140,6 +160,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
 
 
         Clock.schedule_interval(self.flushUnsaved, 60*5)
+        self.gotoMainScreen()
 
         return sm
 
@@ -162,12 +183,50 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
     def makeMainScreen(self):
         mainScreen = Screen(name='Main')
 
-        layout = BoxLayout(orientation='vertical',
-                           spacing=10, size_hint=(1, 1))
-        mainScreen.add_widget(layout)
+        mainscroll = ScrollView(size_hint=(1, 1))
+
+        self.mainScreenlayout = BoxLayout(orientation='vertical',
+                           spacing=10, size_hint=(1, 1),adaptive_height=True)\
+
+        mainscroll.add_widget(self.mainScreenlayout)
+        mainScreen.add_widget(mainscroll)
+        return mainScreen
+
+
+    def gotoMainScreen(self):
+        self.mainScreenlayout.clear_widgets()
+        layout=self.mainScreenlayout
+
+    
         label = MDToolbar(title="HardlineP2P")
         layout.add_widget(label)
 
+        for i in sorted(list(daemonconfig.getBookmarks().keys())):
+            bw =BoxLayout(orientation='horizontal',
+                           spacing=10, size_hint=(1, None),adaptive_height=True)
+            b = Button(text=i,
+                      size_hint=(0.8, None), font_size="14sp")
+            bd = Button(text="Del",
+                      size_hint=(0.2, None), font_size="14sp")
+
+
+            def dlbm(*a,i=i):
+                def f(a):
+                    if a:
+                        daemonconfig.setBookmark(a,None,None)
+                        self.gotoMainScreen()
+                self.askQuestion("Delete Bookmark?",i,f)
+            bd.bind(on_press=dlbm)
+
+            def bm(*a,i=i):
+                self.gotoBookmark(i)
+            b.bind(on_press=bm)
+            bw.add_widget(b)
+            bw.add_widget(bd)
+            layout.add_widget(bw)
+            
+
+            
         btn1 = Button(text='My Streams',
                       size_hint=(1, None), font_size="14sp")
         label2 = Label(size_hint=(1, None), halign="center",
@@ -192,8 +251,9 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         btn5.bind(on_press=self.goToSettings)
 
         layout.add_widget(btn5)
+        self.screenManager.current = "Main"
 
-        return mainScreen
+
 
 
 
@@ -214,7 +274,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
                 if self.backStack:
                     self.backStack.pop()()
                 else:
-                    self.screenManager.current = "Main"
+                    self.gotoMainScreen()
 
         # If they have an unsaved post, ask them if they really want to leave.
         if self.unsavedDataCallback:

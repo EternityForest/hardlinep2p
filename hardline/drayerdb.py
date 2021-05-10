@@ -1284,7 +1284,6 @@ class DocumentDatabase():
                     
                     #Non-burned only propagates one level
                     #But we can still discard it
-
                     elif 'time' in docObj:
                         if x['id']==docObj['parent'] and  x['time']> docObj['time']:
                             return 

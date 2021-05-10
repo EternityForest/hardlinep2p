@@ -62,7 +62,7 @@ class ServicesMixin():
 
     def editLocalService(self, name, c=None):
         if not c:
-            c = configparser.ConfigParser(dict_type=cidict.CaseInsensitiveDict)
+            c = configparser.RawConfigParser(dict_type=cidict.CaseInsensitiveDict)
 
         try:
             c.add_section("Service")

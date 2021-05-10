@@ -51,6 +51,8 @@ def cacheWrap(f):
         return f(*a)
     return f2
 
+
+
 def makePostRenderingFuncs(limit=1024*1024):
     @cacheWrap
     def spreadsheetSum(p):
@@ -66,6 +68,10 @@ def makePostRenderingFuncs(limit=1024*1024):
                 return float('nan')
             t+=i
         return t
+
+    def spreadsheetConvert(p, unit, to):
+        import pint
+        return pint.Quantity(p,unit).to(to)
     
     @cacheWrap
     def spreadsheetLatest(p):
@@ -99,7 +105,7 @@ def makePostRenderingFuncs(limit=1024*1024):
             t+=i
         return t/n
     
-    funcs = {'SUM':spreadsheetSum, 'AVG':spreadsheetAvg,'LATEST':spreadsheetLatest,'RANDSELECT':spreadsheetRandSelect}
+    funcs = {'SUM':spreadsheetSum, 'AVG':spreadsheetAvg,'LATEST':spreadsheetLatest,'RANDSELECT':spreadsheetRandSelect, 'CONVERT':spreadsheetConvert}
     return funcs
 
 prf_full = makePostRenderingFuncs()
@@ -113,25 +119,25 @@ def getPostRenderingFunctions(limit):
 
 class ColumnIterator():
     def __init__(self, db,postPath, col):
-        self.col = col
-        self.db = db
-        self.postPath= postPath
+        self._col = col
+        self._db = db
+        self._postPath= postPath
 
     def __iter__(self):
-        self.cur = self.db.getDocumentsByType("row", parent=self.postPath, limit=10240000000,allowOrphans=True)
+        self._cur = self.db.getDocumentsByType("row", parent=self._postPath, limit=10240000000,allowOrphans=True)
         return self
 
     def __next__(self):
-        for i in self.cur:
-            if self.col in i:
-                return i[self.col]
+        for i in self._cur:
+            if self._col in i:
+                return i[self._col]
         raise StopIteration
 
     def __hash__(self):
-        return hash((self.col, self.db.filename))
+        return hash((self._col, self._db.filename))
 
     def __eq__(self, other):
-        return (self.col, self.db.filename) == (self.col, self.db.filename)
+        return (self._col, self._db.filename) == (self._col, self._db.filename)
 
 
 def renderPostTemplate(db, postID,text, limit=100000000):

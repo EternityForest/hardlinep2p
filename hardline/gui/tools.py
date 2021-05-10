@@ -32,7 +32,7 @@ from .. daemonconfig import makeUserDatabase
 from .. import  drayerdb, cidict
 
 from kivymd.uix.picker import MDDatePicker
-
+import toml
 
 class ToolsAndSettingsMixin():
 
@@ -40,8 +40,13 @@ class ToolsAndSettingsMixin():
         self.screenManager.current = "Settings"
 
     def goToGlobalSettings(self, *a):
-        globalConfig = configparser.ConfigParser(dict_type=cidict.CaseInsensitiveDict)
-        globalConfig.read(hardline.globalSettingsPath)
+        if os.path.exists(hardline.globalSettingsPath):
+            with open(hardline.globalSettingsPath) as f:
+                globalConfig=toml.load(f)
+        else:
+            globalConfig={}
+
+
         self.localSettingsBox.clear_widgets()
 
         self.localSettingsBox.add_widget(Label(size_hint=(1, 6), halign="center",
@@ -69,7 +74,7 @@ class ToolsAndSettingsMixin():
 
         def save(*a):
             with open(hardline.globalSettingsPath, 'w') as f:
-                globalConfig.write(f)
+                toml.dump(globalConfig,f)
             if platform == 'android':
                 self.stop_service()
                 self.start_service()

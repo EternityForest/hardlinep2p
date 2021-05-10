@@ -111,32 +111,43 @@ dbLocal = threading.local()
 
 from .cidict import CaseInsensitiveDict
 
-globalSettingsPath = os.path.join(directories.settings_path,"settings.ini")
-globalConfig = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
-globalConfig.read(globalSettingsPath)
+globalSettingsPath = os.path.join(directories.settings_path,"settings.toml")
 
+import toml
+if os.path.exists(globalSettingsPath):
+    with open(globalSettingsPath) as f:
+        globalConfig=toml.load(f)
+else:
+    globalConfig={}
+
+ogConfig = globalConfig
+c=0
 if not "DHTProxy" in globalConfig:
-    globalConfig.add_section("DHTProxy")
+    globalConfig["DHTProxy"]={}
+    c=1
 
 if not globalConfig['DHTProxy'].get("server1",'').strip():
     globalConfig['DHTProxy']['server1']="http://185.198.26.230:4223/"
+    c=1
 
 if not globalConfig['DHTProxy'].get("server3",'').strip():
     globalConfig['DHTProxy']['server2']="http://[200:6a4e:d4a9:d773:388:b367:481:5382]:4223/"
+    c=1
 
-with open(globalSettingsPath,'w') as f:
-    globalConfig.write(f)
+if c:
+    with open(globalSettingsPath,'w') as f:
+        toml.dump(globalConfig,f)
 
 
 
     
 
 def getDHTProxies():
-    globalConfig = configparser.ConfigParser(dict_type=CaseInsensitiveDict)
+    globalConfig = configparser.RawConfigParser(dict_type=CaseInsensitiveDict)
     globalConfig.read(globalSettingsPath)
 
     if not "DHTProxy" in globalConfig:
-        globalConfig.add_section("DHTProxy")
+        globalConfig["DHTProxy"]={}
 
     l = []
 
