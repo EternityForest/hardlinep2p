@@ -53,9 +53,24 @@ class PostsMixin():
         self.streamEditPanel.clear_widgets()
         self.streamEditPanel.add_widget(MDToolbar(title="Post in "+stream+"(Autosave on)"))
 
+        document = daemonconfig.userDatabases[stream].getDocumentByID(postID,allowOrphans=True)
+
+        def upOne(*a):
+            if document and 'parent' in document:
+                self.gotoStreamPost(stream,document['parent'])
+            else:
+                self.gotoStreamPosts(stream)
+
+        btn1 = Button(text='Up',
+                size_hint=(1, None), font_size="14sp")
+
+        btn1.bind(on_press=upOne)
+      
+        self.streamEditPanel.add_widget(btn1)
+
+
         self.streamEditPanel.add_widget(self.makeBackButton())
         
-        document = daemonconfig.userDatabases[stream].getDocumentByID(postID,allowOrphans=True)
 
 
         #Don't pollute history with timewaasters for every refresh
@@ -323,9 +338,25 @@ class PostsMixin():
             parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent)
             self.streamEditPanel.add_widget(self.makePostWidget(stream,parentDoc))
             self.streamEditPanel.add_widget((MDToolbar(title="Comments:")))
-            
+        
+
 
         topbar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
+
+        def upOne(*a):
+            if parent:
+                self.gotoStreamPost(stream,parent)
+            else:
+                self.editStream(stream)
+
+        btn1 = Button(text='Up',
+                size_hint=(1, None), font_size="14sp")
+
+        btn1.bind(on_press=upOne)
+      
+        topbar.add_widget(btn1)
+
+
         topbar.add_widget(self.makeBackButton())
 
         searchBar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
@@ -375,11 +406,11 @@ class PostsMixin():
             if startTime:
                 #If we have a start time the initial search has to be ascending or we will just always get the very latest.
                 #So then we have to reverse it to give a consistent ordering
-                p = list(reversed(list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parentPath,descending=False,orphansOnly=orphansMode))))
+                p = list(reversed(list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20,descending=False,orphansOnly=orphansMode,parent=parentPath))))
             else:
-                p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parentPath,orphansOnly=orphansMode))
+                p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20,orphansOnly=orphansMode,parent=parentPath))
         else:
-            p=list(s.searchDocuments(search,"post",startTime=startTime, endTime=endTime or 10**18, limit=20, parent=parentPath))
+            p=list(s.searchDocuments(search,"post",startTime=startTime, endTime=endTime or 10**18, limit=20))
 
         if p:
             newest=p[0]['time']
@@ -436,8 +467,11 @@ class PostsMixin():
         pagebuttons.add_widget(newer)
 
 
-        self.streamEditPanel.add_widget(pagebuttons)
-        self.streamEditPanel.add_widget(startdate)
+        #If everything fits on one page we do not need to have the nav buttons
+        if len(p)>=20 or startTime or endTime:
+            self.streamEditPanel.add_widget(pagebuttons)
+            self.streamEditPanel.add_widget(startdate)
+
 
         if not orphansMode:
             self.streamEditPanel.add_widget(searchBar)
@@ -533,6 +567,8 @@ class PostsMixin():
         def savepost(*a,goto=False):
             if newp.text:
                 with daemonconfig.userDatabases[stream]:
+                    import uuid
+                    id = str(uuid.uuid4())
                     d = {'body': newp.text,'title':newtitle.text,'type':'post'}
                     if parent:
                         d['parent'] = parent
@@ -542,12 +578,11 @@ class PostsMixin():
 
                 self.unsavedDataCallback=None
                 if goto:
-                    self.backStack.pop()
                     try:
                         if parent:
                             self.gotoStreamPost(stream,parent)
                         else:
-                            self.gotoStreamPosts(stream)
+                            self.gotoStreamPost(stream,id)
                     except:
                         logging.exception("Error going to root of where we just put comment")
                         self.goBack()

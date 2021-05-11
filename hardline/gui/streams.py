@@ -58,6 +58,16 @@ class StreamsMixin():
         self.streamEditPanel.add_widget(Label(size_hint=(
             1, None), halign="center", text=name))
 
+        def upOne(*a):
+            self.goToStreams()
+
+        btn1 = Button(text='Up',
+                size_hint=(1, None), font_size="14sp")
+
+        btn1.bind(on_press=upOne)
+
+        self.streamEditPanel.add_widget(btn1)
+
         self.streamEditPanel.add_widget(self.makeBackButton())
         
         def goHere():
@@ -302,13 +312,22 @@ class StreamsMixin():
 
 
         layout.add_widget(MDToolbar(title="My Streams"))
-        def goMain(*a):
-            self.screenManager.current = "Main"
+
+        def upOne(*a):
+            self.gotoMainScreen()
+
+        btn1 = Button(text='Up',
+                size_hint=(1, None), font_size="14sp")
+
+        btn1.bind(on_press=upOne)
+
+        layout.add_widget(btn1)
 
         layout.add_widget(self.makeBackButton())
 
         btn2 = Button(text='Create a Stream',
                       size_hint=(1, None), font_size="14sp")
+
 
         btn2.bind(on_press=self.promptAddStream)
         layout.add_widget(btn2)

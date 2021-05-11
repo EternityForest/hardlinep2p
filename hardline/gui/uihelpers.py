@@ -1,6 +1,7 @@
 
 
 import logging
+from kivy.core.clipboard import Clipboard
 from kivy.uix.boxlayout import BoxLayout
 from kivymd.uix.button import MDFlatButton
 
@@ -53,6 +54,7 @@ class AppHelpers():
             logging.exception("Could not get QR lib")
             return self.showText(text,title)
         t =QRCodeWidget(data=text, size_hint=(1,1))
+        t.size=(self.root_window.width/2, self.root_window.height/2.5)
         
         def cbr_yes(*a):
             print("Accept Button")
@@ -64,6 +66,15 @@ class AppHelpers():
             self.dialog.dismiss()
             self.showText(text,title)
 
+        def cbr_cpy(*a):
+            print("Accept Button")
+            self.dialog.dismiss()
+            try:
+                from kivy.core.clipboard import Clipboard
+                Clipboard.copy(text)
+            except:
+                logging.exception("Could not copy to clipboard")
+
         self.dialog = MDDialog(
             type="custom",
             title=title,
@@ -74,6 +85,9 @@ class AppHelpers():
                 ),
                 Button(
                     text="Show Text", text_color=self.theme_cls.primary_color, on_press=cbr_txt
+                ),
+                 Button(
+                    text="Copy", text_color=self.theme_cls.primary_color, on_press=cbr_cpy
                 )
             ],
         )

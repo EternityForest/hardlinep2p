@@ -1130,7 +1130,9 @@ class DocumentDatabase():
         return json.dumps(l, sort_keys=True,indent=2)
 
     def exportRecordSetToTOML(self,docs):
-        "Export all records in the list along with all the records in the list to VCable TOML format"
+        """Export all records in the list along with all the records in the list to VCable TOML format,
+        optimized for meaningful diffs
+        """
         data = {}
         for i in docs:
             data.update(self.getAllRelatedRecords(i))
@@ -1142,11 +1144,44 @@ class DocumentDatabase():
         import json
         for i in data:
             d=json.loads(data[i][0])
-            l.append((d['id'],d))
+            #Dict copy ensuring keys are sorted
+            d2 = {}
+            for i in sorted(list(d.keys())):
+                d2[i]=d[i]
+            d=d2
+            if 'parent' in d:
+                parent = self.getDocumentByID(d['parent'],allowOrphans=True)
+                psk=''
+                if parent:
+                    psk = parent.get('title',parent.get('name',parent['id']))
+
+                sk = d.get('title',d.get('name',d['id']))
+
+            #Shorter path lengths closer to the root first.  Then we group by the title of the parent(Keep related together)
+            #Then we sort by the title of the record itself, finally we sort by ID.
+            l.append((len(self.getPath(d['id'])), sk,d['id'],d))
+
         l = sorted(l)
 
-        l = [ [i[1]] for i in l]
-        return json.dumps(l, sort_keys=True,indent=2)
+        op = {}
+        for i in l:
+            k = i[0].get('title','')
+            
+            #Headings can eith represent an ID or a title or niether.
+
+            if k and (not k in op) and not k.startswith('#'):
+                op[k]=i[0]
+                del i[0]['title']
+            else:
+                if not k and not i[0]['id'] in op:
+                    op['#'+i[0]['id']]=i[0]
+                    del i[0]['id']
+                else:
+                    op['#'+str(uuid.uuid4())]=i[0]
+        
+        return toml.dump(op)
+
+
 
     
     def getPath(self,record,path = None, useAttribute='id'):

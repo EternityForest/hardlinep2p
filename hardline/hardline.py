@@ -847,8 +847,6 @@ def server_thread(sock):
                         except:
                             logger.info(traceback.format_exc())
                     else:
-
-
                         raise RuntimeError(
                             "All saved host options and dht options failed:"+str(hosts))
         except:
