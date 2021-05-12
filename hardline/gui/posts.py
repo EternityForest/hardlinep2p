@@ -58,7 +58,7 @@ class PostsMixin():
 
         def upOne(*a):
             if document and 'parent' in document:
-                self.gotoStreamPost(stream,document['parent'],indexAssumption=False)
+                self.gotoStreamPost(stream,document['parent'])
             else:
                 self.gotoStreamPosts(stream)
 
@@ -332,7 +332,7 @@ class PostsMixin():
             #The index assumption, jump straight to the index when we detect a very short post
             #with at least one child
             if indexAssumption and len(document.get('body',''))<140:
-                self.gotoStreamPosts(stream,parent=postID)
+                self.gotoStreamPosts(stream,parent=postID,indexAssumptionWasUsed=True)
                 return
 
             pinnedIDs[i['id']]=True
@@ -346,7 +346,7 @@ class PostsMixin():
             #The index assumption, jump straight to the index when we detect a very short post
             #with at least one child
             if indexAssumption and len(document.get('body',''))<140:
-                self.gotoStreamPosts(stream,parent=postID)
+                self.gotoStreamPosts(stream,parent=postID,indexAssumptionWasUsed=True)
                 return
 
             #Avoid showing pinned twice
@@ -429,7 +429,7 @@ class PostsMixin():
 
         self.currentPageNewRecordHandler = onNewRecord
 
-    def gotoStreamPosts(self, stream, startTime=0, endTime=0, parent='', search='',noBack=False,orphansMode=False):
+    def gotoStreamPosts(self, stream, startTime=0, endTime=0, parent='', search='',noBack=False,orphansMode=False,indexAssumptionWasUsed=False):
         "Handles both top level stream posts and comments, and searches.  So we can search comments if we want."
 
         #We MUST ensure we clear this when leaving the page. Pst widgets do ut for us.
@@ -448,15 +448,18 @@ class PostsMixin():
             parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent)
             #Disable index assumption so we can always actually go to the parent post instead of getting stuck.
             self.streamEditPanel.add_widget(self.makePostWidget(stream,parentDoc,indexAssumption=False))
-            self.streamEditPanel.add_widget((MDToolbar(title="Comments:")))
-        
 
 
         topbar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
 
         def upOne(*a):
             if parent:
-                self.gotoStreamPost(stream,parent,indexAssumption=False)
+                #Treat as a 'view' of the parent doc so that up one level actually goes one abovet the parent for this comment
+                #page
+                if parentDoc.get('parent',''):
+                    self.gotoStreamPost(stream,parentDoc.get('parent',''))
+                    return
+                self.gotoStreamPosts(stream)
             else:
                 self.editStream(stream)
 
@@ -586,7 +589,9 @@ class PostsMixin():
             self.streamEditPanel.add_widget(pagebuttons)
 
 
-        if not orphansMode:
+        #Only allow global search just to make stuff easier\#defensive programming ensure always show
+        #user if this is seartch thjpugh
+        if not orphansMode and ((not parent) or search):
             self.streamEditPanel.add_widget(searchBar)
 
 
