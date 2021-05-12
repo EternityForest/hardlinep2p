@@ -296,7 +296,11 @@ class DocumentDatabase():
                 self.threadLocal.conn.execute(
                     '''CREATE INDEX IF NOT EXISTS document_parent_type_time ON document(IFNULL(json_extract(json,"$.parent"),"")  ,json_extract(json,"$.type"), IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))) ''')
                 
+                self.threadLocal.conn.execute(
+                    '''CREATE INDEX IF NOT EXISTS document_parent_pinrank ON document(IFNULL(json_extract(json,"$.parent"),"") ,IFNULL(json_extract(json,"$.pinRank"),0)) WHERE json_extract(json,"$.pinRank") IS NOT null''')
                 
+
+
                 self.threadLocal.conn.execute(
                     '''CREATE INDEX IF NOT EXISTS document_link ON document(json_extract(json,"$.link")) WHERE json_extract(json,"$.link") IS NOT null''')
                 self.threadLocal.conn.execute(
@@ -1234,7 +1238,8 @@ class DocumentDatabase():
         logging.info("Setting record, recieved from: "+receivedFrom+" and local ID is "+base64.b64encode(self.localNodeVK).decode())
 
 
-        
+
+
         self.dbConnect()
         oldVersionData={}
         if 'id' in docObj:
@@ -1261,6 +1266,11 @@ class DocumentDatabase():
         else:
             oldVersion=None
 
+
+        docObj['time'] = docObj.get('time', time.time()*1000000) or time.time()*1000000
+        docObj['id'] = docObj.get('id', str(uuid.uuid4()))
+        docObj['name'] = docObj.get('name', docObj['id'])
+        docObj['type'] = docObj.get('type', '')
 
         #Location snapback.  The parent field has it's very own location tracker.
         if self.writePassword:
@@ -1368,10 +1378,7 @@ class DocumentDatabase():
                 raise RuntimeError("Cannot modify records without the writePassword")
             #Handling a locally created document
             
-            docObj['time'] = docObj.get('time', time.time()*1000000) or time.time()*1000000
-            docObj['id'] = docObj.get('id', str(uuid.uuid4()))
-            docObj['name'] = docObj.get('name', docObj['id'])
-            docObj['type'] = docObj.get('type', '')
+
 
             d = jsonEncode(docObj)
 

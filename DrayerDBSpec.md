@@ -174,7 +174,12 @@ There is potential to leak data by deleting something that leaves unreachable re
 ### post
 
 Has title and body attributes, it represents a notification, note, social post, or other such text record.  If it has a parent, it is a comment.
-{{ and }} are currently reserved
+{{ and }} represent inline sandboxed template expressions
+
+
+#### pinRank
+Posts with this numeric property  set are considered pinned to the top of a listing.
+
 
 ### row
 

@@ -185,6 +185,7 @@ class PostsMixin():
         
         
         buttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
+        buttons2 = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
 
 
         if daemonconfig.userDatabases[stream].writePassword:
@@ -242,11 +243,85 @@ class PostsMixin():
                 f('yes')
 
 
-        btn1 = Button(text='Data Table',
+        btn1 = Button(text='Table',
                 size_hint=(1, None), font_size="14sp")
 
         btn1.bind(on_press=tableview)
-        self.streamEditPanel.add_widget(btn1)
+        buttons2.add_widget(btn1)
+
+
+
+
+        def archive(*a):
+            def f(x):
+                if x:
+                    import uuid
+
+                    #Save changes before we archive
+                    document['title']=newtitle.text
+                    document['body']=sourceText[0] or newp.text
+
+
+                    #Special UUID standin for the "Root post", which does not really exist.
+                    rootUUID = '1d4f7b28-0677-4245-a4e3-21a1376b0b3a'
+
+                    #We use this UUID as the identifier for archives.
+                    #We can't use a special name for fear of conflict, and because the user should have total freedom to
+                    #Rename and customize the archive folder.
+                    archiveUUID = 'f638dbb8-dc03-48f3-a644-9fe6ba4c13eb'
+
+                    archiveID=str(uuid.uuid5(uuid.UUID(document.get('parent','') or rootUUID), archiveUUID))
+
+                    with daemonconfig.userDatabases[stream]:
+                        #Make the archive post.  It must be a sibling.
+                        if not daemonconfig.userDatabases[stream].getDocumentByID(archiveID):
+                            daemonconfig.userDatabases[stream].setDocument({
+                                'id':archiveID,
+                                'title':'Archive',
+                                'specialPostType':'archive',
+                                'parent':document.get('parent',''),
+                                'type':'post',
+                                'pinRank': 1,
+                                'body':"This is where archived posts in this folder go",
+                                "icon":"icons/CC0 Clipart/nicubunu/office/box_with_folders.jpg"
+                            })
+                        
+
+                        #Now we make the document into a child of the archive
+                        p=document.get('parent','')
+
+                        document['parent']= archiveID
+                        document['moveTime'] = int(time.time()*10**6)
+                        try:
+                            del document['time']
+                        except KeyError:
+                            pass
+                        daemonconfig.userDatabases[stream].setDocument(document)
+
+                    daemonconfig.userDatabases[stream].commit()
+
+
+                    self.unsavedDataCallback=None
+                    self.currentPageNewRecordHandler=None
+                    self.gotoStreamPosts(stream, parent=p)
+
+
+            self.askQuestion("Archive Post?","yes",f)
+
+
+
+        btn1 = Button(text='Archive',
+                size_hint=(1, None), font_size="14sp")
+
+        btn1.bind(on_press=archive)
+        buttons2.add_widget(btn1)
+
+        
+
+
+
+
+        self.streamEditPanel.add_widget(buttons2)
 
         #This just shows you the most recent info
         self.streamEditPanel.add_widget(Label(size_hint=(
@@ -555,23 +630,18 @@ class PostsMixin():
         l.add_widget(btn)
         l2 = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None),minimum_height=cm(1.5))
         
-   
+
         src = os.path.join(directories.assetLibPath, post.get("icon","INVALID"))
         useIcon=False
-        img = Image(size_hint=(0.2,None))
+        img = Image(size_hint=(0.2,1))
         img.size_hint_min_y=cm(1.5)   
         img.source= src
         l2.add_widget(img)
         l.image = img
-        bodyText =Label(text=body.strip(),size_hint=(0.8,None),valign="top")
-        bodyText.height=cm(1.5)
+        bodyText =Label(text=body.strip(),size_hint=(0.8,1),valign="top")
         l.body = bodyText
-       
-        rateLimit = [0]
+    
         def setWidth(obj,w):
-            if rateLimit[0]>time.time()-3:
-                return
-            rateLimit[0]=time.time()
             bodyText.text_size=(w-(img.width+4)),None
             bodyText.texture_update()
             bodyText.width = (bodyText.texture_size[0],max(bodyText.texture_size[1],cm(1.5)))
@@ -586,7 +656,7 @@ class PostsMixin():
         l2.add_widget(w)
         l.add_widget(l2)
 
-       
+    
 
         return l
 
