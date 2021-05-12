@@ -40,6 +40,7 @@ from . import tables
 
 
 
+pinRankFilter = "IFNULL(json_extract(json,'$.pinRank'), 0) >0"
 
 
 
@@ -101,7 +102,7 @@ class PostsMixin():
         innerTitleBar.add_widget(newtitle)
 
 
-        img = Image(size_hint=(0.3,1))
+        img = Image(size_hint=(0.3,None))
         titleBar.add_widget(img)
         titleBar.add_widget(innerTitleBar)
 
@@ -148,9 +149,10 @@ class PostsMixin():
 
 
 
-        def post(*a,goBack=False):
+        def post(*a,goBack=False):                    
             with daemonconfig.userDatabases[stream]:
-                if self.unsavedDataCallback:
+                if self.unsavedDataCallback:            
+                    self.unsavedDataCallback=None
                     document['title']=newtitle.text
                     document['body']=sourceText[0] or newp.text
                     #Make sure system knows this is not an old document
@@ -160,7 +162,6 @@ class PostsMixin():
                         pass
                     daemonconfig.userDatabases[stream].setDocument(document)
                     daemonconfig.userDatabases[stream].commit()
-                    self.unsavedDataCallback=None
                     if goBack:
                         self.goBack()
 
@@ -252,9 +253,24 @@ class PostsMixin():
             1, None), halign="center", text="Recent Comments:"))
 
         s = daemonconfig.userDatabases[stream]
+
+        pinnedIDs={}
+        pinnedPosts = []
+
+        #Get nonzero pin rank
+        p1 = s.getDocumentsByType("post", limit=5,parent=postID,extraFilters=pinRankFilter)
+        for i in p1:
+            pinnedIDs[i['id']]=True
+            pinnedPosts.append((i.get('pinRank',0),i['id'],i))
+
+        for i in reversed(list(sorted(pinnedPosts))):
+            self.streamEditPanel.add_widget(self.makePostWidget(stream,i[2]))
+
         p = s.getDocumentsByType("post", limit=5,parent=postID)
         for i in p:
-            self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
+            #Avoid showing pinned twice
+            if not i['id'] in pinnedIDs:
+                self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
 
         commentsbuttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
         
@@ -350,12 +366,13 @@ class PostsMixin():
                 self.editStream(stream)
 
         btn1 = Button(text='Up',
-                size_hint=(1, None), font_size="14sp")
+                size_hint=(0.9, None), font_size="14sp")
 
         btn1.bind(on_press=upOne)
+        btn1.height=cm(1)
       
         topbar.add_widget(btn1)
-
+        topbar.height=cm(1)
 
         topbar.add_widget(self.makeBackButton())
 
@@ -363,6 +380,9 @@ class PostsMixin():
 
         searchQuery = MDTextField(size_hint=(0.68,None),multiline=False, text=search)
         searchButton = MDRoundFlatButton(text="Search", size_hint=(0.3,None))
+        searchButton.height=cm(1)
+        searchQuery.height=cm(1)
+
         searchBar.add_widget(searchQuery)
         searchBar.add_widget(searchButton)
 
@@ -382,7 +402,7 @@ class PostsMixin():
         def write(*a):
             self.currentPageNewRecordHandler=None
             self.gotoNewStreamPost(stream,parent)
-        btn1 = Button(text='Write a post',
+        btn1 = Button(text='Write',
                 size_hint=(1, None), font_size="14sp")
 
         btn1.bind(on_press=write)
@@ -423,7 +443,7 @@ class PostsMixin():
 
         #Let the user see older posts by picking a start date to stat showing from.
         startdate = Button(text=time.strftime('(%a %b %d, %Y)',time.localtime(oldest/10**6)),
-                      size_hint=(1, None), font_size="14sp")
+                      size_hint=(0.9, None), font_size="14sp")
 
       
         def f(*a):
@@ -462,9 +482,12 @@ class PostsMixin():
             self.gotoStreamPosts(stream, endTime=oldest,parent=parent)            
 
         older.bind(on_release=f3)
+        newer.height=cm(1)
+        older.height=cm(1)
 
         pagebuttons.add_widget(older)
         pagebuttons.add_widget(newer)
+
 
 
         #If everything fits on one page we do not need to have the nav buttons
@@ -477,13 +500,27 @@ class PostsMixin():
             self.streamEditPanel.add_widget(searchBar)
 
 
-        self.streamEditPanel.add_widget(MDToolbar(title="Posts"))
+        #self.streamEditPanel.add_widget(MDToolbar(title="Posts"))
 
 
-       
+
+        pinnedIDs={}
+        pinnedPosts = []
+
+        #Get nonzero pin rank
+        p1 = s.getDocumentsByType("post",parent=parentPath,extraFilters=pinRankFilter)
+        for i in p1:
+            pinnedIDs[i['id']]=True
+            pinnedPosts.append((i.get('pinRank',0),i['id'],i))
+
+        for i in reversed(list(sorted(pinnedPosts))):
+            self.streamEditPanel.add_widget(self.makePostWidget(stream,i[2]))
+
         for i in p:
-            self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
-        
+            #Avoid showing pinned twice
+            if not i['id'] in pinnedIDs:
+                self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
+
         
         def onNewRecord(db,r,sig):
             if db is daemonconfig.userDatabases[stream]:
@@ -521,15 +558,20 @@ class PostsMixin():
    
         src = os.path.join(directories.assetLibPath, post.get("icon","INVALID"))
         useIcon=False
-        img = Image(size_hint=(0.2,1))
+        img = Image(size_hint=(0.2,None))
         img.size_hint_min_y=cm(1.5)   
         img.source= src
         l2.add_widget(img)
         l.image = img
-        bodyText =Label(text=body.strip(),size_hint=(0.8,1),valign="top")
+        bodyText =Label(text=body.strip(),size_hint=(0.8,None),valign="top")
+        bodyText.height=cm(1.5)
         l.body = bodyText
        
+        rateLimit = [0]
         def setWidth(obj,w):
+            if rateLimit[0]>time.time()-3:
+                return
+            rateLimit[0]=time.time()
             bodyText.text_size=(w-(img.width+4)),None
             bodyText.texture_update()
             bodyText.width = (bodyText.texture_size[0],max(bodyText.texture_size[1],cm(1.5)))
@@ -569,7 +611,7 @@ class PostsMixin():
                 with daemonconfig.userDatabases[stream]:
                     import uuid
                     id = str(uuid.uuid4())
-                    d = {'body': newp.text,'title':newtitle.text,'type':'post'}
+                    d = {'body': newp.text,'title':newtitle.text,'type':'post','documentTime':int(time.time()*10**6)}
                     if parent:
                         d['parent'] = parent
 
@@ -605,31 +647,6 @@ class PostsMixin():
 
 
 
-    def makePostsListingPage(self):
-        "Generic posts listing"
-
-        screen = Screen(name='PostList')
-
-        layout = BoxLayout(orientation='vertical', spacing=10)
-        screen.add_widget(layout)
-
-
-        self.postListScroll = ScrollView(size_hint=(1, 1))
-
-        self.postListPanel = BoxLayout(
-            orientation='vertical',adaptive_height= True, spacing=5)
-        self.postListPanel.bind(
-            minimum_height=self.postListPanel.setter('height'))
-
-        self.postListPanelScroll.add_widget(self.postListPanel)
-
-        layout.add_widget(self.postListPanelScroll)
-
-        return screen
-
-
-
-
     def gotoBookmark(self,b):
         bm = daemonconfig.getBookmarks()[b]
         for i in daemonconfig.userDatabases:
@@ -647,9 +664,8 @@ class PostsMixin():
 
 
         self.postMetaPanelScroll = ScrollView(size_hint=(1, 1))
-
         self.postMetaPanel = BoxLayout(
-            orientation='vertical',adaptive_height= True, spacing=5)
+            orientation='vertical', spacing=5,adaptive_height= True)
         self.postMetaPanel.bind(
             minimum_height=self.postMetaPanel.setter('height'))
 
@@ -816,6 +832,25 @@ class PostsMixin():
             
         bmButton.bind(on_release=promptSet)
         self.postMetaPanel.add_widget(bmButton)
+
+
+        #Used to set the pin rank of a post
+        prButton = Button(size_hint=(1,None), text="Pin Rank:"+str(s.get('pinRank') or 0))
+        def promptSet(*a):
+            def f(p):
+                if not p is None:
+                    try:
+                        s['pinRank']=int(p)
+                        self.unsavedDataCallback=autosavecallback
+                    except:
+                        pass
+
+                    prButton.text="Pin Rank:"+str(s.get('pinRank') or 0)
+            self.askQuestion("Pin Rank?",str(s.get('pinRank') or 0),f)
+            
+        prButton.bind(on_release=promptSet)
+        self.postMetaPanel.add_widget(prButton)
+
 
 
         export = Button(size_hint=(1,None), text="Export Raw Data")
