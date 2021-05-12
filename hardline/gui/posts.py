@@ -47,7 +47,7 @@ pinRankFilter = "IFNULL(json_extract(json,'$.pinRank'), 0) >0"
 class PostsMixin():
 
 
-    def gotoStreamPost(self, stream,postID,noBack=False):
+    def gotoStreamPost(self, stream,postID,noBack=False, indexAssumption=True):
         "Editor/viewer for ONE specific post"
         self.unsavedDataCallback=None
 
@@ -58,7 +58,7 @@ class PostsMixin():
 
         def upOne(*a):
             if document and 'parent' in document:
-                self.gotoStreamPost(stream,document['parent'])
+                self.gotoStreamPost(stream,document['parent'],indexAssumption=False)
             else:
                 self.gotoStreamPosts(stream)
 
@@ -74,12 +74,6 @@ class PostsMixin():
         
 
 
-        #Don't pollute history with timewaasters for every refresh
-        if not noBack:
-            def goHere():
-                self.gotoStreamPost(stream, postID)
-            self.backStack.append(goHere)
-            self.backStack = self.backStack[-50:]
 
 
         newtitle = MDTextField(text=document.get("title",''),mode='fill', multiline=False,font_size='22sp',hint_text='Title')
@@ -335,6 +329,12 @@ class PostsMixin():
         #Get nonzero pin rank
         p1 = s.getDocumentsByType("post", limit=5,parent=postID,extraFilters=pinRankFilter)
         for i in p1:
+            #The index assumption, jump straight to the index when we detect a very short post
+            #with at least one child
+            if indexAssumption and len(document.get('body',''))<140:
+                self.gotoStreamPosts(stream,parent=postID)
+                return
+
             pinnedIDs[i['id']]=True
             pinnedPosts.append((i.get('pinRank',0),i['id'],i))
 
@@ -343,9 +343,28 @@ class PostsMixin():
 
         p = s.getDocumentsByType("post", limit=5,parent=postID)
         for i in p:
+            #The index assumption, jump straight to the index when we detect a very short post
+            #with at least one child
+            if indexAssumption and len(document.get('body',''))<140:
+                self.gotoStreamPosts(stream,parent=postID)
+                return
+
             #Avoid showing pinned twice
             if not i['id'] in pinnedIDs:
                 self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
+
+
+        
+        #Don't pollute history with timewaasters for every refresh
+        #Do the adding to the back stack after the check for children so that
+        #We don't create a back entry if we use the index assumption
+        if not noBack:
+            def goHere():
+                self.gotoStreamPost(stream, postID)
+            self.backStack.append(goHere)
+            self.backStack = self.backStack[-50:]
+
+
 
         commentsbuttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
         
@@ -427,7 +446,8 @@ class PostsMixin():
                 self.streamEditPanel.add_widget(MDToolbar(title="Feed for "+stream))
         else:
             parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent)
-            self.streamEditPanel.add_widget(self.makePostWidget(stream,parentDoc))
+            #Disable index assumption so we can always actually go to the parent post instead of getting stuck.
+            self.streamEditPanel.add_widget(self.makePostWidget(stream,parentDoc,indexAssumption=False))
             self.streamEditPanel.add_widget((MDToolbar(title="Comments:")))
         
 
@@ -436,7 +456,7 @@ class PostsMixin():
 
         def upOne(*a):
             if parent:
-                self.gotoStreamPost(stream,parent)
+                self.gotoStreamPost(stream,parent,indexAssumption=False)
             else:
                 self.editStream(stream)
 
@@ -444,10 +464,8 @@ class PostsMixin():
                 size_hint=(0.9, None), font_size="14sp")
 
         btn1.bind(on_press=upOne)
-        btn1.height=cm(1)
       
         topbar.add_widget(btn1)
-        topbar.height=cm(1)
 
         topbar.add_widget(self.makeBackButton())
 
@@ -455,8 +473,7 @@ class PostsMixin():
 
         searchQuery = MDTextField(size_hint=(0.68,None),multiline=False, text=search)
         searchButton = MDRoundFlatButton(text="Search", size_hint=(0.3,None))
-        searchButton.height=cm(1)
-        searchQuery.height=cm(1)
+ 
 
         searchBar.add_widget(searchQuery)
         searchBar.add_widget(searchButton)
@@ -517,7 +534,7 @@ class PostsMixin():
         #The calender interactions are based on the real oldest post in the set
 
         #Let the user see older posts by picking a start date to stat showing from.
-        startdate = Button(text=time.strftime('(%a %b %d, %Y)',time.localtime(oldest/10**6)),
+        startdate = Button(text=time.strftime("(%a %b %d, '%y)",time.localtime(oldest/10**6)),
                       size_hint=(0.9, None), font_size="14sp")
 
       
@@ -543,24 +560,23 @@ class PostsMixin():
         pagebuttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
 
         #Thids button advances to the next newer page of posts.
-        newer = Button(text='Newer',
-                      size_hint=(0.28, None), font_size="14sp")
+        newer = Button(text='>>',
+                      size_hint=(0.28, None), font_size="11sp")
         def f2(*a):
             self.gotoStreamPosts(stream, newest,parent=parent)            
 
         newer.bind(on_release=f2)
 
         #Thids button advances to the next newer page of posts.
-        older = Button(text='Older',
-                      size_hint=(0.28, None), font_size="14sp")
+        older = Button(text='<<',
+                      size_hint=(0.28, None), font_size="11sp")
         def f3(*a):
             self.gotoStreamPosts(stream, endTime=oldest,parent=parent)            
 
         older.bind(on_release=f3)
-        newer.height=cm(1)
-        older.height=cm(1)
 
         pagebuttons.add_widget(older)
+        pagebuttons.add_widget(startdate)
         pagebuttons.add_widget(newer)
 
 
@@ -568,7 +584,6 @@ class PostsMixin():
         #If everything fits on one page we do not need to have the nav buttons
         if len(p)>=20 or startTime or endTime:
             self.streamEditPanel.add_widget(pagebuttons)
-            self.streamEditPanel.add_widget(startdate)
 
 
         if not orphansMode:
@@ -606,13 +621,14 @@ class PostsMixin():
 
         self.screenManager.current = "EditStream"
 
-    def makePostWidget(self,stream, post):
+    def makePostWidget(self,stream, post,indexAssumption=True):
+        "Index assumption allows treating very short posts as indexes that gfo straight to the comment page"
         def f(*a):
             def f2(d):
                 if d:
                     self.currentPageNewRecordHandler=None
                     self.unsavedDataCallback = False
-                    self.gotoStreamPost(stream,post['id'])
+                    self.gotoStreamPost(stream,post['id'],indexAssumption=indexAssumption)
 
             # If they have an unsaved post, ask them if they really want to leave.
             if self.unsavedDataCallback:
@@ -627,6 +643,11 @@ class PostsMixin():
 
         l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
         btn=Button(text=post.get('title',"?????") + " "+time.strftime('(%a %b %d, %Y)',time.localtime(post.get('time',0)/10**6)), size_hint=(1,None), on_release=f)
+        
+        if (not post.get('body','').strip()) and ((not post.get('icon','')) or not post['icon'].strip()):
+            return btn
+
+        
         l.add_widget(btn)
         l2 = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None),minimum_height=cm(1.5))
         
@@ -840,6 +861,25 @@ class PostsMixin():
         icon.bind(on_release=promptSet)
         self.postMetaPanel.add_widget(icon)
 
+
+
+
+
+        clearicon = Button(size_hint=(1,None), text="Clear Icon")
+        def promptSet(*a):
+            from .kivymdfmfork import MDFileManager
+          
+            def f(x):
+                if x=='yes':
+                    s['icon'] = selection[len(directories.assetLibPath)+1:] if selection else ''
+                    s['time']=None
+                    self.unsavedDataCallback=autosavecallback
+                    icon.text = "Icon: "+os.path.basename(s.get("icon",''))
+
+            self.askQuestion("Remove Icon?",'yes',f)
+            
+        clearicon.bind(on_release=promptSet)
+        self.postMetaPanel.add_widget(clearicon)
 
 
         idButton = Button(size_hint=(1,None), text="Show Post ID")

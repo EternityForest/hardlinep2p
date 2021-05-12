@@ -399,6 +399,8 @@ class StreamsMixin():
         self.backStack.append(goHere)
         self.backStack=self.backStack[-50:]
 
+        self.streamsListBox.add_widget(MDToolbar(title="Open Streams:"))
+
         try:
             s = daemonconfig.userDatabases
             time.sleep(0.5)
