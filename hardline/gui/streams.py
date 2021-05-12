@@ -94,6 +94,17 @@ class StreamsMixin():
         self.streamEditPanel.add_widget(btn2)
 
 
+        if name.startswith('file:'):
+            btn2 = Button(text='Close Stream',
+            size_hint=(1, None), font_size="14sp")
+            def close(*a):
+                daemonconfig.closeUserDatabase(name)
+                self.goToStreams()
+            btn2.bind(on_press=close)
+            self.streamEditPanel.add_widget(btn2)
+
+
+
         importData = Button(size_hint=(1,None), text="Import Data File")
 
         def promptSet(*a):
@@ -331,6 +342,40 @@ class StreamsMixin():
 
         btn2.bind(on_press=self.promptAddStream)
         layout.add_widget(btn2)
+
+
+        def f(selection):
+            if selection:
+                dn = 'file:'+os.path.basename(selection)
+                while dn in daemonconfig.userDatabases:
+                    dn=dn+'2'
+                try:
+                    daemonconfig.loadUserDatabase(selection,dn)
+                    self.editStream(dn)
+                except:
+                    logging.exception(dn)
+
+            self.openFM.close()
+
+        #This lets us view notebook files that aren't installed.
+        def promptOpen(*a):
+
+            from .kivymdfmfork import MDFileManager
+            from . import directories
+            self.openFM= MDFileManager(select_path=f)
+            self.openFM.show(directories.externalStorageDir or directories.settings_path)
+
+            
+
+        btn1 = Button(text='Open Book File',
+                size_hint=(1, None), font_size="14sp")
+
+        btn1.bind(on_press=promptOpen)
+
+        layout.add_widget(btn1)
+
+
+
 
         self.streamsListBoxScroll = ScrollView(size_hint=(1, 1))
 

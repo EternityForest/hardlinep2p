@@ -230,6 +230,27 @@ def loadUserDatabases(serviceDir, only=None, forceProxy=None, callbackFunction=N
     return r
 
 
+
+
+def loadUserDatabase(file, dn):
+    "Mostly used for the document viewing feature"
+    try:
+        userDatabases[dn] = defaultDBClass(file)
+    except:
+        logger.exception(traceback.format_exc())
+
+
+def closeUserDatabase(dn):
+    "Mostlu used for the document viewing feature"
+    try:
+        userDatabases[dn].close()
+        del userDatabases[dn]
+        
+    except:
+        logger.exception(traceback.format_exc())
+    return r
+
+
 def makeUserDatabase(dir, name):
     dir = dir or directories.drayerDB_root
 

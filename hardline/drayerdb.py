@@ -18,6 +18,7 @@ import random
 import configparser
 import os
 
+
 from . import libnacl
 import base64
 import struct
@@ -241,6 +242,7 @@ import collections
 
 class DocumentDatabase():
     def __init__(self, filename, keypair=None, servable=True,forceProxy=None):
+        "We can open TOML files as if they were databases, we just can't sync them"
 
         self.filename = os.path.abspath(filename)
         self.threadLocal = threading.local()
@@ -389,41 +391,52 @@ class DocumentDatabase():
         #How many days to keep records that are marked as temporary 
         self.autocleanDays = float(self.config['Database'].get('autocleanDays','0'))
 
+        self.syncKey=self.writePassword=None
 
-        if not keypair:
-            if 'Sync' not in self.config:
-                vk, sk = libnacl.crypto_sign_keypair()
-                self.config.add_section('Sync')
-                self.config.set('Sync', 'syncKey',
-                                base64.b64encode(vk).decode('utf8'))
-                self.config.set('Sync', 'writePassword',
-                                base64.b64encode(sk).decode('utf8'))
-                self.saveConfig()
 
-            self.syncKey = self.config.get('Sync', 'syncKey', fallback=None)
-            self.writePassword = self.config.get(
-                'Sync', 'writePassword', fallback='')
+        if  (not filename.endswith('.toml')):
+            if not keypair:
+                if 'Sync' not in self.config:
+                    vk, sk = libnacl.crypto_sign_keypair()
+                    self.config.add_section('Sync')
+                    self.config.set('Sync', 'syncKey',
+                                    base64.b64encode(vk).decode('utf8'))
+                    self.config.set('Sync', 'writePassword',
+                                    base64.b64encode(sk).decode('utf8'))
+                    self.saveConfig()
 
-        else:
-            self.syncKey = base64.b64encode(keypair[0]).decode()
-            self.writePassword = base64.b64encode(keypair[1]).decode()
+                self.syncKey = self.config.get('Sync', 'syncKey', fallback=None)
+                self.writePassword = self.config.get(
+                    'Sync', 'writePassword', fallback='')
+
+            else:
+                self.syncKey = base64.b64encode(keypair[0]).decode()
+                self.writePassword = base64.b64encode(keypair[1]).decode()
         
-        # Deterministically generate a keypair that we will use to sign all correspondance
-        # writePassword has to be a part of it because nodes that have it are special and we want it
-        #to be harder to fake one, plus adding one should effectively make it a new node so we know
-        #to check things we couldn't trust before.
-        self.localNodeVK, self.localNodeSK = libnacl.crypto_sign_seed_keypair(
-            libnacl.crypto_generichash((os.path.basename(filename)+self.nodeIDSeed+self.writePassword).encode("utf8"), readNodeID()))
+            # Deterministically generate a keypair that we will use to sign all correspondance
+            # writePassword has to be a part of it because nodes that have it are special and we want it
+            #to be harder to fake one, plus adding one should effectively make it a new node so we know
+            #to check things we couldn't trust before.
+            self.localNodeVK, self.localNodeSK = libnacl.crypto_sign_seed_keypair(
+                libnacl.crypto_generichash((os.path.basename(filename)+self.nodeIDSeed+self.writePassword).encode("utf8"), readNodeID()))
+        else:
+             self.localNodeVK, self.localNodeSK = libnacl.crypto_sign_keypair()
+             self.syncKey, self.writePassword= libnacl.crypto_sign_keypair()
+             self.syncKey = base64.b64encode(self.syncKey).decode('utf8')
+             self.writePassword = base64.b64encode(self.writePassword).decode('utf8')
 
-        if self.config['Sync'].get("serve",'').strip():
-            servable= self.config['Sync'].get("serve").lower() in ("true",'yes','on','enable')
+
+        if (not filename.endswith('.toml')):
+            if self.config['Sync'].get("serve",'').strip():
+                servable= self.config['Sync'].get("serve").lower() in ("true",'yes','on','enable')
 
 
 
-    
-        if self.syncKey and servable:
-            databaseBySyncKeyHash[libnacl.crypto_generichash(
-                libnacl.crypto_generichash(base64.b64decode(self.syncKey)))[:16]] = self
+        
+            if self.syncKey and servable:
+                databaseBySyncKeyHash[libnacl.crypto_generichash(
+                    libnacl.crypto_generichash(base64.b64decode(self.syncKey)))[:16]] = self
+
         self.serverURL=None
         self.syncFailBackoff =1
 
@@ -453,7 +466,15 @@ class DocumentDatabase():
         #             self.setDocument(i)
         # self.commit()
 
-        self.useSyncServer(forceProxy or self.config.get('Sync', 'server', fallback=None))
+
+        if (filename.endswith('.toml')):
+            with open(filename) as f:
+                self.importFromToml(f.read())
+            #Lock it
+            self.writePassword=None
+
+        if (not filename.endswith('.toml')):
+            self.useSyncServer(forceProxy or self.config.get('Sync', 'server', fallback=None))
 
     def close(self):
         self.useSyncServer("")
@@ -641,9 +662,17 @@ class DocumentDatabase():
 
     def dbConnect(self):
         if not hasattr(self.threadLocal, 'conn'):
-            if not os.path.exists(self.filename):
-                print("Creating new DB file at:"+self.filename)
-            self.threadLocal.conn = sqlite3.connect(self.filename)
+
+
+            filename=self.filename
+            if filename.endswith('.toml'):
+                import urllib
+                filename = 'file:' +urllib.parse.quote(self.filename,safe='')+'?mode=memory&cache=shared'
+
+
+            if not os.path.exists(filename):
+                print("Creating new DB file at:"+filename)
+            self.threadLocal.conn = sqlite3.connect(filename)
 
 
             #Lets make our own crappy fake copy of JSON1, so we can use it on
@@ -1141,8 +1170,6 @@ class DocumentDatabase():
         for i in docs:
             data.update(self.getAllRelatedRecords(i))
         
-
-
         #Get the records as a list, sorted by time for consistency.
         l = []
         import json
@@ -1153,37 +1180,68 @@ class DocumentDatabase():
             for i in sorted(list(d.keys())):
                 d2[i]=d[i]
             d=d2
+            psk=''
             if 'parent' in d:
                 parent = self.getDocumentByID(d['parent'],allowOrphans=True)
-                psk=''
                 if parent:
                     psk = parent.get('title',parent.get('name',parent['id']))
 
-                sk = d.get('title',d.get('name',d['id']))
+            sk = d.get('title',d.get('name',d['id']))
 
             #Shorter path lengths closer to the root first.  Then we group by the title of the parent(Keep related together)
             #Then we sort by the title of the record itself, finally we sort by ID.
-            l.append((len(self.getPath(d['id'])), sk,d['id'],d))
+            l.append((len(self.getPath(d['id'])), psk, sk,d['id'],d))
 
         l = sorted(l)
 
+
+
         op = {}
         for i in l:
-            k = i[0].get('title','')
+            k = i[4].get('title','')
             
             #Headings can eith represent an ID or a title or niether.
 
             if k and (not k in op) and not k.startswith('#'):
-                op[k]=i[0]
-                del i[0]['title']
+                op[k]=i[4]
+                del i[4]['title']
             else:
-                if not k and not i[0]['id'] in op:
-                    op['#'+i[0]['id']]=i[0]
-                    del i[0]['id']
+                if not k and not i[4]['id'] in op:
+                    op['#'+i[4]['id']]=i[4]
+                    del i[4]['id']
                 else:
-                    op['#'+str(uuid.uuid4())]=i[0]
+                    op['#'+str(uuid.uuid4())]=i[4]
+        import toml
+        return toml.dumps(op)
+
+
+    def importFromToml(self,d):
+        if isinstance(d,str):
+            import toml
+            l=toml.loads(d)
         
-        return toml.dump(op)
+        for i in l:
+            d=l[i]
+            #Fish the info we stored in theheading back into the dict
+            if i.startswith("#") and not 'id' in d:
+                d['id'] = i[1:]
+            else:
+                if not 'title' in d:
+                    d['title']=i
+            
+            #Detect non-uuid seeds.  Preserve unhashed so we can write back, for human readability.
+            if not ('id' in d and (len(d['id'])==36 and d['id'].count('-'))):
+                d['id'] = uuid.uuid5(uuid.UUID('44628338-56d5-4663-8a29-db98daba3a31'), d.get('id',i))
+                d['uuid5Seed'] = d.get('id',i) 
+
+            #Do the same thing for parents
+            if 'parent' in d and (not(len(d['parent'])==36 and d['parent'].dcount('-'))):
+                d['parent'] = uuid.uuid5(uuid.UUID('44628338-56d5-4663-8a29-db98daba3a31'), d['parent'][1:])
+                d['uuid5ParentSeed'] = d['parent'][1:]
+
+            self.setDocument(d)
+
+
 
 
 
@@ -1409,6 +1467,12 @@ class DocumentDatabase():
                     try:
                         c = self.threadLocal.conn.execute(
                             "DELETE FROM document WHERE IFNULL(json_extract(json,'$.id'),'INVALID')=?;", (docObj['id'],))
+                        
+                        try:
+                            del self.documentCache[docObj['id']]
+                        except KeyError:
+                            pass
+
                     except sqlite3.Error as er:
                         import sys
                         print('SQLite error: %s' % (' '.join(er.args)))
@@ -1464,6 +1528,12 @@ class DocumentDatabase():
                     #Clear any records sharing the same autoclean channel which are older than both this record and the horizon.
                     horizon = min(docObj['time'], (time.time()-(self.autocleanDays*3600*24))*1000000)
                     c = self.threadLocal.conn.execute("DELETE FROM document WHERE json_extract(json,'$.autoclean')=? AND ifnull(json_extract(json,'$.parent'),'')=? AND json_extract(json,'$.time')<?",(docObj['autoclean'],docObj.get('parent',''), horizon )).fetchone()
+
+                    #Delete the cache item right after we insert it.
+                    try:
+                        del self.documentCache[docObj['id']]
+                    except KeyError:
+                        pass
 
         return docObj['id']
 
@@ -1547,6 +1617,12 @@ class DocumentDatabase():
                     else:
                         #Silent delete unreachable.
                         c=self.threadLocal.conn.execute("DELETE FROM document WHERE json_extract(json,'$.id')=? and json_extract(json,'$.time')<=?",(i[0],propagateTime))
+                        #Delete the cache item right after we insert it.
+                        try:
+                            del self.documentCache[i[0]]
+                        except KeyError:
+                            pass
+
                     self.propagateNulls(i[0],propagateTime=propagateTime,parentNull=parentNull,depth=depth)
 
                     if not i[0] in lastround:

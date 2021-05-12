@@ -198,7 +198,8 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         layout=self.mainScreenlayout
 
     
-        label = MDToolbar(title="HardlineP2P")
+        label = MDToolbar(title="Drayer Journal")
+        label.icon=os.path.join(os.path.dirname(os.path.abspath("__file__")),'assets','icons',"Craftpix.net",'medival','cart.jpg')
         layout.add_widget(label)
 
         for i in sorted(list(daemonconfig.getBookmarks().keys())):

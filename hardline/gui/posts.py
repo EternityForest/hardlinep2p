@@ -102,7 +102,7 @@ class PostsMixin():
         innerTitleBar.add_widget(newtitle)
 
 
-        img = Image(size_hint=(0.3,None))
+        img = Image(size_hint=(0.3,1))
         titleBar.add_widget(img)
         titleBar.add_widget(innerTitleBar)
 
@@ -968,7 +968,47 @@ class PostsMixin():
         self.postMetaPanel.add_widget(Label(text="Exports this post, all descendants,\nand all ancestors in JSON format\nthat can be imported into\nanother stream.",size_hint=(1,None)))
 
 
+
+        export = Button(size_hint=(1,None), text="Export TOML")
+
+        def promptSet(*a):
+            from .kivymdfmfork import MDFileManager
+
+
+            def f(selection):
+                if selection:
+                    if not selection.endswith(".toml"):
+                        selection=selection+".toml"
+                
+                    try:
+                        #Needed for android
+                        if not "com.eternityforest" in selection:
+                            self.getPermission('files')
+                    except:
+                        logging.exception("cant ask permission")
+                    data = daemonconfig.userDatabases[stream].exportRecordSetToTOML([docID])
+
+                    logging.info("Exporting data to:"+selection)
+                    with open(selection,'w') as f:
+                        f.write(data)
+                    self.openFM.close()
+
+             #Autocorrect had some fun with the kivymd devs
+            self.openFM= MDFileManager(select_path=f,save_mode=((s.get('title','') or 'UntitledPost')+'.toml'))
+            self.openFM.show(directories.externalStorageDir or directories.settings_path)
+
+
+            
+        export.bind(on_release=promptSet)
+        self.postMetaPanel.add_widget(export)
+
+
         
+
+
+
+
+
         def burn(*a):
             def reallyBurn(v):
                 if v==docID:
