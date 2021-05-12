@@ -1075,7 +1075,7 @@ class DocumentDatabase():
             self.dbConnect()
             for i in self.uncommittedNullRecordsIDs:
                 self.propagateNulls(i,self.uncommittedNullRecordsIDs[i])
-                self.uncommittedNullRecordsIDs={}
+            self.uncommittedNullRecordsIDs={}
 
             self.threadLocal.conn.commit()
         r = self.earliestUncommittedRecord

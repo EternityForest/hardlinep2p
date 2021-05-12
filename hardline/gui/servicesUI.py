@@ -179,7 +179,7 @@ class ServicesMixin():
         "Make a button that, when pressed, edits the local service in the title"
 
         btn = Button(text=name,
-                     font_size="14", size_hint=(1, None))
+                     font_size="14sp", size_hint=(1, None))
 
         def f(*a):
             self.editLocalService(name, c)

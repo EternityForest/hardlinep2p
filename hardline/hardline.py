@@ -1109,6 +1109,10 @@ def start(localport=None):
     try:
         # This is the server context we use for localhost coms
         bindsocket = socket.socket()
+        try:
+            bindsocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        except:
+            logging.exception("Reuseport not available")
         if localport:
             # Try for 30 seconds of waiting to see if the port becomes available.
             for i in range(30):
