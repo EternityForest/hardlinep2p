@@ -1,7 +1,7 @@
 [app]
 
 # (str) Title of your application
-title = HardlineP2P
+title = Drayer Journal
 
 # (str) Package name
 package.name = hardlinep2p
@@ -28,7 +28,7 @@ source.exclude_dirs = bin
 #source.exclude_patterns = license,images/*/*.jpg
 
 # (str) Application versioning (method 1)
-version = 0.14
+version = 0.16
 
 # (str) Application versioning (method 2)
 # version.regex = __version__ = ['"](.*)['"]

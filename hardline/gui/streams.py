@@ -62,9 +62,6 @@ class StreamsMixin():
         stack = StackLayout(size_hint=(1,None),adaptive_height=True,spacing=5)
 
 
-        self.streamEditPanel.add_widget(Label(size_hint=(
-            1, None), halign="center", text=name))
-
         def upOne(*a):
             self.goToStreams()
 
@@ -76,7 +73,10 @@ class StreamsMixin():
 
 
         topbar.add_widget(self.makeBackButton())
+
         self.streamEditPanel.add_widget(topbar)
+        self.streamEditPanel.add_widget(MDToolbar(title=name))
+
 
         def goHere():
             self.editStream( name)
@@ -150,20 +150,27 @@ class StreamsMixin():
                     if not selection.endswith(".toml"):
                         selection=selection+".toml"
                 
-                    try:
-                        #Needed for android
-                        if not "com.eternityforest" in selection:
-                            self.getPermission('files')
-                    except:
-                        logging.exception("cant ask permission")
+                    def g(a):
+                        if a=='yes':
+                            try:
+                                #Needed for android
+                                if not "com.eternityforest" in selection:
+                                    self.getPermission('files')
+                            except:
+                                logging.exception("cant ask permission")
 
-                    r = daemonconfig.userDatabases[name].getDocumentsByType('post',parent='')
-                    data = daemonconfig.userDatabases[name].exportRecordSetToTOML([i['id'] for i in r])
+                            r = daemonconfig.userDatabases[name].getDocumentsByType('post',parent='')
+                            data = daemonconfig.userDatabases[name].exportRecordSetToTOML([i['id'] for i in r])
 
-                    logging.info("Exporting data to:"+selection)
-                    with open(selection,'w') as f:
-                        f.write(data)
-                    self.openFM.close()
+                            logging.info("Exporting data to:"+selection)
+                            with open(selection,'w') as f:
+                                f.write(data)
+                        self.openFM.close()
+                    
+                    if os.path.exists(selection):
+                        self.askQuestion("Overwrite?",'yes',g)
+                    else:
+                        g('yes')
 
              #Autocorrect had some fun with the kivymd devs
             self.openFM= MDFileManager(select_path=f,save_mode=(name+'.toml'))
@@ -382,10 +389,11 @@ class StreamsMixin():
 
         bar = BoxLayout( spacing=10,adaptive_height=True,size_hint=(1,None))
 
-        stack = StackLayout( spacing=10,adaptive_height=True,size_hint=(1,None))
+        stack = StackLayout( spacing=10,adaptive_height=True,size_hint=(1,None))        
+        layout.add_widget(bar)
         layout.add_widget(MDToolbar(title="My Streams"))
 
-        layout.add_widget(bar)
+
 
         layout.add_widget(stack)
 

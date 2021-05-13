@@ -429,7 +429,9 @@ class PostsMixin():
         #We need a better way of handling this!!!!!
         self.currentPageNewRecordHandler=None
         self.streamEditPanel.clear_widgets()
-       
+        topbar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True,size_hint=(1,None))
+
+        self.streamEditPanel.add_widget(topbar)
 
         s = daemonconfig.userDatabases[stream]
         if not parent:
@@ -439,12 +441,11 @@ class PostsMixin():
                 self.streamEditPanel.add_widget(MDToolbar(title="Feed for "+stream))
         else:
             parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent)
-            self.streamEditPanel.add_widget(MDToolbar(title=stream))
             #Disable index assumption so we can always actually go to the parent post instead of getting stuck.
             self.streamEditPanel.add_widget(self.makePostWidget(stream,parentDoc,indexAssumption=False))
+            self.streamEditPanel.add_widget(MDToolbar(title=stream))
 
 
-        topbar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True,size_hint=(1,None))
 
         def upOne(*a):
             if parent:
@@ -485,7 +486,6 @@ class PostsMixin():
             
             topbar.add_widget(btn1)
 
-        self.streamEditPanel.add_widget(topbar)
 
 
 
@@ -640,7 +640,7 @@ class PostsMixin():
         #Chop to a shorter length, then rechop to even shorter, to avoid cutting off part of a long template and being real ugly.
         body=post.get('body',"?????")[:240].strip()
         body = tables.renderPostTemplate(daemonconfig.userDatabases[stream], post['id'], body, 4096)
-        body=body[:140].replace("\r",'').replace("\n",'_NEWLINE',2).replace("\n","").replace("_NEWLINE","\r\n")
+        body=body[:180].replace("\r",'').replace("\n",'_NEWLINE',2).replace("\n","").replace("_NEWLINE","\r\n")
 
         #Split on blank line
         body=body.split('\r\n\r\n')[0].split('\n#')[0]
@@ -747,6 +747,17 @@ class PostsMixin():
         for i in daemonconfig.userDatabases:
             if bm[0]==daemonconfig.userDatabases[i].filename:
                 self.gotoStreamPost(i,bm[1])
+                return
+        
+        #If the bookmark is in an external file, dynamic load it
+        try:
+            dn = "file:"+os.path.basename(bm[0])
+            if not dn in daemonconfig.userDatabases:
+                daemonconfig.loadUserDatabase(bm[0],dn)
+            self.gotoStreamPost(dn,bm[1])
+        except:
+            logging.exception("??")
+
 
 
     def makePostMetaDataPage(self):
@@ -754,19 +765,17 @@ class PostsMixin():
 
         screen = Screen(name='PostMeta')
 
-        layout = BoxLayout(orientation='vertical', spacing=10,size_hint=(1, 1),adaptive_height= True)
-        screen.add_widget(layout)
 
 
-        self.postMetaPanelScroll = ScrollView(size_hint=(1, 1))
+        self.postMetaPanelScroll = ScrollView(size_hint=(1, 1))        
+        screen.add_widget( self.postMetaPanelScroll)
+
         self.postMetaPanel = BoxLayout(
-            orientation='vertical', spacing=5,adaptive_height= True,size_hint=(1, 1))
+            orientation='vertical', spacing=5,adaptive_height= True,size_hint=(1, None))
         self.postMetaPanel.bind(
             minimum_height=self.postMetaPanel.setter('height'))
 
         self.postMetaPanelScroll.add_widget(self.postMetaPanel)
-
-        layout.add_widget(self.postMetaPanelScroll)
 
 
         return screen
@@ -967,52 +976,6 @@ class PostsMixin():
 
 
 
-        export = Button( text="Export Raw Data")
-
-        def promptSet(*a):
-            from .kivymdfmfork import MDFileManager
-
-
-            def f(selection):
-                if selection:
-                    if not selection.endswith(".json"):
-                        selection=selection+".json"
-                
-                    try:
-                        #Needed for android
-                        if not "com.eternityforest" in selection:
-                            self.getPermission('files')
-                    except:
-                        logging.exception("cant ask permission")
-                    data = daemonconfig.userDatabases[stream].getAllRelatedRecords(docID)
-
-
-                    #Get the records as a list, sorted by time for consistency.
-                    l = []
-                    import json
-                    for i in data:
-                        d=json.loads(data[i][0])
-                        l.append((d['id'],d))
-                    l = sorted(l)
-
-                    l = [ [i[1]] for i in l]
-                    logging.info("Exporting data to:"+selection)
-                    with open(selection,'w') as f:
-                        f.write(json.dumps(l, sort_keys=True,indent=2))
-                    self.openFM.close()
-
-             #Autocorrect had some fun with the kivymd devs
-            self.openFM= MDFileManager(select_path=f,save_mode=((s.get('title','') or 'UntitledPost')+'.json'))
-            self.openFM.show(directories.externalStorageDir or directories.settings_path)
-
-
-            
-        export.bind(on_release=promptSet)
-        self.postMetaPanel.add_widget(export)
-        self.postMetaPanel.add_widget(Label(text="Exports this post, all descendants,\nand all ancestors in JSON format\nthat can be imported into\nanother stream.",size_hint=(1,None)))
-
-
-
         export = Button( text="Export TOML")
 
         def promptSet(*a):
@@ -1024,18 +987,25 @@ class PostsMixin():
                     if not selection.endswith(".toml"):
                         selection=selection+".toml"
                 
-                    try:
-                        #Needed for android
-                        if not "com.eternityforest" in selection:
-                            self.getPermission('files')
-                    except:
-                        logging.exception("cant ask permission")
-                    data = daemonconfig.userDatabases[stream].exportRecordSetToTOML([docID])
+                    def g(a):
+                        if a=='yes':
+                            try:
+                                #Needed for android
+                                if not "com.eternityforest" in selection:
+                                    self.getPermission('files')
+                            except:
+                                logging.exception("cant ask permission")
+                            data = daemonconfig.userDatabases[stream].exportRecordSetToTOML([docID])
 
-                    logging.info("Exporting data to:"+selection)
-                    with open(selection,'w') as f:
-                        f.write(data)
+                            logging.info("Exporting data to:"+selection)
+                            with open(selection,'w') as f:
+                                f.write(data)
                     self.openFM.close()
+
+                    if os.path.exists(selection):
+                        self.askQuestion("Overwrite?",'yes',g)
+                    else:
+                        g('yes')
 
              #Autocorrect had some fun with the kivymd devs
             self.openFM= MDFileManager(select_path=f,save_mode=((s.get('title','') or 'UntitledPost')+'.toml'))

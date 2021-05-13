@@ -213,7 +213,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         label.icon=os.path.join(os.path.dirname(os.path.abspath("__file__")),'assets','icons',"Craftpix.net",'medival','cart.jpg')
         layout.add_widget(label)
 
-        stack = StackLayout(size_hint=(1,None),adaptive_height=True)
+        stack = StackLayout(size_hint=(1,None),adaptive_height=True,spacing=5)
 
       
             
