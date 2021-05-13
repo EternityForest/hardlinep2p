@@ -1,5 +1,11 @@
 # This is the kivy android app.  Maybe ignore it on ither platforms, the code the support them is only for testing.
 
+
+from kivy.config import Config
+
+Config.set('graphics', 'maxfps', '48')
+
+
 from kivy.uix.layout import Layout
 from . import tools, servicesUI, discovery, tables, posts, streams, uihelpers
 from kivymd.uix.textfield import MDTextFieldRect, MDTextField
@@ -140,6 +146,10 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         import kivymd
         self.theme_cls.colors=kivymd.color_definitions.colors
 
+        import kivy.clock
+        #Bad HACC
+        kivy.clock.Clock.max_iteration = 5
+
         #Horid hacks for material design
         self.theme_cls.colors['Brown']['900']='050200'
         self.theme_cls.colors['Green']['600']='83A16C'
@@ -186,7 +196,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         mainscroll = ScrollView(size_hint=(1, 1))
 
         self.mainScreenlayout = BoxLayout(orientation='vertical',
-                           spacing=10, size_hint=(1, 1),adaptive_height=True)\
+                           spacing=10, size_hint=(1, 1),adaptive_height=True)
 
         mainscroll.add_widget(self.mainScreenlayout)
         mainScreen.add_widget(mainscroll)
@@ -206,9 +216,9 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
             bw =BoxLayout(orientation='horizontal',
                            spacing=10, size_hint=(1, None),adaptive_height=True)
             b = Button(text=i,
-                      size_hint=(0.8, None), font_size="14sp")
+                      size_hint=(0.78, None), font_size="14sp")
             bd = Button(text="Del",
-                      size_hint=(0.2, None), font_size="14sp")
+                      size_hint=(0.18, None), font_size="14sp")
 
 
             def dlbm(*a,i=i):
@@ -283,9 +293,9 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         else:
             f(True)
 
-    def makeBackButton(self):
+    def makeBackButton(self,width=1):
         btn1 = Button(text='Back',
-                      size_hint=(1, None), font_size="14sp")
+                      size_hint=(width, None), font_size="14sp")
 
         btn1.bind(on_press=self.goBack)
         return btn1

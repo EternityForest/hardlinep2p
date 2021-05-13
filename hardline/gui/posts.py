@@ -90,13 +90,13 @@ class PostsMixin():
         self.theme_cls.accent_hue='900'
 
         titleBar = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None))
-        innerTitleBar = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(0.7,None))
+        innerTitleBar = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(0.68,None))
         date = MDFlatButton(size_hint=(1,None), text="Modified: "+time.strftime('%Y %b %d (%a) @ %r',time.localtime(document.get('time',0)/10**6)), )
         innerTitleBar.add_widget(date)
         innerTitleBar.add_widget(newtitle)
 
 
-        img = Image(size_hint=(0.3,1))
+        img = Image(size_hint=(0.28,1))
         titleBar.add_widget(img)
         titleBar.add_widget(innerTitleBar)
 
@@ -436,8 +436,9 @@ class PostsMixin():
         #If we do not, incomimg records may randomly take us back here.
         #We need a better way of handling this!!!!!
         self.currentPageNewRecordHandler=None
-
         self.streamEditPanel.clear_widgets()
+       
+
         s = daemonconfig.userDatabases[stream]
         if not parent:
             if orphansMode:
@@ -450,7 +451,7 @@ class PostsMixin():
             self.streamEditPanel.add_widget(self.makePostWidget(stream,parentDoc,indexAssumption=False))
 
 
-        topbar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
+        topbar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True,size_hint=(1,None))
 
         def upOne(*a):
             if parent:
@@ -464,28 +465,15 @@ class PostsMixin():
                 self.editStream(stream)
 
         btn1 = Button(text='Up',
-                size_hint=(0.9, None), font_size="14sp")
+                size_hint=(0.29, None), font_size="14sp")
 
         btn1.bind(on_press=upOne)
       
         topbar.add_widget(btn1)
 
-        topbar.add_widget(self.makeBackButton())
-
-        searchBar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
-
-        searchQuery = MDTextField(size_hint=(0.68,None),multiline=False, text=search)
-        searchButton = MDRoundFlatButton(text="Search", size_hint=(0.3,None))
- 
-
-        searchBar.add_widget(searchQuery)
-        searchBar.add_widget(searchButton)
+        topbar.add_widget(self.makeBackButton(0.29))
 
 
-
-        def doSearch(*a):
-            self.gotoStreamPosts(stream, startTime, endTime, parent,searchQuery.text.strip())
-        searchButton.bind(on_release=doSearch)
 
         if not noBack:
             def goHere():
@@ -498,13 +486,15 @@ class PostsMixin():
             self.currentPageNewRecordHandler=None
             self.gotoNewStreamPost(stream,parent)
         btn1 = Button(text='Write',
-                size_hint=(1, None), font_size="14sp")
+                size_hint=(0.29, None), font_size="14sp")
 
         btn1.bind(on_press=write)
         if s.writePassword and not orphansMode:
             topbar.add_widget(btn1)
 
         self.streamEditPanel.add_widget(topbar)
+
+
 
 
 
@@ -538,7 +528,7 @@ class PostsMixin():
 
         #Let the user see older posts by picking a start date to stat showing from.
         startdate = Button(text=time.strftime("(%a %b %d, '%y)",time.localtime(oldest/10**6)),
-                      size_hint=(0.9, None), font_size="14sp")
+                      size_hint=(0.3, None))
 
       
         def f(*a):
@@ -558,44 +548,61 @@ class PostsMixin():
 
         startdate.bind(on_release=f)
 
-
-
-        pagebuttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
-
-        #Thids button advances to the next newer page of posts.
-        newer = Button(text='>>',
-                      size_hint=(0.28, None), font_size="11sp")
-        def f2(*a):
-            self.gotoStreamPosts(stream, newest,parent=parent)            
-
-        newer.bind(on_release=f2)
-
-        #Thids button advances to the next newer page of posts.
-        older = Button(text='<<',
-                      size_hint=(0.28, None), font_size="11sp")
-        def f3(*a):
-            self.gotoStreamPosts(stream, endTime=oldest,parent=parent)            
-
-        older.bind(on_release=f3)
-
-        pagebuttons.add_widget(older)
-        pagebuttons.add_widget(startdate)
-        pagebuttons.add_widget(newer)
-
-
-
         #If everything fits on one page we do not need to have the nav buttons
         if len(p)>=20 or startTime or endTime:
+
+            pagebuttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True,size_hint=(1,None))
+
+            #Thids button advances to the next newer page of posts.
+            newer = Button(text='>>',
+                        size_hint=(0.28, None))
+            def f2(*a):
+                self.gotoStreamPosts(stream, newest,parent=parent)            
+
+            newer.bind(on_release=f2)
+
+            #Thids button advances to the next newer page of posts.
+            older = Button(text='<<',
+                        size_hint=(0.28, None))
+            def f3(*a):
+                self.gotoStreamPosts(stream, endTime=oldest,parent=parent)            
+
+            older.bind(on_release=f3)
+
+            pagebuttons.add_widget(older)
+            pagebuttons.add_widget(startdate)
+            pagebuttons.add_widget(newer)      
             self.streamEditPanel.add_widget(pagebuttons)
+
+
 
 
         #Only allow global search just to make stuff easier\#defensive programming ensure always show
         #user if this is seartch thjpugh
         if not orphansMode and ((not parent) or search):
+
+            searchBar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True,size_hint=(1,None))
+
+            searchQuery = MDTextField(size_hint=(0.68,None),multiline=False, text=search)
+            searchButton = MDRoundFlatButton(text="Search", size_hint=(0.28,None))
+    
+
+            searchBar.add_widget(searchQuery)
+            searchBar.add_widget(searchButton)
+
+
+
+            def doSearch(*a):
+                self.gotoStreamPosts(stream, startTime, endTime, parent,searchQuery.text.strip())
+            searchButton.bind(on_release=doSearch)
+
+
             self.streamEditPanel.add_widget(searchBar)
 
 
-        #self.streamEditPanel.add_widget(MDToolbar(title="Posts"))
+                
+     
+
 
 
 
@@ -620,7 +627,7 @@ class PostsMixin():
         def onNewRecord(db,r,sig):
             if db is daemonconfig.userDatabases[stream]:
                 if r.get('parent','')==parent and r['type']=="post":
-                    self.gotoStreamPosts(stream,startTime,endTime,parent, search,noBack=True)
+                   self.gotoStreamPosts(stream,startTime,endTime,parent, search,noBack=True)
         if not orphansMode:
             self.currentPageNewRecordHandler = onNewRecord
 
@@ -646,11 +653,12 @@ class PostsMixin():
         body = tables.renderPostTemplate(daemonconfig.userDatabases[stream], post['id'], body, 4096)
         body=body[:140].replace("\r",'').replace("\n",'_NEWLINE',2).replace("\n","").replace("_NEWLINE","\r\n")
 
-        l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
         btn=Button(text=post.get('title',"?????") + " "+time.strftime('(%a %b %d, %Y)',time.localtime(post.get('time',0)/10**6)), size_hint=(1,None), on_release=f)
         
         if (not post.get('body','').strip()) and ((not post.get('icon','')) or not post['icon'].strip()):
             return btn
+
+        l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
 
         
         l.add_widget(btn)
@@ -659,12 +667,12 @@ class PostsMixin():
 
         src = os.path.join(directories.assetLibPath, post.get("icon","INVALID"))
         useIcon=False
-        img = Image(size_hint=(0.2,1))
+        img = Image(size_hint=(0.18,1))
         img.size_hint_min_y=cm(1.5)   
         img.source= src
         l2.add_widget(img)
         l.image = img
-        bodyText =Label(text=body.strip(),size_hint=(0.8,1),valign="top")
+        bodyText =Label(text=body.strip(),size_hint=(0.78,1),valign="top")
         l.body = bodyText
     
         def setWidth(obj,w):

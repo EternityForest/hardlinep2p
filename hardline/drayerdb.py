@@ -437,6 +437,7 @@ class DocumentDatabase():
                 databaseBySyncKeyHash[libnacl.crypto_generichash(
                     libnacl.crypto_generichash(base64.b64decode(self.syncKey)))[:16]] = self
 
+
         self.serverURL=None
         self.syncFailBackoff =1
 
@@ -475,6 +476,28 @@ class DocumentDatabase():
 
         if (not filename.endswith('.toml')):
             self.useSyncServer(forceProxy or self.config.get('Sync', 'server', fallback=None))
+
+
+        if self.writePassword:
+            with self:
+                #Set the database ID if it is not already set.
+                #Because of how sync works this really can't be a stable thing.
+                #I don't know what it is good for actually.  But it's as good as anything to be sure we always
+                #Have at least one record in case that is every important. 
+                x = self.getDocumentByID('b82e3647-4411-4107-b78a-b8256cee7a65')
+                if not x:
+                    self.setDocument({
+                        'type':'meta',
+                        #Timestamps are negative numbers here so that older ones win.
+                        #We want this to be a stable ID.  But we can't rely on this alone
+                        #Because we might not have a good clock.  So it is important that we check for an existing record.
+                        'time':-(time.time()*10**6),
+                        'id':'b82e3647-4411-4107-b78a-b8256cee7a65',
+                        'name':'databaseID',
+                        'value':str(uuid.uuid4())
+                    })
+            self.commit()
+
 
     def close(self):
         self.useSyncServer("")

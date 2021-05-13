@@ -440,8 +440,6 @@ class StreamsMixin():
         screen = Screen(name='EditStream')
         self.servicesScreen = screen
 
-        layout = BoxLayout(orientation='vertical', spacing=10)
-        screen.add_widget(layout)
 
 
         self.streamEditPanelScroll = ScrollView(size_hint=(1, 1))
@@ -453,7 +451,7 @@ class StreamsMixin():
 
         self.streamEditPanelScroll.add_widget(self.streamEditPanel)
 
-        layout.add_widget(self.streamEditPanelScroll)
+        screen.add_widget(self.streamEditPanelScroll)
 
         return screen
 
