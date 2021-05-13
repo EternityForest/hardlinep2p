@@ -1235,7 +1235,23 @@ class DocumentDatabase():
                 else:
                     op['#'+str(uuid.uuid4())]=i[4]
         import toml
-        return toml.dumps(op)
+
+
+        #https://github.com/sanskrit-coders/sanskrit_data/blob/7074d0d63e86052d14181f86a4788fe09ceef2df/sanskrit_data/toml_helper.py#L6
+        from toml.encoder import _dump_str, TomlEncoder, unicode
+        def _dump_str_prefer_multiline(v):
+            multilines = v.split('\n')
+            if len(multilines) > 1:
+                return unicode('"""\n' + v.strip().replace('"""','\\"""') + '\n"""')
+            else:
+                return _dump_str(v)
+
+
+        class MultilinePreferringTomlEncoder(toml.TomlEncoder):
+            def __init__(self, _dict=dict, preserve=False):
+                super(MultilinePreferringTomlEncoder, self).__init__(_dict=dict, preserve=preserve)
+                self.dump_funcs[str] = _dump_str_prefer_multiline
+        return toml.dumps(op,MultilinePreferringTomlEncoder())
 
 
     def importFromToml(self,d):
@@ -1253,12 +1269,12 @@ class DocumentDatabase():
                     d['title']=i
             
             #Detect non-uuid seeds.  Preserve unhashed so we can write back, for human readability.
-            if not ('id' in d and (len(d['id'])==36 and d['id'].count('-'))):
+            if not ('id' in d and (len(d['id'])==36 and d['id'].count('-')==4)):
                 d['id'] = uuid.uuid5(uuid.UUID('44628338-56d5-4663-8a29-db98daba3a31'), d.get('id',i))
                 d['uuid5Seed'] = d.get('id',i) 
 
             #Do the same thing for parents
-            if 'parent' in d and (not(len(d['parent'])==36 and d['parent'].dcount('-'))):
+            if 'parent' in d and (not(len(d['parent'])==36 and d['parent'].count('-')==4)):
                 d['parent'] = uuid.uuid5(uuid.UUID('44628338-56d5-4663-8a29-db98daba3a31'), d['parent'][1:])
                 d['uuid5ParentSeed'] = d['parent'][1:]
 

@@ -63,7 +63,7 @@ class PostsMixin():
                 self.gotoStreamPosts(stream)
 
         btn1 = Button(text='Up',
-                size_hint=(1, None), font_size="14sp")
+                size_hint=(1, None))
 
         btn1.bind(on_press=upOne)
       
@@ -91,7 +91,7 @@ class PostsMixin():
 
         titleBar = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None))
         innerTitleBar = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(0.68,None))
-        date = MDFlatButton(size_hint=(1,None), text="Modified: "+time.strftime('%Y %b %d (%a) @ %r',time.localtime(document.get('time',0)/10**6)), )
+        date = MDFlatButton(size_hint=(1,None), text="Modified: "+time.strftime('%Y %b %d (%a) @ %r',time.localtime(document.get('time',0)/10**6)))
         innerTitleBar.add_widget(date)
         innerTitleBar.add_widget(newtitle)
 
@@ -168,7 +168,7 @@ class PostsMixin():
         newp.bind(text=setUnsaved)
 
         btn1 = Button(text='Save',
-                      size_hint=(0.28, None), font_size="14sp")
+                      size_hint=(0.28, None))
         btn1.bind(on_release=saveButtonHandler)
 
 
@@ -200,7 +200,7 @@ class PostsMixin():
             self.askQuestion("Delete post permanently on all nodes?", postID, reallyDelete)
 
         btn1 = Button(text='Delete',
-                      size_hint=(0.28, None), font_size="14sp")
+                      size_hint=(0.28, None))
         btn1.bind(on_release=delete)
 
         if daemonconfig.userDatabases[stream].writePassword:
@@ -218,7 +218,7 @@ class PostsMixin():
         
 
         btn1 = Button(text='Info',
-                      size_hint=(0.28, None), font_size="14sp")
+                      size_hint=(0.28, None))
         btn1.bind(on_release=goToProperties)
         buttons.add_widget(btn1)
 
@@ -238,7 +238,7 @@ class PostsMixin():
 
 
         btn1 = Button(text='Table',
-                size_hint=(1, None), font_size="14sp")
+                size_hint=(1, None))
 
         btn1.bind(on_press=tableview)
         buttons2.add_widget(btn1)
@@ -305,7 +305,7 @@ class PostsMixin():
 
 
         btn1 = Button(text='Archive',
-                size_hint=(1, None), font_size="14sp")
+                size_hint=(1, None))
 
         btn1.bind(on_press=archive)
         buttons2.add_widget(btn1)
@@ -381,7 +381,7 @@ class PostsMixin():
                 f('yes')
 
         btn1 = Button(text='Comments',
-                      size_hint=(0.4, None), font_size="14sp")
+                      size_hint=(0.4, None))
         btn1.bind(on_release=goToCommentsPage)
         commentsbuttons.add_widget(btn1)
 
@@ -401,7 +401,7 @@ class PostsMixin():
                 f('yes')
 
         btn1 = Button(text='Add',
-                      size_hint=(0.4, None), font_size="14sp")
+                      size_hint=(0.4, None))
         btn1.bind(on_release=writeComment)
         commentsbuttons.add_widget(btn1)
 
@@ -465,7 +465,7 @@ class PostsMixin():
                 self.editStream(stream)
 
         btn1 = Button(text='Up',
-                size_hint=(0.29, None), font_size="14sp")
+                size_hint=(0.29, None))
 
         btn1.bind(on_press=upOne)
       
@@ -524,32 +524,32 @@ class PostsMixin():
             newest=endTime
             oldest=startTime
 
-        #The calender interactions are based on the real oldest post in the set
-
-        #Let the user see older posts by picking a start date to stat showing from.
-        startdate = Button(text=time.strftime("(%a %b %d, '%y)",time.localtime(oldest/10**6)),
-                      size_hint=(0.3, None))
-
-      
-        def f(*a):
-            if oldest:
-                d=time.localtime((oldest)/10**6)
-            else:
-                d=time.localtime()
-
-            from kivymd.uix.picker import MDDatePicker
-
-            def onAccept(date):
-                t= datetime.datetime.combine(date,datetime.datetime.min.time()).timestamp()*10**6
-                self.gotoStreamPosts(stream, t,parent=parent)            
-            d =MDDatePicker(onAccept,year=d.tm_year, month=d.tm_mon, day=d.tm_mday)
-
-            d.open()
-
-        startdate.bind(on_release=f)
-
+        
         #If everything fits on one page we do not need to have the nav buttons
         if len(p)>=20 or startTime or endTime:
+            #The calender interactions are based on the real oldest post in the set
+
+            #Let the user see older posts by picking a start date to stat showing from.
+            startdate = Button(text=time.strftime("(%a %b %d, '%y)",time.localtime(oldest/10**6)),
+                        size_hint=(0.3, None))
+
+        
+            def f(*a):
+                if oldest:
+                    d=time.localtime((oldest)/10**6)
+                else:
+                    d=time.localtime()
+
+                from kivymd.uix.picker import MDDatePicker
+
+                def onAccept(date):
+                    t= datetime.datetime.combine(date,datetime.datetime.min.time()).timestamp()*10**6
+                    self.gotoStreamPosts(stream, t,parent=parent)            
+                d =MDDatePicker(onAccept,year=d.tm_year, month=d.tm_mon, day=d.tm_mday)
+
+                d.open()
+
+            startdate.bind(on_release=f)
 
             pagebuttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True,size_hint=(1,None))
 
@@ -653,6 +653,9 @@ class PostsMixin():
         body = tables.renderPostTemplate(daemonconfig.userDatabases[stream], post['id'], body, 4096)
         body=body[:140].replace("\r",'').replace("\n",'_NEWLINE',2).replace("\n","").replace("_NEWLINE","\r\n")
 
+        #Split on blank line
+        body=body.split('\r\n\r\n')[0].split('\n#')[0]
+
         btn=Button(text=post.get('title',"?????") + " "+time.strftime('(%a %b %d, %Y)',time.localtime(post.get('time',0)/10**6)), size_hint=(1,None), on_release=f)
         
         if (not post.get('body','').strip()) and ((not post.get('icon','')) or not post['icon'].strip()):
@@ -739,7 +742,7 @@ class PostsMixin():
         self.unsavedDataCallback=post
 
         btn1 = Button(text='Post!',
-                      size_hint=(1, None), font_size="14sp")
+                      size_hint=(1, None))
         btn1.bind(on_release=post)
 
         self.streamEditPanel.add_widget(newtitle)
@@ -1074,7 +1077,7 @@ class PostsMixin():
             self.askQuestion("BURN post permanently on all nodes?", docID, reallyBurn)
 
         btn1 = Button(text='Burn',
-                      size_hint=(1, None), font_size="14sp")
+                      size_hint=(1, None))
         btn1.bind(on_release=burn)
 
         if daemonconfig.userDatabases[stream].writePassword:

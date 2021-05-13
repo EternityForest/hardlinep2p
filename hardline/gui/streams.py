@@ -132,6 +132,44 @@ class StreamsMixin():
         self.streamEditPanel.add_widget(importData)
 
 
+
+        export = Button(size_hint=(1,None), text="Export All Posts")
+
+        def promptSet(*a):
+            from .kivymdfmfork import MDFileManager
+            from .. import directories
+
+
+            def f(selection):
+                if selection:
+                    if not selection.endswith(".toml"):
+                        selection=selection+".toml"
+                
+                    try:
+                        #Needed for android
+                        if not "com.eternityforest" in selection:
+                            self.getPermission('files')
+                    except:
+                        logging.exception("cant ask permission")
+
+                    r = daemonconfig.userDatabases[name].getDocumentsByType('post',parent='')
+                    data = daemonconfig.userDatabases[name].exportRecordSetToTOML([i['id'] for i in r])
+
+                    logging.info("Exporting data to:"+selection)
+                    with open(selection,'w') as f:
+                        f.write(data)
+                    self.openFM.close()
+
+             #Autocorrect had some fun with the kivymd devs
+            self.openFM= MDFileManager(select_path=f,save_mode=(name+'.toml'))
+            self.openFM.show(directories.externalStorageDir or directories.settings_path)
+
+
+        export.bind(on_release=promptSet)
+        self.streamEditPanel.add_widget(export)
+
+
+
         self.screenManager.current = "EditStream"
 
     

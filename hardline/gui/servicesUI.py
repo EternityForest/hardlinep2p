@@ -111,7 +111,7 @@ class ServicesMixin():
 
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="24sp",
                                                     text='Cache'))
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), font_size="14sp",
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),
                                                     text='Cache mode only works for static content'))
 
         self.localServiceEditPanel.add_widget(
@@ -120,55 +120,55 @@ class ServicesMixin():
         self.localServiceEditPanel.add_widget(
             self.settingButton(c, "Cache", "maxAge"))
 
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), font_size="14sp",
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), 
                                                     text='Try to refresh after maxAge seconds(default 1 week)'))
 
         self.localServiceEditPanel.add_widget(
             self.settingButton(c, "Cache", "maxSize", '256'))
 
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  
                                                     text='Max size to use for the cache in MB'))
 
         self.localServiceEditPanel.add_widget(
             self.settingButton(c, "Cache", "downloadRateLimit", '1200'))
 
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  
                                                     text='Max MB per hour to download'))
 
         self.localServiceEditPanel.add_widget(
             self.settingButton(c, "Cache", "dynamicContent", 'no'))
 
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  
                                                     text='Allow executing code in protected @mako files in the cache dir. yes to enable. Do not use with untrusted @mako'))
 
         self.localServiceEditPanel.add_widget(
             self.settingButton(c, "Cache", "allowListing", 'no'))
 
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), 
                                                     text='Allow directory listing of cached content'))
 
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), 
                                                     text='Directory names are subfolders within the HardlineP2P cache folder,\nand can also be used to share\nstatic files by leaving the service blank.'))
 
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="24sp",
                                                     text='Access Settings'))
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),  font_size="14sp",
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), 
                                                     text='Cache mode only works for static content'))
 
         self.localServiceEditPanel.add_widget(
             self.settingButton(c, "Access", "useDHT", 'yes'))
 
-        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None), font_size="14sp",
+        self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),
                                                     text='DHT Discovery uses a proxy server on Android. \nDisabling this saves bandwidth but makes access from outside your network\nunreliable.'))
 
         btn1 = Button(text='Save Changes',
-                      size_hint=(1, None), font_size="14sp")
+                      size_hint=(1, None))
 
         btn1.bind(on_press=save)
         self.localServiceEditPanel.add_widget(btn1)
 
         btn2 = Button(text='Delete this service',
-                      size_hint=(1, None), font_size="14sp")
+                      size_hint=(1, None))
 
         btn2.bind(on_press=delete)
         self.localServiceEditPanel.add_widget(btn2)
@@ -178,8 +178,7 @@ class ServicesMixin():
     def makeButtonForLocalService(self, name, c=None):
         "Make a button that, when pressed, edits the local service in the title"
 
-        btn = Button(text=name,
-                     font_size="14sp", size_hint=(1, None))
+        btn = Button(text=name,size_hint=(1, None))
 
         def f(*a):
             self.editLocalService(name, c)
@@ -210,7 +209,7 @@ class ServicesMixin():
         layout.add_widget(labelw)
 
         btn2 = Button(text='Create a service',
-                      size_hint=(1, None), font_size="14sp")
+                      size_hint=(1, None))
 
         btn2.bind(on_press=self.promptAddService)
         layout.add_widget(btn2)

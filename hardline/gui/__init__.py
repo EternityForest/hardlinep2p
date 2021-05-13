@@ -216,9 +216,9 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
             bw =BoxLayout(orientation='horizontal',
                            spacing=10, size_hint=(1, None),adaptive_height=True)
             b = Button(text=i,
-                      size_hint=(0.78, None), font_size="14sp")
+                      size_hint=(0.78, None))
             bd = Button(text="Del",
-                      size_hint=(0.18, None), font_size="14sp")
+                      size_hint=(0.18, None))
 
 
             def dlbm(*a,i=i):
@@ -239,7 +239,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
 
             
         btn1 = Button(text='My Streams',
-                      size_hint=(1, None), font_size="14sp")
+                      size_hint=(1, None))
         label2 = Label(size_hint=(1, None), halign="center",
                        text='Notetaking, microblogging, and more!')
         layout.add_widget(btn1)
@@ -248,7 +248,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         btn1.bind(on_press=self.goToStreams)
 
         btn1 = Button(text='Discover Services',
-                      size_hint=(1, None), font_size="14sp")
+                      size_hint=(1, None))
         label2 = Label(size_hint=(1, None), halign="center",
                        text='Find Hardline sites on your local network')
 
@@ -257,11 +257,19 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         layout.add_widget(label2)
 
         btn5 = Button(text='Settings+Tools',
-                      size_hint=(1, None), font_size="14sp")
+                      size_hint=(1, None))
 
         btn5.bind(on_press=self.goToSettings)
 
         layout.add_widget(btn5)
+
+
+        btn6 = Button(text='Help',
+                      size_hint=(1, None))
+
+        btn6.bind(on_press=self.goToHelp)
+
+        layout.add_widget(btn6)
         self.screenManager.current = "Main"
 
 
@@ -295,7 +303,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
 
     def makeBackButton(self,width=1):
         btn1 = Button(text='Back',
-                      size_hint=(width, None), font_size="14sp")
+                      size_hint=(width, None))
 
         btn1.bind(on_press=self.goBack)
         return btn1
@@ -305,6 +313,11 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
             self.goBack()
             return True 
 
+    def goToHelp(self,*a):
+        dn = "builtin:help"
+        if not dn in daemonconfig.userDatabases:
+            daemonconfig.loadUserDatabase(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),'Drayer Documentation.toml'),dn)
+        self.editStream(dn)
 
     def getPermission(self, type='all'):
         """

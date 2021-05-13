@@ -253,7 +253,7 @@ ACTIVITY_MANAGER = """
         MDToolbar:
             id: toolbar
             title: '%s' % root.current_path
-            right_action_items: [['close-box', lambda x: root.exit_manager(1)]]
+            right_action_items: [['close-box', lambda x: root.close()]]
             left_action_items: [['chevron-left', lambda x: root.back()]]
             elevation: 10
 
@@ -587,10 +587,14 @@ class MDFileManager(ThemableBehavior, BoxLayout):
         if len(self.history) == 1:
             path, end = os.path.split(self.history[0])
             if end == "":
-                self.close()
+                #self.close()
                 self.exit_manager(1)
-                return
-            self.history[0] = path
+                if not self._window_manager_open:
+                    return
+                else:
+                    self.history[0]=path
+            else:
+                self.history[0] = path
         else:
             try:
                 self.history.pop()
