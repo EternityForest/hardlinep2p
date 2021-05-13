@@ -1,4 +1,6 @@
 import configparser
+
+import toml
 from hardline import daemonconfig
 from .. import daemonconfig, hardline
 
@@ -7,6 +9,7 @@ import configparser,logging
 
 from kivy.uix.image import Image
 from kivy.uix.widget import Widget
+from kivymd.uix.stacklayout import MDStackLayout as StackLayout
 
 from typing import Sized, Text
 from kivy.utils import platform
@@ -54,6 +57,10 @@ class StreamsMixin():
             pass
 
         self.streamEditPanel.clear_widgets()
+        topbar = BoxLayout(size_hint=(1,None),adaptive_height=True,spacing=5)
+
+        stack = StackLayout(size_hint=(1,None),adaptive_height=True,spacing=5)
+
 
         self.streamEditPanel.add_widget(Label(size_hint=(
             1, None), halign="center", text=name))
@@ -61,15 +68,16 @@ class StreamsMixin():
         def upOne(*a):
             self.goToStreams()
 
-        btn1 = Button(text='Up',
-                size_hint=(1, None), font_size="14sp")
+        btn1 = Button(text='Up')
 
         btn1.bind(on_press=upOne)
 
-        self.streamEditPanel.add_widget(btn1)
+        topbar.add_widget(btn1)
 
-        self.streamEditPanel.add_widget(self.makeBackButton())
-        
+
+        topbar.add_widget(self.makeBackButton())
+        self.streamEditPanel.add_widget(topbar)
+
         def goHere():
             self.editStream( name)
         self.backStack.append(goHere)
@@ -77,35 +85,32 @@ class StreamsMixin():
 
 
 
-        btn2 = Button(text='View Feed',
-                size_hint=(1, None), font_size="14sp")
+        btn2 = Button(text='View Feed')
         def goPosts(*a):
             self.gotoStreamPosts(name)
         btn2.bind(on_press=goPosts)
-        self.streamEditPanel.add_widget(btn2)
+        stack.add_widget(btn2)
 
 
 
-        btn2 = Button(text='Stream Settings',
-                size_hint=(1, None), font_size="14sp")
+        btn2 = Button(text='Stream Settings')
         def goSettings(*a):
             self.editStreamSettings(name)
         btn2.bind(on_press=goSettings)
-        self.streamEditPanel.add_widget(btn2)
+        stack.add_widget(btn2)
 
 
         if name.startswith('file:'):
-            btn2 = Button(text='Close Stream',
-            size_hint=(1, None), font_size="14sp")
+            btn2 = Button(text='Close Stream')
             def close(*a):
                 daemonconfig.closeUserDatabase(name)
                 self.goToStreams()
             btn2.bind(on_press=close)
-            self.streamEditPanel.add_widget(btn2)
+            stack.add_widget(btn2)
 
 
 
-        importData = Button(size_hint=(1,None), text="Import Data File")
+        importData = Button( text="Import Data File")
 
         def promptSet(*a):
             def f(selection):
@@ -129,11 +134,11 @@ class StreamsMixin():
             
             
         importData.bind(on_release=promptSet)
-        self.streamEditPanel.add_widget(importData)
+        stack.add_widget(importData)
 
 
 
-        export = Button(size_hint=(1,None), text="Export All Posts")
+        export = Button( text="Export All Posts")
 
         def promptSet(*a):
             from .kivymdfmfork import MDFileManager
@@ -166,7 +171,9 @@ class StreamsMixin():
 
 
         export.bind(on_release=promptSet)
-        self.streamEditPanel.add_widget(export)
+
+        stack.add_widget(export)
+        self.streamEditPanel.add_widget(stack)
 
 
 
@@ -261,22 +268,21 @@ class StreamsMixin():
                     pBox.text=sk
             self.askQuestion("Overwrite with random keys?",'yes',makeKeys)
         
-        keyButton = Button(text='Generate New Keys',
-                      size_hint=(1, None), font_size="14sp")
+        keyButton = Button(text='Generate New Keys')
         keyButton.bind(on_press=promptNewKeys)
         self.streamEditPanel.add_widget(keyButton)
 
         self.streamEditPanel.add_widget(
             serverBox:=self.settingButton(c, "Sync", "server"))
 
-        self.streamEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="14sp",
+        self.streamEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
                                               text='Do not include the http:// '))
 
         self.streamEditPanel.add_widget(
             self.settingButton(c, "Sync", "serve",'yes'))
 
 
-        self.streamEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="14sp",
+        self.streamEditPanel.add_widget(Label(size_hint=(1, None), halign="center",
                                               text='Set serve=no to forbid clients to sync'))
 
         self.streamEditPanel.add_widget(Label(size_hint=(1, None), halign="center", font_size="24sp",
@@ -302,8 +308,7 @@ class StreamsMixin():
             self.askQuestion("Enter Sharing Code",cb=g,multiline=True)
 
 
-        keyButton = Button(text='Load from Code',
-                    size_hint=(1, None), font_size="14sp")
+        keyButton = Button(text='Load from Code')
         keyButton.bind(on_press=f)
         self.streamEditPanel.add_widget(keyButton)
 
@@ -312,27 +317,23 @@ class StreamsMixin():
         def f(*a):
             self.showSharingCode(name,c)
 
-        keyButton = Button(text='Show Sharing Code',
-                      size_hint=(1, None), font_size="14sp")
+        keyButton = Button(text='Show Sharing Code')
         keyButton.bind(on_press=f)
         self.streamEditPanel.add_widget(keyButton)
 
         def f(*a):
             self.showSharingCode(name,c,wp=False)
 
-        keyButton = Button(text='Readonly Sharing Code',
-                      size_hint=(1, None), font_size="14sp")
+        keyButton = Button(text='Readonly Sharing Code')
         keyButton.bind(on_press=f)
         self.streamEditPanel.add_widget(keyButton)
 
-        btn1 = Button(text='Save Changes',
-                      size_hint=(1, None), font_size="14sp")
+        btn1 = Button(text='Save Changes')
 
         btn1.bind(on_press=save)
         self.streamEditPanel.add_widget(btn1)
 
-        btn2 = Button(text='Delete this stream',
-                      size_hint=(1, None), font_size="14sp")
+        btn2 = Button(text='Delete this stream')
 
         btn2.bind(on_press=delete)
         self.streamEditPanel.add_widget(btn2)
@@ -342,8 +343,7 @@ class StreamsMixin():
         def gotoOrphans(*a,**k):
             self.gotoStreamPosts(name,orphansMode=True)
 
-        oButton = Button(text='Show Unreachable Garbage',
-                        size_hint=(1, None), font_size="14sp")
+        oButton = Button(text='Show Unreachable Garbage')
         oButton.bind(on_press=gotoOrphans)
         self.streamEditPanel.add_widget(oButton)
 
@@ -351,35 +351,62 @@ class StreamsMixin():
 
         self.screenManager.current = "EditStream"
 
+
     def makeStreamsPage(self):
+        "Prettu much just an empty page filled in by the specific goto functions"
+
         screen = Screen(name='Streams')
         self.servicesScreen = screen
 
-        layout = BoxLayout(orientation='vertical', spacing=10)
-        screen.add_widget(layout)
+        self.streamsEditPanelScroll = ScrollView(size_hint=(1, 1))
+
+        self.streamsEditPanel = BoxLayout(
+            orientation='vertical',adaptive_height= True, spacing=5,size_hint=(1, None))
+        self.streamsEditPanel.bind(
+            minimum_height=self.streamsEditPanel.setter('height'))
+
+        self.streamsEditPanelScroll.add_widget(self.streamsEditPanel)
+
+        screen.add_widget(self.streamsEditPanelScroll)
+
+        return screen
 
 
 
+    def goToStreams(self,*a):
+        
+        "Go to a page wherein we can list user-modifiable services."
+        self.streamsEditPanel.clear_widgets()
+
+        layout = self.streamsEditPanel       
+
+        bar = BoxLayout( spacing=10,adaptive_height=True,size_hint=(1,None))
+
+        stack = StackLayout( spacing=10,adaptive_height=True,size_hint=(1,None))
         layout.add_widget(MDToolbar(title="My Streams"))
+
+        layout.add_widget(bar)
+
+        layout.add_widget(stack)
+
+        bar.add_widget(self.makeBackButton())
+
 
         def upOne(*a):
             self.gotoMainScreen()
 
-        btn1 = Button(text='Up',
-                size_hint=(1, None), font_size="14sp")
+        btn1 = Button(text='Up')
 
         btn1.bind(on_press=upOne)
 
-        layout.add_widget(btn1)
+        bar.add_widget(btn1)
 
-        layout.add_widget(self.makeBackButton())
 
-        btn2 = Button(text='Create a Stream',
-                      size_hint=(1, None), font_size="14sp")
+        btn2 = Button(text='Create a Stream')
 
 
         btn2.bind(on_press=self.promptAddStream)
-        layout.add_widget(btn2)
+        stack.add_widget(btn2)
 
 
         def f(selection):
@@ -405,45 +432,26 @@ class StreamsMixin():
 
             
 
-        btn1 = Button(text='Open Book File',
-                size_hint=(1, None), font_size="14sp")
+        btn1 = Button(text='Open Book File')
 
         btn1.bind(on_press=promptOpen)
 
-        layout.add_widget(btn1)
+        stack.add_widget(btn1)
 
 
-
-
-        self.streamsListBoxScroll = ScrollView(size_hint=(1, 1))
-
-        self.streamsListBox = BoxLayout(
-            orientation='vertical', size_hint=(1, None), spacing=10)
-        self.streamsListBox.bind(
-            minimum_height=self.streamsListBox.setter('height'))
-
-        self.streamsListBoxScroll.add_widget(self.streamsListBox)
-
-        layout.add_widget(self.streamsListBoxScroll)
-
-        return screen
-
-    def goToStreams(self, *a):
-        "Go to a page wherein we can list user-modifiable services."
-        self.streamsListBox.clear_widgets()
 
         def goHere():
             self.screenManager.current = "Streams"
         self.backStack.append(goHere)
         self.backStack=self.backStack[-50:]
 
-        self.streamsListBox.add_widget(MDToolbar(title="Open Streams:"))
+        layout.add_widget(MDToolbar(title="Open Streams:"))
 
         try:
             s = daemonconfig.userDatabases
             time.sleep(0.5)
             for i in s:
-                self.streamsListBox.add_widget(
+                layout.add_widget(
                     self.makeButtonForStream(i))
 
         except Exception:
@@ -454,8 +462,7 @@ class StreamsMixin():
     def makeButtonForStream(self, name):
         "Make a button that, when pressed, edits the stream in the title"
 
-        btn = Button(text=name,
-                     font_size="14", size_hint=(1, None))
+        btn = Button(text=name)
 
         def f(*a):
             self.editStream(name)
@@ -478,12 +485,10 @@ class StreamsMixin():
         screen = Screen(name='EditStream')
         self.servicesScreen = screen
 
-
-
         self.streamEditPanelScroll = ScrollView(size_hint=(1, 1))
 
         self.streamEditPanel = BoxLayout(
-            orientation='vertical',adaptive_height= True, spacing=5)
+            orientation='vertical',adaptive_height= True, spacing=5,size_hint=(1, None))
         self.streamEditPanel.bind(
             minimum_height=self.streamEditPanel.setter('height'))
 

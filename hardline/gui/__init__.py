@@ -23,6 +23,8 @@ import traceback
 import time
 from kivy.uix.screenmanager import ScreenManager, Screen
 import threading
+from kivymd.uix.stacklayout import MDStackLayout as StackLayout
+
 from kivymd.uix.boxlayout import MDBoxLayout as BoxLayout
 from kivymd.uix.card import MDCard
 from kivymd.uix.toolbar import MDToolbar
@@ -147,8 +149,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         self.theme_cls.colors=kivymd.color_definitions.colors
 
         import kivy.clock
-        #Bad HACC
-        kivy.clock.Clock.max_iteration = 5
+        kivy.clock.Clock.max_iteration = 10
 
         #Horid hacks for material design
         self.theme_cls.colors['Brown']['900']='050200'
@@ -212,13 +213,47 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         label.icon=os.path.join(os.path.dirname(os.path.abspath("__file__")),'assets','icons',"Craftpix.net",'medival','cart.jpg')
         layout.add_widget(label)
 
+        stack = StackLayout(size_hint=(1,None),adaptive_height=True)
+
+      
+            
+
+            
+        btn1 = Button(text='My Streams')
+
+        stack.add_widget(btn1)
+
+        btn1.bind(on_press=self.goToStreams)
+
+        btn1 = Button(text='Discover Services')
+     
+
+        btn1.bind(on_press=self.goToDiscovery)
+        stack.add_widget(btn1)
+
+        btn5 = Button(text='Settings+Tools')
+
+        btn5.bind(on_press=self.goToSettings)
+
+        stack.add_widget(btn5)
+
+
+        btn6 = Button(text='Help')
+
+        btn6.bind(on_press=self.goToHelp)
+
+        stack.add_widget(btn6)
+
+        layout.add_widget(stack)
+
+        label = MDToolbar(title="Bookmarks")
+        layout.add_widget(label)
+
         for i in sorted(list(daemonconfig.getBookmarks().keys())):
             bw =BoxLayout(orientation='horizontal',
                            spacing=10, size_hint=(1, None),adaptive_height=True)
-            b = Button(text=i,
-                      size_hint=(0.78, None))
-            bd = Button(text="Del",
-                      size_hint=(0.18, None))
+            b = Button(text=i[:32])
+            bd = Button(text="Del")
 
 
             def dlbm(*a,i=i):
@@ -235,41 +270,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
             bw.add_widget(b)
             bw.add_widget(bd)
             layout.add_widget(bw)
-            
 
-            
-        btn1 = Button(text='My Streams',
-                      size_hint=(1, None))
-        label2 = Label(size_hint=(1, None), halign="center",
-                       text='Notetaking, microblogging, and more!')
-        layout.add_widget(btn1)
-        layout.add_widget(label2)
-
-        btn1.bind(on_press=self.goToStreams)
-
-        btn1 = Button(text='Discover Services',
-                      size_hint=(1, None))
-        label2 = Label(size_hint=(1, None), halign="center",
-                       text='Find Hardline sites on your local network')
-
-        btn1.bind(on_press=self.goToDiscovery)
-        layout.add_widget(btn1)
-        layout.add_widget(label2)
-
-        btn5 = Button(text='Settings+Tools',
-                      size_hint=(1, None))
-
-        btn5.bind(on_press=self.goToSettings)
-
-        layout.add_widget(btn5)
-
-
-        btn6 = Button(text='Help',
-                      size_hint=(1, None))
-
-        btn6.bind(on_press=self.goToHelp)
-
-        layout.add_widget(btn6)
         self.screenManager.current = "Main"
 
 
@@ -302,8 +303,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
             f(True)
 
     def makeBackButton(self,width=1):
-        btn1 = Button(text='Back',
-                      size_hint=(width, None))
+        btn1 = Button(text='Back')
 
         btn1.bind(on_press=self.goBack)
         return btn1

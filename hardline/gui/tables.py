@@ -206,7 +206,7 @@ class TablesMixin():
         searchBar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
 
         searchQuery = MDTextField(size_hint=(0.68,None),multiline=False, text=search)
-        searchButton = MDRoundFlatButton(text="Search", size_hint=(0.3,None))
+        searchButton = MDRoundFlatButton(text="Search")
         searchBar.add_widget(searchQuery)
         searchBar.add_widget(searchButton)
 
@@ -305,8 +305,8 @@ class TablesMixin():
             self.currentPageNewRecordHandler=None
             self.gotoStreamRow(stream,post['id'])
 
-        l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
-        l.add_widget(Button(text=post.get('name',"?????"), size_hint=(1,None), on_release=f))
+        l = BoxLayout(adaptive_height=True,orientation='vertical')
+        l.add_widget(Button(text=post.get('name',"?????"), on_release=f))
         
         tlen =0
         t = []
@@ -372,8 +372,7 @@ class TablesMixin():
 
             self.goBack()
       
-        btn1 = Button(text='Save Changes',
-                      size_hint=(0.48, None), font_size="14sp")
+        btn1 = Button(text='Save Changes', font_size="14sp")
         btn1.bind(on_release=post)
 
 
@@ -397,8 +396,7 @@ class TablesMixin():
                     self.gotoStreamPosts(stream)
             self.askQuestion("Delete table row permanently on all nodes?", postID, reallyDelete)
 
-        btn1 = Button(text='Delete',
-                      size_hint=(0.48, None), font_size="14sp")
+        btn1 = Button(text='Delete', font_size="14sp")
         btn1.bind(on_release=delete)
 
         if daemonconfig.userDatabases[stream].writePassword:
@@ -421,7 +419,7 @@ class TablesMixin():
                     names[i]='(removed)'
         
         for i in names:
-            self.streamEditPanel.add_widget( Button(size_hint=(1,None), text=i[4:]))
+            self.streamEditPanel.add_widget( Button( text=i[4:]))
             d = document.get(i,'')
             try:
                 d=float(d)
@@ -443,7 +441,7 @@ class TablesMixin():
 
             if isinstance(d,float) or not d.strip():
                 l = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
-                b = MDRoundFlatButton(text="--", size_hint=(0.48,None))
+                b = MDRoundFlatButton(text="--")
                 def f(*a, i=i, x=x):
                     d=document.get(i,'')
                     if isinstance(d,str):
@@ -456,7 +454,7 @@ class TablesMixin():
                     x.text=str(d-1)
                 b.bind(on_release=f)
 
-                b2 = MDRoundFlatButton(text="++", size_hint=(0.48,None))
+                b2 = MDRoundFlatButton(text="++")
                 def f(*a, i=i, x=x):
                     d=document.get(i,'')
                     if isinstance(d,str):
@@ -475,7 +473,7 @@ class TablesMixin():
                 self.streamEditPanel.add_widget(l)
 
 
-        b = MDRoundFlatButton(text="Add Column", size_hint=(0.48,None))
+        b = MDRoundFlatButton(text="Add Column")
         def f(*a):
             def f2(r):
                 if r:
@@ -490,7 +488,7 @@ class TablesMixin():
         b.bind(on_release=f)
         self.streamEditPanel.add_widget(b)
 
-        b = MDRoundFlatButton(text="Del Column", size_hint=(0.48,None))
+        b = MDRoundFlatButton(text="Del Column")
         def f(*a):
             def f2(r):
                 if r:

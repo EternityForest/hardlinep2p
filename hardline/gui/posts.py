@@ -43,6 +43,8 @@ from . import tables
 pinRankFilter = "IFNULL(json_extract(json,'$.pinRank'), 0) >0"
 
 
+from kivymd.uix.stacklayout import MDStackLayout as StackLayout
+
 
 class PostsMixin():
 
@@ -56,21 +58,23 @@ class PostsMixin():
 
         document = daemonconfig.userDatabases[stream].getDocumentByID(postID,allowOrphans=True)
 
+        topbar = BoxLayout(size_hint=(1,None),adaptive_height=True,spacing=10)
+        self.streamEditPanel.add_widget(topbar)
+
         def upOne(*a):
             if document and 'parent' in document:
                 self.gotoStreamPost(stream,document['parent'])
             else:
                 self.gotoStreamPosts(stream)
 
-        btn1 = Button(text='Up',
-                size_hint=(1, None))
+        btn1 = Button(text='Up')
 
         btn1.bind(on_press=upOne)
-      
-        self.streamEditPanel.add_widget(btn1)
+        topbar.add_widget(btn1)
+        
 
 
-        self.streamEditPanel.add_widget(self.makeBackButton())
+        topbar.add_widget(self.makeBackButton())
         
 
 
@@ -89,9 +93,9 @@ class PostsMixin():
         self.theme_cls.accent_pallete='Brown'
         self.theme_cls.accent_hue='900'
 
-        titleBar = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None))
+        titleBar = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(0.99,None))
         innerTitleBar = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(0.68,None))
-        date = MDFlatButton(size_hint=(1,None), text="Modified: "+time.strftime('%Y %b %d (%a) @ %r',time.localtime(document.get('time',0)/10**6)))
+        date = MDFlatButton(text="Modified: "+time.strftime('%Y %b %d (%a) @ %r',time.localtime(document.get('time',0)/10**6)))
         innerTitleBar.add_widget(date)
         innerTitleBar.add_widget(newtitle)
 
@@ -167,9 +171,7 @@ class PostsMixin():
         newtitle.bind(text=setUnsaved)
         newp.bind(text=setUnsaved)
 
-        btn1 = Button(text='Save',
-                      size_hint=(0.28, None))
-        btn1.bind(on_release=saveButtonHandler)
+
 
 
         self.streamEditPanel.add_widget(titleBar)
@@ -178,12 +180,13 @@ class PostsMixin():
 
         
         
-        buttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
-        buttons2 = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
+        buttons = StackLayout(spacing=10,adaptive_height=True,size_hint=(1,None))
 
+        self.streamEditPanel.add_widget(buttons)  
 
         if daemonconfig.userDatabases[stream].writePassword:
-            self.streamEditPanel.add_widget(buttons)  
+            btn1 = Button(text='Save')
+            btn1.bind(on_release=saveButtonHandler)
             buttons.add_widget(btn1)
 
 
@@ -199,11 +202,11 @@ class PostsMixin():
                     self.gotoStreamPosts(stream)
             self.askQuestion("Delete post permanently on all nodes?", postID, reallyDelete)
 
-        btn1 = Button(text='Delete',
-                      size_hint=(0.28, None))
-        btn1.bind(on_release=delete)
+       
 
         if daemonconfig.userDatabases[stream].writePassword:
+            btn1 = Button(text='Delete')
+            btn1.bind(on_release=delete)
             buttons.add_widget(btn1)
 
 
@@ -217,8 +220,7 @@ class PostsMixin():
           
         
 
-        btn1 = Button(text='Info',
-                      size_hint=(0.28, None))
+        btn1 = Button(text='Info')
         btn1.bind(on_release=goToProperties)
         buttons.add_widget(btn1)
 
@@ -237,11 +239,10 @@ class PostsMixin():
                 f('yes')
 
 
-        btn1 = Button(text='Table',
-                size_hint=(1, None))
+        btn1 = Button(text='Table')
 
         btn1.bind(on_press=tableview)
-        buttons2.add_widget(btn1)
+        buttons.add_widget(btn1)
 
 
 
@@ -304,19 +305,12 @@ class PostsMixin():
 
 
 
-        btn1 = Button(text='Archive',
-                size_hint=(1, None))
+        btn1 = Button(text='Archive')
 
         btn1.bind(on_press=archive)
-        buttons2.add_widget(btn1)
+        buttons.add_widget(btn1)
 
         
-
-
-
-
-        self.streamEditPanel.add_widget(buttons2)
-
         #This just shows you the most recent info
         self.streamEditPanel.add_widget(Label(size_hint=(
             1, None), halign="center", text="Recent Comments:"))
@@ -366,7 +360,7 @@ class PostsMixin():
 
 
 
-        commentsbuttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
+        commentsbuttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True,size_hint=(1,None))
         
         #This button takes you to the full comments manager
         def goToCommentsPage(*a):
@@ -380,8 +374,7 @@ class PostsMixin():
             else:
                 f('yes')
 
-        btn1 = Button(text='Comments',
-                      size_hint=(0.4, None))
+        btn1 = Button(text='Comments')
         btn1.bind(on_release=goToCommentsPage)
         commentsbuttons.add_widget(btn1)
 
@@ -400,8 +393,7 @@ class PostsMixin():
             else:
                 f('yes')
 
-        btn1 = Button(text='Add',
-                      size_hint=(0.4, None))
+        btn1 = Button(text='Add')
         btn1.bind(on_release=writeComment)
         commentsbuttons.add_widget(btn1)
 
@@ -447,6 +439,7 @@ class PostsMixin():
                 self.streamEditPanel.add_widget(MDToolbar(title="Feed for "+stream))
         else:
             parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent)
+            self.streamEditPanel.add_widget(MDToolbar(title=stream))
             #Disable index assumption so we can always actually go to the parent post instead of getting stuck.
             self.streamEditPanel.add_widget(self.makePostWidget(stream,parentDoc,indexAssumption=False))
 
@@ -464,8 +457,7 @@ class PostsMixin():
             else:
                 self.editStream(stream)
 
-        btn1 = Button(text='Up',
-                size_hint=(0.29, None))
+        btn1 = Button(text='Up')
 
         btn1.bind(on_press=upOne)
       
@@ -485,11 +477,12 @@ class PostsMixin():
         def write(*a):
             self.currentPageNewRecordHandler=None
             self.gotoNewStreamPost(stream,parent)
-        btn1 = Button(text='Write',
-                size_hint=(0.29, None), font_size="14sp")
 
-        btn1.bind(on_press=write)
         if s.writePassword and not orphansMode:
+            btn1 = Button(text='Write')
+
+            btn1.bind(on_press=write)
+            
             topbar.add_widget(btn1)
 
         self.streamEditPanel.add_widget(topbar)
@@ -515,6 +508,7 @@ class PostsMixin():
             else:
                 p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20,orphansOnly=orphansMode,parent=parentPath))
         else:
+            #Search always global
             p=list(s.searchDocuments(search,"post",startTime=startTime, endTime=endTime or 10**18, limit=20))
 
         if p:
@@ -530,8 +524,7 @@ class PostsMixin():
             #The calender interactions are based on the real oldest post in the set
 
             #Let the user see older posts by picking a start date to stat showing from.
-            startdate = Button(text=time.strftime("(%a %b %d, '%y)",time.localtime(oldest/10**6)),
-                        size_hint=(0.3, None))
+            startdate = Button(text=time.strftime("(%a %b %d, '%y)",time.localtime(oldest/10**6)))
 
         
             def f(*a):
@@ -554,16 +547,14 @@ class PostsMixin():
             pagebuttons = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True,size_hint=(1,None))
 
             #Thids button advances to the next newer page of posts.
-            newer = Button(text='>>',
-                        size_hint=(0.28, None))
+            newer = Button(text='>>')
             def f2(*a):
                 self.gotoStreamPosts(stream, newest,parent=parent)            
 
             newer.bind(on_release=f2)
 
             #Thids button advances to the next newer page of posts.
-            older = Button(text='<<',
-                        size_hint=(0.28, None))
+            older = Button(text='<<')
             def f3(*a):
                 self.gotoStreamPosts(stream, endTime=oldest,parent=parent)            
 
@@ -576,15 +567,12 @@ class PostsMixin():
 
 
 
-
-        #Only allow global search just to make stuff easier\#defensive programming ensure always show
-        #user if this is seartch thjpugh
         if not orphansMode and ((not parent) or search):
 
             searchBar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True,size_hint=(1,None))
 
             searchQuery = MDTextField(size_hint=(0.68,None),multiline=False, text=search)
-            searchButton = MDRoundFlatButton(text="Search", size_hint=(0.28,None))
+            searchButton = MDRoundFlatButton(text="Search")
     
 
             searchBar.add_widget(searchQuery)
@@ -622,6 +610,7 @@ class PostsMixin():
             #Avoid showing pinned twice
             if not i['id'] in pinnedIDs:
                 self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
+                pass
 
         
         def onNewRecord(db,r,sig):
@@ -656,7 +645,7 @@ class PostsMixin():
         #Split on blank line
         body=body.split('\r\n\r\n')[0].split('\n#')[0]
 
-        btn=Button(text=post.get('title',"?????") + " "+time.strftime('(%a %b %d, %Y)',time.localtime(post.get('time',0)/10**6)), size_hint=(1,None), on_release=f)
+        btn=Button(text=post.get('title',"?????") + " "+time.strftime('(%a %b %d, %Y)',time.localtime(post.get('time',0)/10**6)), on_release=f)
         
         if (not post.get('body','').strip()) and ((not post.get('icon','')) or not post['icon'].strip()):
             return btn
@@ -665,7 +654,7 @@ class PostsMixin():
 
         
         l.add_widget(btn)
-        l2 = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None),minimum_height=cm(1.5))
+        l2 = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None))
         
 
         src = os.path.join(directories.assetLibPath, post.get("icon","INVALID"))
@@ -681,7 +670,7 @@ class PostsMixin():
         def setWidth(obj,w):
             bodyText.text_size=(w-(img.width+4)),None
             bodyText.texture_update()
-            bodyText.width = (bodyText.texture_size[0],max(bodyText.texture_size[1],cm(1.5)))
+            bodyText.size = (bodyText.texture_size[0],max(bodyText.texture_size[1],cm(1.5)))
             l2.minimum_height=max(bodyText.texture_size[1],cm(1.5))
             l.minimum_height=l2.height+btn.height+4
 
@@ -741,8 +730,7 @@ class PostsMixin():
 
         self.unsavedDataCallback=post
 
-        btn1 = Button(text='Post!',
-                      size_hint=(1, None))
+        btn1 = Button(text='Post!')
         btn1.bind(on_release=post)
 
         self.streamEditPanel.add_widget(newtitle)
@@ -766,13 +754,13 @@ class PostsMixin():
 
         screen = Screen(name='PostMeta')
 
-        layout = BoxLayout(orientation='vertical', spacing=10)
+        layout = BoxLayout(orientation='vertical', spacing=10,size_hint=(1, 1),adaptive_height= True)
         screen.add_widget(layout)
 
 
         self.postMetaPanelScroll = ScrollView(size_hint=(1, 1))
         self.postMetaPanel = BoxLayout(
-            orientation='vertical', spacing=5,adaptive_height= True)
+            orientation='vertical', spacing=5,adaptive_height= True,size_hint=(1, 1))
         self.postMetaPanel.bind(
             minimum_height=self.postMetaPanel.setter('height'))
 
@@ -790,16 +778,16 @@ class PostsMixin():
 
         self.postMetaPanel.add_widget((MDToolbar(title=s.get('title','Untitled'))))
 
-        topbar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True)
+        topbar = BoxLayout(orientation="horizontal",spacing=10,adaptive_height=True,size_hint=(1, None))
         
         def goBack(*a):
             self.screenManager.current= "EditStream"
-        btn =  Button(size_hint=(1,None), text="Go Back")
+        btn =  Button( text="Go Back")
         btn.bind(on_release=goBack)
         self.postMetaPanel.add_widget(btn)
     
      
-        location = Button(size_hint=(1,None), text="Location: "+str(s.get("lat",0))+','+str(s.get('lon',0)) )
+        location = Button( text="Location: "+str(s.get("lat",0))+','+str(s.get('lon',0)) )
 
         def promptSet(*a):
             def onEnter(d):
@@ -842,7 +830,7 @@ class PostsMixin():
 
         self.postMetaPanel.add_widget(Label(text="Icon Asset Lib:"+ directories.assetLibPath, size_hint=(1,None)))
 
-        icon = Button(size_hint=(1,None), text="Icon: "+os.path.basename(s.get("icon",'')) )
+        icon = Button( text="Icon: "+os.path.basename(s.get("icon",'')) )
         def promptSet(*a):
             from .kivymdfmfork import MDFileManager
           
@@ -881,7 +869,7 @@ class PostsMixin():
 
 
 
-        clearicon = Button(size_hint=(1,None), text="Clear Icon")
+        clearicon = Button( text="Clear Icon")
         def promptSet(*a):
             from .kivymdfmfork import MDFileManager
           
@@ -898,7 +886,7 @@ class PostsMixin():
         self.postMetaPanel.add_widget(clearicon)
 
 
-        idButton = Button(size_hint=(1,None), text="Show Post ID")
+        idButton = Button( text="Show Post ID")
         def promptSet(*a):
             self.askQuestion("You can't change this",docID)
             
@@ -907,7 +895,7 @@ class PostsMixin():
 
 
 
-        parentButton = Button(size_hint=(1,None), text="Set post parent")
+        parentButton = Button( text="Set post parent")
         def promptSet(*a):
             def f(p):
                 if not p is None:
@@ -949,7 +937,7 @@ class PostsMixin():
         self.postMetaPanel.add_widget(parentButton)
 
 
-        bmButton = Button(size_hint=(1,None), text="Bookmark")
+        bmButton = Button( text="Bookmark")
         def promptSet(*a):
             def f(p):
                 if not p is None:
@@ -961,7 +949,7 @@ class PostsMixin():
 
 
         #Used to set the pin rank of a post
-        prButton = Button(size_hint=(1,None), text="Pin Rank:"+str(s.get('pinRank') or 0))
+        prButton = Button( text="Pin Rank:"+str(s.get('pinRank') or 0))
         def promptSet(*a):
             def f(p):
                 if not p is None:
@@ -979,7 +967,7 @@ class PostsMixin():
 
 
 
-        export = Button(size_hint=(1,None), text="Export Raw Data")
+        export = Button( text="Export Raw Data")
 
         def promptSet(*a):
             from .kivymdfmfork import MDFileManager
@@ -1025,7 +1013,7 @@ class PostsMixin():
 
 
 
-        export = Button(size_hint=(1,None), text="Export TOML")
+        export = Button( text="Export TOML")
 
         def promptSet(*a):
             from .kivymdfmfork import MDFileManager
@@ -1076,11 +1064,10 @@ class PostsMixin():
                     self.gotoStreamPosts(stream)
             self.askQuestion("BURN post permanently on all nodes?", docID, reallyBurn)
 
-        btn1 = Button(text='Burn',
-                      size_hint=(1, None))
-        btn1.bind(on_release=burn)
 
         if daemonconfig.userDatabases[stream].writePassword:
+            btn1 = Button(text='Burn')
+            btn1.bind(on_release=burn)
             self.postMetaPanel.add_widget(btn1)
             self.postMetaPanel.add_widget(self.saneLabel("Burning a post is less\n likely to leave behind recoverable\nchild comments for spies than just deleting.\nHowever it has a chance of also\nremoving child posts that *used*\nto be stored under the post\nbut were moved.",  self.postMetaPanel))
             self.postMetaPanel.add_widget(self.saneLabel("Both methods reliably delete this specific post.",  self.postMetaPanel))

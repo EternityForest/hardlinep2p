@@ -161,14 +161,12 @@ class ServicesMixin():
         self.localServiceEditPanel.add_widget(Label(size_hint=(1, None),
                                                     text='DHT Discovery uses a proxy server on Android. \nDisabling this saves bandwidth but makes access from outside your network\nunreliable.'))
 
-        btn1 = Button(text='Save Changes',
-                      size_hint=(1, None))
+        btn1 = Button(text='Save Changes')
 
         btn1.bind(on_press=save)
         self.localServiceEditPanel.add_widget(btn1)
 
-        btn2 = Button(text='Delete this service',
-                      size_hint=(1, None))
+        btn2 = Button(text='Delete this service')
 
         btn2.bind(on_press=delete)
         self.localServiceEditPanel.add_widget(btn2)
@@ -178,7 +176,7 @@ class ServicesMixin():
     def makeButtonForLocalService(self, name, c=None):
         "Make a button that, when pressed, edits the local service in the title"
 
-        btn = Button(text=name,size_hint=(1, None))
+        btn = Button(text=name)
 
         def f(*a):
             self.editLocalService(name, c)
@@ -208,8 +206,7 @@ class ServicesMixin():
         layout.add_widget(label)
         layout.add_widget(labelw)
 
-        btn2 = Button(text='Create a service',
-                      size_hint=(1, None))
+        btn2 = Button(text='Create a service')
 
         btn2.bind(on_press=self.promptAddService)
         layout.add_widget(btn2)
