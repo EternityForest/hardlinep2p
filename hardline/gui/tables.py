@@ -196,7 +196,7 @@ class TablesMixin():
         parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent,allowOrphans=True)
         self.streamEditPanel.add_widget(self.makeBackButton())
 
-        postWidget=self.makePostWidget(stream,parentDoc)
+        postWidget=self.makePostWidget(stream,parentDoc,indexAssumption=False)
         self.streamEditPanel.add_widget(postWidget)
         self.streamEditPanel.add_widget((MDToolbar(title="Data Table View")))
             
@@ -319,7 +319,7 @@ class TablesMixin():
         
         t ="\r\n".join(textwrap.wrap(",  ".join(t), 48))
 
-        l.add_widget(Label(text=t, size_hint=(1,None), font_size='22sp',halign='left'))
+        l.add_widget(self.saneLabel(t,l))
         return l
 
     def gotoStreamRow(self, stream, postID, document=None, noBack=False,template=None):

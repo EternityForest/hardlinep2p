@@ -140,12 +140,15 @@ async def DBAPI(websocket, path):
 
             if db.lastChange > session.lastResyncFlushTime:
                 pass
-
-            if kaTimestamp < (time.time()-240):
+            
+            if kaTimestamp < (time.time()-(240 if (not (session.remoteNodeID == db.localNodeVK)) else 30)):
                 kaTimestamp = time.time()
                 if session.remoteNodeID == db.localNodeVK:
                     r = {'connectedServers': db.connectedServers}
-                    await websocket.send(db.encodeMessage(r))
+                else:
+                    r={}
+                await websocket.send(db.encodeMessage(r))
+
 
     except websockets.exceptions.ConnectionClosedOK:
         print("Connection closed with client!!")

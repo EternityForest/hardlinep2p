@@ -327,7 +327,7 @@ class PostsMixin():
         for i in p1:
             #The index assumption, jump straight to the index when we detect a very short post
             #with at least one child
-            if indexAssumption and len(document.get('body',''))<140:
+            if indexAssumption and len(document.get('body',''))<180:
                 self.gotoStreamPosts(stream,parent=postID,indexAssumptionWasUsed=True)
                 return
 
@@ -340,10 +340,12 @@ class PostsMixin():
            
 
         p = s.getDocumentsByType("post", limit=5,parent=postID)
+        c=False
         for i in p:
+            c=True
             #The index assumption, jump straight to the index when we detect a very short post
             #with at least one child
-            if indexAssumption and len(document.get('body',''))<140:
+            if indexAssumption and len(document.get('body',''))<180:
                 self.gotoStreamPosts(stream,parent=postID,indexAssumptionWasUsed=True)
                 return
 
@@ -351,7 +353,12 @@ class PostsMixin():
             if not i['id'] in pinnedIDs:
                 x=self.makePostWidget(stream,i)
                 self.streamEditPanel.add_widget(x)
-                
+
+        if indexAssumption and not c and len(document.get('body',''))<180:
+            for i in s.getDocumentsByType("row", limit=1,parent=postID):
+                self.gotoTableView(stream,postID)
+                return
+                    
 
 
         
