@@ -153,6 +153,8 @@ class PostsMixin():
                     self.unsavedDataCallback=None
                     document['title']=newtitle.text
                     document['body']=sourceText[0] or newp.text
+                    #If there is no document time we need to add one.
+                    document['documentTime'] = document.get('documentTime',document.get('time',int(time.time()*10**6)))
                     #Make sure system knows this is not an old document
                     try:
                         del document['time']
@@ -333,7 +335,9 @@ class PostsMixin():
             pinnedPosts.append((i.get('pinRank',0),i['id'],i))
 
         for i in reversed(list(sorted(pinnedPosts))):
-            self.streamEditPanel.add_widget(self.makePostWidget(stream,i[2]))
+            x=self.makePostWidget(stream,i[2])
+            self.streamEditPanel.add_widget(x)
+           
 
         p = s.getDocumentsByType("post", limit=5,parent=postID)
         for i in p:
@@ -345,7 +349,9 @@ class PostsMixin():
 
             #Avoid showing pinned twice
             if not i['id'] in pinnedIDs:
-                self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
+                x=self.makePostWidget(stream,i)
+                self.streamEditPanel.add_widget(x)
+                
 
 
         
@@ -421,7 +427,7 @@ class PostsMixin():
 
         self.currentPageNewRecordHandler = onNewRecord
 
-    def gotoStreamPosts(self, stream, startTime=0, endTime=0, parent='', search='',noBack=False,orphansMode=False,indexAssumptionWasUsed=False):
+    def gotoStreamPosts(self, stream, startTime=0, endTime=0, parent='', search='',noBack=False,orphansMode=False,indexAssumptionWasUsed=False,arrivalOrder=None):
         "Handles both top level stream posts and comments, and searches.  So we can search comments if we want."
 
         #We MUST ensure we clear this when leaving the page. Pst widgets do ut for us.
@@ -442,7 +448,8 @@ class PostsMixin():
         else:
             parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent)
             #Disable index assumption so we can always actually go to the parent post instead of getting stuck.
-            self.streamEditPanel.add_widget(self.makePostWidget(stream,parentDoc,indexAssumption=False))
+            x=self.makePostWidget(stream,parentDoc,indexAssumption=False)
+            self.streamEditPanel.add_widget(x)
             self.streamEditPanel.add_widget(MDToolbar(title=stream))
 
 
@@ -604,13 +611,14 @@ class PostsMixin():
             pinnedPosts.append((i.get('pinRank',0),i['id'],i))
 
         for i in reversed(list(sorted(pinnedPosts))):
-            self.streamEditPanel.add_widget(self.makePostWidget(stream,i[2]))
+            x=self.makePostWidget(stream,i[2])
+            self.streamEditPanel.add_widget(x)
 
         for i in p:
             #Avoid showing pinned twice
             if not i['id'] in pinnedIDs:
-                self.streamEditPanel.add_widget(self.makePostWidget(stream,i))
-                pass
+                x=self.makePostWidget(stream,i)
+                self.streamEditPanel.add_widget(x)
 
         
         def onNewRecord(db,r,sig):
@@ -659,23 +667,26 @@ class PostsMixin():
 
         src = os.path.join(directories.assetLibPath, post.get("icon","INVALID"))
         useIcon=False
-        img = Image(size_hint=(0.18,1))
+        img = Image(size_hint=(0.25,1))
         img.size_hint_min_y=cm(1.5)   
         img.source= src
         l2.add_widget(img)
         l.image = img
-        bodyText =Label(text=body.strip(),size_hint=(0.78,1),valign="top")
+        bodyText =Label(text=body.strip(),size_hint=(0.75,1),valign="top")
         l.body = bodyText
+        import kivy.clock
+
     
-        def setWidth(obj,w):
+        def setWidth(*a):
+            w=l2.width
             bodyText.text_size=(w-(img.width+4)),None
             bodyText.texture_update()
             bodyText.size = (bodyText.texture_size[0],max(bodyText.texture_size[1],cm(1.5)))
-            l2.minimum_height=max(bodyText.texture_size[1],cm(1.5))
+            l2.height=max(bodyText.texture_size[1],cm(1.5))
             l.minimum_height=l2.height+btn.height+4
 
         l2.bind(width=setWidth)
-
+        kivy.clock.Clock.schedule_once(setWidth)
         #w = MDTextField(text=body, multiline=True,size_hint=(1,0.5),mode="rectangle",readonly=True)
         w=bodyText
         
@@ -703,7 +714,7 @@ class PostsMixin():
         newp = MDTextFieldRect(text='', multiline=True,size_hint=(0.68,None))
 
         def savepost(*a,goto=False):
-            if newp.text:
+            if newp.text or newtitle.text:
                 with daemonconfig.userDatabases[stream]:
                     import uuid
                     id = str(uuid.uuid4())
@@ -868,8 +879,12 @@ class PostsMixin():
                 except:
                     self.openFM= MDFileManager(select_path=f,exit_manager=e)
 
-            self.openFM.show(os.path.join(directories.assetLibPath,'icons'))
-
+            if os.path.exists("/storage/emulated/0/Documents") and os.access("/storage/emulated/0/Documents",os.W_OK):
+                self.openFM.show("/storage/emulated/0/Documents")
+            elif os.path.exists(os.path.expanduser("~/Documents")) and os.access(os.path.expanduser("~/Documents"),os.W_OK):
+                self.openFM.show(os.path.expanduser("~/Documents"))
+            else:
+                self.openFM.show(directories.externalStorageDir or directories.settings_path)
             
         icon.bind(on_release=promptSet)
         self.postMetaPanel.add_widget(icon)
@@ -981,6 +996,11 @@ class PostsMixin():
         def promptSet(*a):
             from .kivymdfmfork import MDFileManager
 
+            try:
+                #Needed for android
+                self.getPermission('files')
+            except:
+                logging.exception("cant ask permission")
 
             def f(selection):
                 if selection:
@@ -989,12 +1009,7 @@ class PostsMixin():
                 
                     def g(a):
                         if a=='yes':
-                            try:
-                                #Needed for android
-                                if not "com.eternityforest" in selection:
-                                    self.getPermission('files')
-                            except:
-                                logging.exception("cant ask permission")
+
                             data = daemonconfig.userDatabases[stream].exportRecordSetToTOML([docID])
 
                             logging.info("Exporting data to:"+selection)

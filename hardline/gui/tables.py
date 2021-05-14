@@ -252,8 +252,7 @@ class TablesMixin():
             self.currentPageNewRecordHandler=None
             self.gotoStreamRow(stream, id, newDoc)
 
-        btn1 = Button(text='New Entry',
-                size_hint=(1, None), font_size="14sp")
+        btn1 = Button(text='New Entry')
 
         btn1.bind(on_press=write)
         newEntryBar.add_widget(newRowName)
@@ -372,7 +371,7 @@ class TablesMixin():
 
             self.goBack()
       
-        btn1 = Button(text='Save Changes', font_size="14sp")
+        btn1 = Button(text='Save Changes')
         btn1.bind(on_release=post)
 
 
@@ -396,7 +395,7 @@ class TablesMixin():
                     self.gotoStreamPosts(stream)
             self.askQuestion("Delete table row permanently on all nodes?", postID, reallyDelete)
 
-        btn1 = Button(text='Delete', font_size="14sp")
+        btn1 = Button(text='Delete')
         btn1.bind(on_release=delete)
 
         if daemonconfig.userDatabases[stream].writePassword:

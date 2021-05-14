@@ -561,6 +561,7 @@ class MDFileManager(ThemableBehavior, BoxLayout):
                       
             return dirs, files
         except OSError:
+            logging.exception("OSERROR")
             self.history.pop()
             return None, None
 

@@ -216,8 +216,8 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         stack = StackLayout(size_hint=(1,None),adaptive_height=True,spacing=5)
 
       
-            
-
+        l = self.saneLabel("Notice: streams may be stored on the SD card. Some other apps may be able to read them",layout)
+        layout.add_widget(l)
             
         btn1 = Button(text='My Streams')
 

@@ -87,12 +87,12 @@ class DiscoveryMixin():
         "Make a button that, when pressed, opens a link to the service denoted by the hash"
 
         btn = Button(text=str(info['title']),
-                     font_size="26sp", size_hint=(1, None))
+                     font_size="26sp")
 
         def f(*a):
             self.openInBrowser("http://"+info['hash']+".localhost:7009")
         btn.bind(on_press=f)
 
-        return(btn, Label(text="Hosted By: "+info.get("from_ip", ""), font_size="14sp", size_hint=(1, None)),
+        return(btn, Label(text="Hosted By: "+info.get("from_ip", ""), size_hint=(1, None)),
 
-               Label(text="ID: "+info['hash'], font_size="14sp", size_hint=(1, None)))
+               Label(text="ID: "+info['hash'], size_hint=(1, None)))

@@ -69,7 +69,7 @@ class ToolsAndSettingsMixin():
         self.localSettingsBox.add_widget(
             self.settingButton(globalConfig, "DrayerDB", 'serverName'))
 
-        btn1 = Button(text='Save', font_size="14sp")
+        btn1 = Button(text='Save')
 
         def save(*a):
             with open(hardline.globalSettingsPath, 'w') as f:
@@ -119,9 +119,9 @@ class ToolsAndSettingsMixin():
 
 
 
-        log = Button(text='System Logs', font_size="14sp")
+        log = Button(text='System Logs')
 
-        btn1 = Button(text='Local Services', font_size="14sp")
+        btn1 = Button(text='Local Services')
         label1 = Label( halign="center",
                        text='Share a local webservice with the world')
 
@@ -132,20 +132,20 @@ class ToolsAndSettingsMixin():
         layout.add_widget(btn1)
         layout.add_widget(label1)
 
-        btn = Button(text='Global Settings', font_size="14sp")
+        btn = Button(text='Global Settings')
 
         btn.bind(on_press=self.goToGlobalSettings)
         layout.add_widget(btn)
 
         # Start/Stop
-        btn3 = Button(text='Stop',  font_size="14sp")
+        btn3 = Button(text='Stop')
         btn3.bind(on_press=self.stop_service)
         label3 = Label(size_hint=(1, None), halign="center",
                        text='Stop the background process.  It must be running to acess hardline sites.  Starting may take a few seconds.')
         layout.add_widget(btn3)
         layout.add_widget(label3)
 
-        btn4 = Button(text='Start or Restart.', font_size="14sp")
+        btn4 = Button(text='Start or Restart.')
         btn4.bind(on_press=self.start_service)
         label4 = Label(size_hint=(1, None), halign="center",
                        text='Restart the process. It will show in your notifications.')

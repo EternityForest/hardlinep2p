@@ -85,7 +85,7 @@ class StreamsMixin():
 
 
 
-        btn2 = Button(text='View Feed')
+        btn2 = Button(text='Notebook View')
         def goPosts(*a):
             self.gotoStreamPosts(name)
         btn2.bind(on_press=goPosts)
@@ -113,24 +113,34 @@ class StreamsMixin():
         importData = Button( text="Import Data File")
 
         def promptSet(*a):
+            try:
+                #Needed for android
+                self.getPermission('files')
+            except:
+                logging.exception("cant ask permission")
+
             def f(selection):
                 if selection:
                     def f2(x):
                         if x:
-                            import json
-                            with open(selection) as f:
-                                for i in json.loads(f.read()):
-                                    with  daemonconfig.userDatabases[name]:
-                                        daemonconfig.userDatabases[name].setDocument(i[0])
-                                    daemonconfig.userDatabases[name].commit()
+                            with  daemonconfig.userDatabases[name]:
+                                with open(selection) as f:
+                                    daemonconfig.userDatabases[name].importFromToml(f.read())
+                            daemonconfig.userDatabases[name].commit()
                     self.askQuestion("Really import?","yes",cb=f2)
                 self.openFM.close()
 
             from .kivymdfmfork import MDFileManager
             from . import directories
             self.openFM= MDFileManager(select_path=f)
-            self.openFM.show(directories.externalStorageDir or directories.settings_path)
 
+            
+            if os.path.exists("/storage/emulated/0/Documents") and os.access("/storage/emulated/0/Documents",os.W_OK):
+                self.openFM.show("/storage/emulated/0/Documents")
+            elif os.path.exists(os.path.expanduser("~/Documents")) and os.access(os.path.expanduser("~/Documents"),os.W_OK):
+                self.openFM.show(os.path.expanduser("~/Documents"))
+            else:
+                self.openFM.show(directories.externalStorageDir or directories.settings_path)
             
             
         importData.bind(on_release=promptSet)
@@ -143,7 +153,11 @@ class StreamsMixin():
         def promptSet(*a):
             from .kivymdfmfork import MDFileManager
             from .. import directories
-
+            try:
+                #Needed for android
+                self.getPermission('files')
+            except:
+                logging.exception("cant ask permission")
 
             def f(selection):
                 if selection:
@@ -152,12 +166,6 @@ class StreamsMixin():
                 
                     def g(a):
                         if a=='yes':
-                            try:
-                                #Needed for android
-                                if not "com.eternityforest" in selection:
-                                    self.getPermission('files')
-                            except:
-                                logging.exception("cant ask permission")
 
                             r = daemonconfig.userDatabases[name].getDocumentsByType('post',parent='')
                             data = daemonconfig.userDatabases[name].exportRecordSetToTOML([i['id'] for i in r])
@@ -174,14 +182,27 @@ class StreamsMixin():
 
              #Autocorrect had some fun with the kivymd devs
             self.openFM= MDFileManager(select_path=f,save_mode=(name+'.toml'))
-            self.openFM.show(directories.externalStorageDir or directories.settings_path)
 
+            if os.path.exists("/storage/emulated/0/Documents") and os.access("/storage/emulated/0/Documents",os.W_OK):
+                self.openFM.show("/storage/emulated/0/Documents")
+            elif os.path.exists(os.path.expanduser("~/Documents")) and os.access(os.path.expanduser("~/Documents"),os.W_OK):
+                self.openFM.show(os.path.expanduser("~/Documents"))
+            else:
+                self.openFM.show(directories.externalStorageDir or directories.settings_path)
 
         export.bind(on_release=promptSet)
 
         stack.add_widget(export)
         self.streamEditPanel.add_widget(stack)
 
+
+        #Show recent changes no matter where they are in the tree.
+        #TODO needs to be hideable for anti-spoiler purposes in fiction.
+        self.streamEditPanel.add_widget(MDToolbar(title="Recent Changes:"))
+
+        for i in daemonconfig.userDatabases[name].getDocumentsByType('post',orderBy='arrival DESC',limit=5):
+            x =self.makePostWidget(name,i)
+            self.streamEditPanel.add_widget(x)
 
 
         self.screenManager.current = "EditStream"
@@ -433,10 +454,22 @@ class StreamsMixin():
         #This lets us view notebook files that aren't installed.
         def promptOpen(*a):
 
+            try:
+                #Needed for android
+                self.getPermission('files')
+            except:
+                logging.exception("cant ask permission")
+
             from .kivymdfmfork import MDFileManager
             from . import directories
             self.openFM= MDFileManager(select_path=f)
-            self.openFM.show(directories.externalStorageDir or directories.settings_path)
+
+            if os.path.exists("/storage/emulated/0/Documents") and os.access("/storage/emulated/0/Documents",os.W_OK):
+                self.openFM.show("/storage/emulated/0/Documents")
+            elif os.path.exists(os.path.expanduser("~/Documents")) and os.access(os.path.expanduser("~/Documents"),os.W_OK):
+                self.openFM.show(os.path.expanduser("~/Documents"))
+            else:
+                self.openFM.show(directories.externalStorageDir or directories.settings_path)
 
             
 
