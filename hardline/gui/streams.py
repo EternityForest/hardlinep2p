@@ -418,7 +418,6 @@ class StreamsMixin():
 
         layout.add_widget(stack)
 
-        bar.add_widget(self.makeBackButton())
 
 
         def upOne(*a):
@@ -429,6 +428,7 @@ class StreamsMixin():
         btn1.bind(on_press=upOne)
 
         bar.add_widget(btn1)
+        bar.add_widget(self.makeBackButton())
 
 
         btn2 = Button(text='Create a Stream')
