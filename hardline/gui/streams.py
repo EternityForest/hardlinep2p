@@ -494,6 +494,15 @@ class StreamsMixin():
             for i in s:
                 layout.add_widget(
                     self.makeButtonForStream(i))
+                try:
+                    for j in daemonconfig.userDatabases[i].connectedServers:
+                        if daemonconfig.userDatabases[i].connectedServers[j]>(time.time()-(10*60)):
+                            w='online'
+                        else:
+                            w='idle/offline'
+                        layout.add_widget(self.saneLabel(j[:28]+": "+w, layout))
+                except:
+                    logging.exception("Error showing node status")
 
         except Exception:
             logging.info(traceback.format_exc())

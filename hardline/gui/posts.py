@@ -879,12 +879,7 @@ class PostsMixin():
                 except:
                     self.openFM= MDFileManager(select_path=f,exit_manager=e)
 
-            if os.path.exists("/storage/emulated/0/Documents") and os.access("/storage/emulated/0/Documents",os.W_OK):
-                self.openFM.show("/storage/emulated/0/Documents")
-            elif os.path.exists(os.path.expanduser("~/Documents")) and os.access(os.path.expanduser("~/Documents"),os.W_OK):
-                self.openFM.show(os.path.expanduser("~/Documents"))
-            else:
-                self.openFM.show(directories.externalStorageDir or directories.settings_path)
+            self.openFM.show(directories.assetLibPath)
             
         icon.bind(on_release=promptSet)
         self.postMetaPanel.add_widget(icon)

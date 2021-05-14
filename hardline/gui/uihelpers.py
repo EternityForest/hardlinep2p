@@ -4,6 +4,7 @@ import logging
 from kivy.core.clipboard import Clipboard
 from kivy.uix.boxlayout import BoxLayout
 from kivymd.uix.button import MDFlatButton
+import kivy.clock
 
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.label import MDLabel as Label
@@ -39,12 +40,15 @@ class AppHelpers():
 
     def saneLabel(self,text, container):
         bodyText =Label(text=text,size_hint=(1,None),valign="top")
-        def setWidth(obj,w):
-            bodyText.text_size=(w),None
+
+        def setWidth(*a):
+            bodyText.text_size=(container.width),None
             bodyText.texture_update()
             bodyText.height = bodyText.texture_size[1]
            
         container.bind(width=setWidth)
+        
+        kivy.clock.Clock.schedule_once(setWidth)
         return bodyText
 
     def showQR(self, text,title="QR"):
