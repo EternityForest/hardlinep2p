@@ -24,6 +24,12 @@ Ideally, you'll be able to take home a smart device, plug it into your router, f
 
 That bookmark will then work from anywhere in the world!
 
+
+In addition to all of this, we also provide journalling and notetaking using distributed databases.
+
+This feature is integrated into the same app and uses the services feature for Sync.
+
+
 ## Prior Art:
 
 * Abandoned Mozilla project that was similar: [https://wiki.mozilla.org/FlyWeb]
@@ -31,9 +37,15 @@ That bookmark will then work from anywhere in the world!
 
 ## Not similar
 
-* IPFS: We aren't bittorrent, we don't use any sort of content-addressible stuff, we provide connections to self-hosted services. 
+* IPFS: We aren't bittorrent, we don't use any sort of content-addressible stuff, we provide connections to self-hosted services, and mutable distributed databases. 
 * Zerotier:  This is not a VPN. It will not conflict with a VPN(Although it may ignore it and use the LAN instead), and it does not act at the low-level network layer.
 
+## Possibly Similar
+
+* The GUN database seems to provide a similar eventually consistent database as the Streams feature
+* DAT:  We have a similar data sharing capability, but we do not manage any version history.
+* Scuttlebutt: We have a similar decentralized publishing capability, but we support multiple writers and don't use a chain.
+* SyncThing seems to use a similar sharing model to sync files.  We don't currently sync files yet though.
 
 ## How it works.
 Computer B can discover the address of computer A if it is on the same network, otherwise it will fall back to using a public OpenDHT proxy that I am hosting(If you run one, let me know, I'd love to add some redundancy!)
