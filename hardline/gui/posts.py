@@ -62,10 +62,17 @@ class PostsMixin():
         self.streamEditPanel.add_widget(topbar)
 
         def upOne(*a):
-            if document and 'parent' in document:
-                self.gotoStreamPost(stream,document['parent'])
+            def f(a):
+                if a=='yes':
+                    self.unsavedDataCallback=None
+                    if document and 'parent' in document:
+                        self.gotoStreamPost(stream,document['parent'])
+                    else:
+                        self.gotoStreamPosts(stream)
+            if self.unsavedDataCallback:
+                self.askQuestion("Discard Changes?","yes",f)
             else:
-                self.gotoStreamPosts(stream)
+                f('yes')
 
         btn1 = Button(text='Up')
 
