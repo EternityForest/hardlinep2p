@@ -96,6 +96,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
 
         if platform == 'android':
             from android import AndroidService
+            logging.info("About to start Android service")
             service = AndroidService('HardlineP2P Service', 'running')
             service.start('service started')
             self.service = service

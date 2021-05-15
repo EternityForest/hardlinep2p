@@ -14,3 +14,7 @@ for i in hardline.daemonconfig.loadUserDatabases(None):
 
 # This is the android service
 hardline.start(7009)
+
+from jnius import autoclass
+PythonService = autoclass('org.kivy.android.PythonService')
+PythonService.mService.setAutoRestartService(True)

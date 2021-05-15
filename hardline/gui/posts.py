@@ -660,7 +660,7 @@ class PostsMixin():
         #Split on blank line
         body=body.split('\r\n\r\n')[0].split('\n#')[0]
 
-        btn=Button(text=post.get('title',"?????") + " "+time.strftime('(%a %b %d, %Y)',time.localtime(post.get('time',0)/10**6)), on_release=f)
+        btn=Button(text=post.get('title',"?????") + " "+time.strftime("(%a %b %d, '%y)",time.localtime(post.get('time',0)/10**6)), on_release=f)
         
         if (not post.get('body','').strip()) and ((not post.get('icon','')) or not post['icon'].strip()):
             return btn
@@ -674,12 +674,22 @@ class PostsMixin():
 
         src = os.path.join(directories.assetLibPath, post.get("icon","INVALID"))
         useIcon=False
-        img = Image(size_hint=(0.25,1))
-        img.size_hint_min_y=cm(1.5)   
-        img.source= src
-        l2.add_widget(img)
+
+        if os.path.exists(src):
+            img = Image(size_hint=(0.25,1))
+            img.size_hint_min_y=cm(1.5)   
+            img.source= src
+            l2.add_widget(img)
+            useIcon=True
+        else:
+            class FakeImage():
+                width=0
+            img=FakeImage
+
+
         l.image = img
-        bodyText =Label(text=body.strip(),size_hint=(0.75,1),valign="top")
+
+        bodyText =Label(text=body.strip(),size_hint=(0.75 if useIcon else 0.9,1),valign="top")
         l.body = bodyText
         import kivy.clock
 
