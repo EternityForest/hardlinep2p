@@ -192,7 +192,11 @@ class StreamsMixin():
 
         export.bind(on_release=promptSet)
 
+
         stack.add_widget(export)
+
+
+
         self.streamEditPanel.add_widget(stack)
 
 
@@ -374,6 +378,36 @@ class StreamsMixin():
         oButton = Button(text='Show Unreachable Garbage')
         oButton.bind(on_press=gotoOrphans)
         self.streamEditPanel.add_widget(oButton)
+
+        noSpreadsheet = Button(text="Spreadsheet on/off")
+
+        def promptSet(*a):
+            from .kivymdfmfork import MDFileManager
+            from .. import directories
+            try:
+                #Needed for android
+                self.getPermission('files')
+            except:
+                logging.exception("cant ask permission")
+
+            def f(selection):
+                if selection=='on':
+                    daemonconfig.userDatabases[name].enableSpreadsheetEval = True
+                else:
+                    daemonconfig.userDatabases[name].enableSpreadsheetEval = False
+            
+            if hasattr(daemonconfig.userDatabases[name],'enableSpreadsheetEval'):
+                esf=daemonconfig.userDatabases[name].enableSpreadsheetEval
+            else:
+                esf=True
+            
+            self.askQuestion("Allow Spreadsheet Functions?",'on' if esf else 'off',f)
+
+        noSpreadsheet.bind(on_release=promptSet)
+        self.streamEditPanel.add_widget(noSpreadsheet)
+        self.streamEditPanel.add_widget(self.saneLabel("Disabling only takes effect for this session. Use this feature if a stream is loading too slowly, to allow you to fix the offending expression.",  self.streamEditPanel))
+
+
 
 
 

@@ -71,7 +71,7 @@ def makePostRenderingFuncs(limit=1024*1024):
 
     def spreadsheetConvert(p, unit, to):
         import pint
-        return pint.Quantity(p,unit).to(to)
+        return pint.Quantity(float(p),unit).to(to).magnitude
     
     @cacheWrap
     def spreadsheetLatest(p):
@@ -143,10 +143,20 @@ class ColumnIterator():
 def renderPostTemplate(db, postID,text, limit=100000000):
     "Render any {{expressions}} in a post based on that post's child data row objects.  Currentlt limit is rounded to just above or below 8192"
 
+
+    if hasattr(db,'enableSpreadsheetEval'):
+        esf=db.enableSpreadsheetEval
+    else:
+        esf=True
+
+    if not esf:
+        return text
+            
+
     search=list(re.finditer(r'\{\{(.*?)\}\}',text))
     if not search:
         return text
-
+    
     d = db.getDocumentByID(postID,allowOrphans=True)
     if not d:
         return ''
