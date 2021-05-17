@@ -744,7 +744,7 @@ class PostsMixin():
                 with daemonconfig.userDatabases[stream]:
                     import uuid
                     id = str(uuid.uuid4())
-                    d = {'body': newp.text,'title':newtitle.text,'type':'post','documentTime':int(time.time()*10**6)}
+                    d = {'body': newp.text,'title':newtitle.text,'type':'post','documentTime':int(time.time()*10**6),'id':id}
                     if parent:
                         d['parent'] = parent
 
