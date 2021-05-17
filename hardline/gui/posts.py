@@ -57,6 +57,8 @@ class PostsMixin():
         self.streamEditPanel.add_widget(MDToolbar(title="Post in "+stream+"(Autosave on)"))
 
         document = daemonconfig.userDatabases[stream].getDocumentByID(postID,allowOrphans=True)
+        if not document:
+            document={}
 
         topbar = BoxLayout(size_hint=(1,None),adaptive_height=True,spacing=10)
         self.streamEditPanel.add_widget(topbar)
@@ -667,7 +669,7 @@ class PostsMixin():
         #Split on blank line
         body=body.split('\r\n\r\n')[0].split('\n#')[0]
 
-        btn=Button(text=post.get('title',"?????") + " "+time.strftime("(%a %b %d, '%y)",time.localtime(post.get('time',0)/10**6)), on_release=f)
+        btn=Button(text=post.get('title',"?????") + " "+time.strftime("(%a %b %d, '%y)",time.localtime(post.get('documentTime',post.get('time',0))/10**6)), on_release=f)
         
         if (not post.get('body','').strip()) and ((not post.get('icon','')) or not post['icon'].strip()):
             return btn

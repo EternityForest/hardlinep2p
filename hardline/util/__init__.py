@@ -186,9 +186,15 @@ class LPDPeer():
         h = bytes.fromhex(hash)
         doublehash = blake2b(h, encoder=nacl.encoding.RawEncoder())[:20].hex()
 
-        # Lookup by hash or rollingCode, store by fullhash.
-        del self.activeHashes[hash] 
-        del self.activeHashes[doublehash] 
+        try:
+            # Lookup by hash or rollingCode, store by fullhash.
+            del self.activeHashes[hash]
+        except KeyError:
+            pass
+        try:
+            del self.activeHashes[doublehash] 
+        except KeyError:
+            pass
         
     
     def calcRollingCode(self,hash):

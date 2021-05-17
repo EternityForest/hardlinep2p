@@ -265,6 +265,10 @@ class StreamsMixin():
             if platform == 'android':
                 self.stop_service()
                 self.start_service()
+            else:
+                db.close()
+                daemonconfig.loadUserDatabases(None, only=name,callbackFunction=self.onDrayerRecordChange)
+
 
         def delete(*a):
             def f(n):

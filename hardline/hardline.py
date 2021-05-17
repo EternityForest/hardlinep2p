@@ -42,23 +42,37 @@ socket.setdefaulttimeout(5)
 import logging
 logger=logging.getLogger("hardline")
 
+from os import environ
+if 'ANDROID_BOOTLOGO' in environ:
+   isAndroid=True
+else:
+   isAndroid=False
+
+
+
 def createWifiChecker():
     """Detects if we are on something like WiFi, and if we have sufficient battery power to keep going.
 
     But if we aren't on android at all, assume that we are always connected to a LAN, even htough there are 4g laptops.
-    don't use for anything critical because of that.
+    don't use for anything critical because of that, this is just a bandwidth optimizer
 
     """
     def alwaysTrue():
         return True
+
+
+
+    if not isAndroid:
+        return alwaysTrue
+
+
 
     try:
         import kivy.utils
     except ImportError:
         return alwaysTrue
 
-    if kivy.utils.platform != 'android':
-        return alwaysTrue
+
 
     from plyer import battery
 
@@ -83,6 +97,13 @@ lanStat = [isOnLan()]
 P2P_PORT = 7009
 
 dhtlock = threading.RLock()
+
+def setP2PPort(x):
+    "Must be called before starting anything or making any services."
+    global P2P_PORT
+    P2P_PORT=x
+    LocalP2PPortContainer[0]=x
+
 
 
 
@@ -505,6 +526,9 @@ class Service():
 
         services[self.keyhash.hex()] = self
 
+        #Start on-demand
+        doUPNPMapping()
+
         self.lpd = util.LPDPeer("HARDLINE-SERVICE", "HARDLINE-SEARCH")
         self.lpd.register(self.password+"-"+self.keyhash.hex(),
                           LocalP2PPortContainer, info)
@@ -703,7 +727,7 @@ class Service():
                             pass
                         return
 
-        t = threading.Thread(target=f, daemon=True)
+        t = threading.Thread(target=f, daemon=True,name="nostartstoplog.p2pconnectionhandler"+str(time.time()))
         t.start()
 
     # def addKnownLANClient(self,l):
@@ -948,7 +972,7 @@ def server_thread(sock):
 
                     return
 
-    t = threading.Thread(target=f, daemon=True)
+    t = threading.Thread(target=f, daemon=True,name="nostartstoplog.localdrayerhandler"+str(time.time()))
     t.start()
 
 
@@ -1085,6 +1109,46 @@ def tryDHTConnect():
         except:
             logger.info(traceback.format_exc())
 
+
+upnplock = threading.RLock()
+
+upnpInitDone = [0]
+thePortMapping = [0]
+def doUPNPMapping():
+    with upnplock:
+        #Not ready.  Must mean service not started.
+        #Service will start it for us.
+        if not upnpInitDone[0]=='ready':
+            return
+        
+        upnpInitDone[0]='done'
+
+        from . import upnpwrapper
+        # Only daemons exposing a service need a WAN mapping
+        t = threading.Thread(target=taskloop, daemon=True)
+        t.start()
+        # We don't actually know what an unbusy port really is. Try a bunch till we find one.
+        # Note that there is a slight bit of unreliableness here.  The router could get rebooted, and lose
+        # our mapping, and someone else could have taken it when we retry.  But that is rather unlikely.
+        # Default to the p2p port
+        WANPortContainer[0] = LocalP2PPortContainer[0]
+
+        for i in range(0, 5):
+            try:
+                portMapping = upnpwrapper.addMapping(
+                    LocalP2PPortContainer[0], "TCP", WANPort=WANPortContainer[0])
+                thePortMapping[0]=portMapping
+                break
+            except:
+                WANPortContainer[0] += 1
+                logger.info(traceback.format_exc())
+                logger.info("Failed to register port mapping, retrying")
+        else:
+            # Default to the p2p port
+            logger.info("Failed to register port mapping, you will need to manually configure.")
+            WANPortContainer[0]=LocalP2PPortContainer[0]
+
+
 def start(localport=None):
     global  portMapping, running, exited, cached_localport
 
@@ -1097,8 +1161,8 @@ def start(localport=None):
     
     try:
     
-        import kivy.utils
-        if kivy.utils.platform == 'android' and services:
+        if isAndroid and services:        
+            import kivy.utils
             logger.info("Getting multicast lock")
             from . import androidtools
             androidtools.getLocksForBackgroundOperation()
@@ -1149,34 +1213,11 @@ def start(localport=None):
 
             else:
                 raise
-
-    if services:
-        from . import upnpwrapper
-
-
-
-        # Only daemons exposing a service need a WAN mapping
-        t = threading.Thread(target=taskloop, daemon=True)
-        t.start()
-        # We don't actually know what an unbusy port really is. Try a bunch till we find one.
-        # Note that there is a slight bit of unreliableness here.  The router could get rebooted, and lose
-        # our mapping, and someone else could have taken it when we retry.  But that is rather unlikely.
-        # Default to the p2p port
-        WANPortContainer[0] = LocalP2PPortContainer[0]
-
-        for i in range(0, 5):
-            try:
-                portMapping = upnpwrapper.addMapping(
-                    LocalP2PPortContainer[0], "TCP", WANPort=WANPortContainer[0])
-                break
-            except:
-                WANPortContainer[0] += 1
-                logger.info(traceback.format_exc())
-                logger.info("Failed to register port mapping, retrying")
-        else:
-            # Default to the p2p port
-            logger.info("Failed to register port mapping, you will need to manually configure.")
-            WANPortContainer[0]=LocalP2PPortContainer[0]
+    
+    with upnplock:
+        upnpInitDone[0]='ready'
+        if services:    
+            doUPNPMapping()
 
     toScan = [p2p_bindsocket]
 
@@ -1197,8 +1238,6 @@ def start(localport=None):
 
         r, w, x = select.select(toScan, [], [], 1)
         try:
-
-            # Whichever one has data, shove it down the other one
             for i in r:
                 if i == bindsocket:
                     x=i.accept()

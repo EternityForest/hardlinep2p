@@ -14,7 +14,7 @@ from .cidict import CaseInsensitiveDict
 def loadUserServices(serviceDir, only=None):
     serviceDir = serviceDir or directories.user_services_dir
 
-    "Load services from a configuration directory.  Only to  only reload one."
+    "Load services from a configuration directory.  Only to  only reload one, by giving it the filename minus .ini"
     try:
         os.makedirs(serviceDir)
     except:
@@ -73,7 +73,7 @@ def loadUserServices(serviceDir, only=None):
                 logger.info(traceback.format_exc())
 
 
-def makeUserService(dir, name, title="A service", service="localhost", port='80',  certfile=None, cacheInfo={}, noStart=False, useDHT='yes'):
+def makeUserService(dir, name, *, title="A service", service="localhost", port='80', cacheInfo={}, noStart=False, useDHT='yes'):
     dir = dir or directories.user_services_dir
 
     try:
@@ -157,8 +157,12 @@ def delDatabase(dir, name):
     if os.path.exists(dir):
         for n in os.listdir(dir):
             i = os.path.join(dir, n)
-            if file and i.startswith(file):
+            if i==file or n.startswith(file+'.'):
                 os.remove(i)
+    try:
+        userDatabases[name].close()
+    except:
+        pass
     del userDatabases[name]
 
 
@@ -241,7 +245,7 @@ def loadUserDatabase(file, dn):
 
 
 def closeUserDatabase(dn):
-    "Mostlu used for the document viewing feature"
+    "Mostly used for the document viewing feature"
     try:
         userDatabases[dn].close()
         del userDatabases[dn]
@@ -280,6 +284,22 @@ userServices = {}
 
 
 ddbservice = [0]
+
+
+keysPath = os.path.join(directories.settings_path,"documentKeys.toml")
+
+
+# def loadStoredKeys():
+#     "Get the stored keys from file."
+#     import toml
+#     if os.path.exists(keysPath):
+#         with open(keysPath) as f:
+#             keys=toml.load(f)
+#     else:
+#         keys={}
+
+#     for i in keys:
+#         drayerdb.addCryptoKey(i, )
 
 
 def loadDrayerServerConfig():

@@ -350,3 +350,52 @@ You may want to delete the database and start over on any read only nodes that a
 
 
 
+## Hardline as an embeddable app
+
+
+
+### daemonconfig
+
+`from hardline import daemonconfig`
+
+
+Daemonconfig provides a high-level interface for controlling a daemon that uses a settings dir.   It uses the standard file-based ways of managing services.
+
+
+
+
+#### makeUserService(dir, name, *, title="A service", service="localhost", port='80', cacheInfo={}, noStart=False, useDHT='yes')
+
+Dir will be the dir in which ot store the service file.
+Name will be the name.
+
+Service and port are the web service you wish to expose.
+
+noStart avoids starting immediately.
+
+#### def delUserService(dir, name)
+
+
+#### def listServices(serviceDir)
+
+List out the active user services.
+
+#### def loadUserServices(serviceDir, only=None):
+Load a service into the set of active services, from the service dir.
+
+
+#### def loadUserDatabases(dir, only=None, forceProxy=None, callbackFunction=None):
+Load databases from a folder into the open set of databases.  Use only to only load one. forceProxy overrides the sync server.
+Callbackfunction sets the dataCallback of each databases
+
+#### userDatabases
+
+Dict indexed by name of all user databases.
+
+#### closeUserDatabase(name)
+
+Close but don't delete the underlying file or anything
+
+
+#### delDatabase(dir, name):
+Delete a database and all it's related files from dir.  Actually consideres anything of the form <name>.db.* to be related.
