@@ -468,8 +468,8 @@ class PostsMixin():
             parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent)
             #Disable index assumption so we can always actually go to the parent post instead of getting stuck.
             x=self.makePostWidget(stream,parentDoc,indexAssumption=False)
-            self.streamEditPanel.add_widget(MDToolbar(title="Posts"))
             self.streamEditPanel.add_widget(x)
+            self.streamEditPanel.add_widget(MDToolbar(title="Posts"))
 
 
 
