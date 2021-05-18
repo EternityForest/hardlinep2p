@@ -331,6 +331,8 @@ class DocumentDatabase():
 
                 # Preferentially use documentTime, if htat is not available use the low level data timestamp.
                 # documentTime is a user-settable field that can go backwards, wheras time must be the raw record creation time
+
+                #VERY IMPORTANT: QUERIES MUST use the indexes WITH the ifnulls  or things WILL be slow
                 self.threadLocal.conn.execute(
                     '''CREATE INDEX IF NOT EXISTS document_parent_type_time ON document(IFNULL(json_extract(json,"$.parent"),"")  ,json_extract(json,"$.type"), IFNULL(json_extract(json,'$.documentTime'), json_extract(json,'$.time'))) ''')
 
@@ -1212,7 +1214,7 @@ class DocumentDatabase():
                 if children:
                     cur2 = self.threadLocal.conn.cursor()
                     cur2.execute(
-                        'SELECT json,signature,arrival FROM document WHERE  json_extract(json,"$.parent")=?', (d['id'],))
+                        'SELECT json,signature,arrival FROM document WHERE IFNULL(json_extract(json,"$.parent"),"")=?', (d['id'],))
 
                     for j in cur2:
                         d2 = json.loads(j[0])
@@ -1822,7 +1824,7 @@ class DocumentDatabase():
                 # The rest we consider blocked. They become an orphan record.
                 thisround = {}
                 c = self.threadLocal.conn.execute(
-                    "SELECT json FROM document WHERE json_extract(json,'$.parent')=? AND json_extract(json,'$.time')<? LIMIT 1000", (record, r['time']))
+                    "SELECT json FROM document WHERE IFNULL(json_extract(json,'$.parent'),'')=? AND json_extract(json,'$.time')<? LIMIT 1000", (record, r['time']))
                 for i in c:
                     x = json.loads(i[0])
                     l.append((x['id'], x['time']))

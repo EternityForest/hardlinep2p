@@ -460,13 +460,16 @@ class PostsMixin():
             if orphansMode:
                 self.streamEditPanel.add_widget(MDToolbar(title="Unreachable Records in "+stream))
             else:
-                self.streamEditPanel.add_widget(MDToolbar(title="Feed for "+stream))
+                if parent is None:
+                    self.streamEditPanel.add_widget(MDToolbar(title="Feed View: "+stream))
+                else:
+                    self.streamEditPanel.add_widget(MDToolbar(title=stream))
         else:
             parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent)
             #Disable index assumption so we can always actually go to the parent post instead of getting stuck.
             x=self.makePostWidget(stream,parentDoc,indexAssumption=False)
+            self.streamEditPanel.add_widget(MDToolbar(title="Posts"))
             self.streamEditPanel.add_widget(x)
-            self.streamEditPanel.add_widget(MDToolbar(title=stream))
 
 
 
@@ -515,21 +518,28 @@ class PostsMixin():
 
 
         if parent:
-            parentPath=s.getDocumentByID(parent)['id']
-
+            try:
+                parentPath=s.getDocumentByID(parent)['id']
+            except:
+                logging.exception("?")
+                return
         else:
-            parentPath=''
+            parentPath=parent
         
         if orphansMode:
             parentPath=None
+
+        #When getting all posts regardless of where they came from, use arrival not actual time. Partly because it will be indexed better,
+        #And partly to show users things they may have missed a long time ago if they didn't have connectivity.
+        orderBy='arrival DESC' if (parent is None) else None
 
         if not search:
             if startTime:
                 #If we have a start time the initial search has to be ascending or we will just always get the very latest.
                 #So then we have to reverse it to give a consistent ordering
-                p = list(reversed(list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20,descending=False,orphansOnly=orphansMode,parent=parentPath))))
+                p = list(reversed(list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20,descending=False,orphansOnly=orphansMode,parent=parentPath)),orderBy=orderBy))
             else:
-                p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20,orphansOnly=orphansMode,parent=parentPath))
+                p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20,orphansOnly=orphansMode,parent=parentPath,orderBy=orderBy))
         else:
             #Search always global
             p=list(s.searchDocuments(search,"post",startTime=startTime, endTime=endTime or 10**18, limit=20))
@@ -620,20 +630,24 @@ class PostsMixin():
         pinnedIDs={}
         pinnedPosts = []
 
-        #Get nonzero pin rank
-        p1 = s.getDocumentsByType("post",parent=parentPath,extraFilters=pinRankFilter)
-        for i in p1:
-            pinnedIDs[i['id']]=True
-            pinnedPosts.append((i.get('pinRank',0),i['id'],i))
 
-        for i in reversed(list(sorted(pinnedPosts))):
-            x=self.makePostWidget(stream,i[2])
-            self.streamEditPanel.add_widget(x)
+        #Makes no sense to have pinned posts in a global feed of all changes, it would get clogged.
+        if not parent is None:
+            #Get nonzero pin rank
+            p1 = s.getDocumentsByType("post",parent=parentPath,extraFilters=pinRankFilter)
+            for i in p1:
+                pinnedIDs[i['id']]=True
+                pinnedPosts.append((i.get('pinRank',0),i['id'],i))
+
+            for i in reversed(list(sorted(pinnedPosts))):
+                x=self.makePostWidget(stream,i[2])
+                self.streamEditPanel.add_widget(x)
 
         for i in p:
             #Avoid showing pinned twice
             if not i['id'] in pinnedIDs:
-                x=self.makePostWidget(stream,i)
+                #In global changes feeds we have to give the user a bit of context.
+                x=self.makePostWidget(stream,i, includeParent=(parent is None))
                 self.streamEditPanel.add_widget(x)
 
         
@@ -646,7 +660,7 @@ class PostsMixin():
 
         self.screenManager.current = "EditStream"
 
-    def makePostWidget(self,stream, post,indexAssumption=True):
+    def makePostWidget(self,stream, post,indexAssumption=True,includeParent=False):
         "Index assumption allows treating very short posts as indexes that gfo straight to the comment page"
         def f(*a):
             def f2(d):
@@ -660,6 +674,17 @@ class PostsMixin():
                 self.askQuestion("Discard unsaved data?", 'yes', cb=f2)
             else:
                 f2(True)
+
+        parent = post.get('parent','')
+        parentTitle=None
+        if includeParent:
+            if parent:
+                try:
+                    parentTitle= daemonconfig.userDatabases[stream].getDocumentByID(parent).get('title','Untitled')
+                except:
+                    parentTitle="NOT FOUND"
+
+                
 
         #Chop to a shorter length, then rechop to even shorter, to avoid cutting off part of a long template and being real ugly.
         body=post.get('body',"?????")[:240].strip()
@@ -677,6 +702,8 @@ class PostsMixin():
         l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
 
         
+        if parentTitle:
+            l.add_widget(self.saneLabel(str(parentTitle)+'>',l))
         l.add_widget(btn)
         l2 = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None))
         
