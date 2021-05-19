@@ -39,8 +39,8 @@ from . import tables
 
 
 
-
-pinRankFilter = "IFNULL(json_extract(json,'$.pinRank'), 0) >0"
+#We need the redundant AND json_extract(json,'$.pinRank') to make it compatible withe partial index
+pinRankFilter = "IFNULL(json_extract(json,'$.pinRank'), 0) >0 AND json_extract(json,'$.pinRank')"
 
 
 from kivymd.uix.stacklayout import MDStackLayout as StackLayout
@@ -163,7 +163,8 @@ class PostsMixin():
                     document['title']=newtitle.text
                     document['body']=sourceText[0] or newp.text
                     #If there is no document time we need to add one.
-                    document['documentTime'] = document.get('documentTime',document.get('time',int(time.time()*10**6)))
+                    #Defensive programming to be able to fix None that somehow got in this propery
+                    document['documentTime'] = document.get('documentTime',document.get('time',int(time.time()*10**6))) or document.get('time',int(time.time()*10**6))
                     #Make sure system knows this is not an old document
                     try:
                         del document['time']
@@ -283,13 +284,12 @@ class PostsMixin():
                         if not daemonconfig.userDatabases[stream].getDocumentByID(archiveID):
                             daemonconfig.userDatabases[stream].setDocument({
                                 'id':archiveID,
-                                'title':'Archive',
+                                'title':'[ Archive ]',
                                 'specialPostType':'archive',
                                 'parent':document.get('parent',''),
                                 'type':'post',
                                 'pinRank': 1,
-                                'body':"This is where archived posts in this folder go",
-                                "icon":"icons/CC0 Clipart/nicubunu/office/box_with_folders.jpg"
+                                'body':"",
                             })
                         
 
@@ -694,7 +694,7 @@ class PostsMixin():
         #Split on blank line
         body=body.split('\r\n\r\n')[0].split('\n#')[0]
 
-        btn=Button(text=post.get('title',"?????") + " "+time.strftime("(%a %b %d, '%y)",time.localtime(post.get('documentTime',post.get('time',0))/10**6)), on_release=f)
+        btn=Button(text=post.get('title',"?????") + " "+time.strftime("(%a %b %d, '%y)",time.localtime((post.get('documentTime',post.get('time',0)) or post.get('time',0))/10**6)  ) , on_release=f)
         
         if (not post.get('body','').strip()) and ((not post.get('icon','')) or not post['icon'].strip()):
             return btn
@@ -947,7 +947,10 @@ class PostsMixin():
           
             def f(x):
                 if x=='yes':
-                    s['icon'] = selection[len(directories.assetLibPath)+1:] if selection else ''
+                    try:
+                        del s['icon']
+                    except:
+                        pass
                     s['time']=None
                     self.unsavedDataCallback=autosavecallback
                     icon.text = "Icon: "+os.path.basename(s.get("icon",''))

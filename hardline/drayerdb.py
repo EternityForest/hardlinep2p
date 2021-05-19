@@ -126,7 +126,6 @@ async def DBAPI(websocket, path):
         a = await websocket.recv()
 
         databaseBySyncKeyHash[a[1:17]].dbConnect()
-        logging.info("incoming connection to DB! ")
         x = databaseBySyncKeyHash[a[1:17]].handleBinaryAPICall(
             a, session, forceResponse=True)
         if x:
@@ -515,6 +514,32 @@ class DocumentDatabase():
                     })
             self.commit()
 
+
+    
+    def computeDatabaseState(self):
+        "Compute a string representing the full state of the whole DB"
+        def byte_xor(ba1, ba2):
+            return bytes([_a ^ _b for _a, _b in zip(ba1, ba2)])
+        accum = b'\0'*32
+
+        cur = self.threadLocal.conn.cursor()
+        # Avoid dumping way too much at once
+        cur.execute(
+            "SELECT signature,arrival FROM document ORDER BY arrival ASC")
+        
+        last = None
+        for i in cur:
+            h = libnacl.crypto_generichash(base64.b64decode(i[0]))
+            accum =byte_xor(accum,h)
+            last = i[1]
+
+        return accum, i[1]
+
+        
+
+
+
+
     def generateNewKeypair(self):
         vk, sk = libnacl.crypto_sign_keypair()
   
@@ -533,10 +558,10 @@ class DocumentDatabase():
         Given a parent document ID and a name, create a unique ID for that parent,name combo semi-deterministically.
         If the parent exists and is encrypted, the ID generated should also be encrypted. 
         """
+        p = self.getDocumentByID(parentDoc)
+
         # Special UUID standin for the "Root post", which does not really exist.
-
         rootUUID = '1d4f7b28-0677-4245-a4e3-21a1376b0b3a'
-
         parentDoc = parentDoc or rootUUID
 
         archiveID = str(uuid.uuid5(parentDoc, name))
@@ -624,17 +649,14 @@ class DocumentDatabase():
 
         return d2
 
-    def decryptDocument(self, document):
 
-        # Pass through any nulls
-        if not document:
-            return document
-        if not 'encData' in document:
-            return document
+    def getSymKeyForEncryptedDocument(self, document):
 
-        # Get the deterministic key for every sender/receiver pair
+        if not 'senderKeyHint' in document:
+            if not 'receiverKeyHint' in document:
+                return None
 
-        # We really want to avoid unnecessary public key operations
+        symKey = False
         if (document['senderKeyHint'], document['receiverKeyHint']) in self.symKeyCache:
             symKey = self.symKeyCache[(
                 document['senderKeyHint'], document['receiverKeyHint'])]
@@ -646,6 +668,26 @@ class DocumentDatabase():
         elif document['senderKeyHint'] in keystore:
             symKey = libnacl.crypto_box_seal_open(
                 document['senderKey'], keystore[document['senderKeyHint']][0], keystore[document['senderKeyHint']][1])
+
+        return symKey
+
+    def decryptDocument(self, document):
+
+        # Pass through any nulls
+        if not document:
+            return document
+        if not 'encData' in document:
+            return document
+
+        # Get the deterministic key for every sender/receiver pair
+
+        # We really want to avoid unnecessary public key operations
+
+        symKey = self.getSymKey(document)
+        if not symKey:
+            #Document does not exist as far as we are concerned, we do not have the key.
+            return None
+
 
         self.symKeyCache[(document['senderKeyHint'],
                           document['receiverKeyHint'])] = symKey
@@ -743,7 +785,6 @@ class DocumentDatabase():
         oldServerURL = self.serverURL
         loop = asyncio.new_event_loop()
 
-        logging.info("Server Manager Target is:"+oldServerURL)
         while oldServerURL == self.serverURL:
             try:
                 if loop.run_until_complete(self.openSessionAsClient(loop)):
@@ -936,7 +977,6 @@ class DocumentDatabase():
 
     def handleBinaryAPICall(self, a, sessionObject=None, forceResponse=False):
         # Process one incoming binary API message.  If part of a sesson, using a sesson objert enables certain features.
-        logging.info("i got a msg")
         self.dbConnect()
 
         # Message type byte is reserved for a future use
@@ -1009,8 +1049,6 @@ class DocumentDatabase():
             r['connectedServers'] = self.connectedServers
 
         b64RemoteNodeID = base64.b64encode(remoteNodeID).decode()
-        logging.info("msg was from:" + b64RemoteNodeID)
-        logging.info("we are:" + base64.b64encode(self.localNodeVK).decode())
 
         # It is an explicitly supported use case to have both the client and the server of a connection share the same database, for use in IPC.
         # In this scenario, it is useless to send ir request old records, as the can't get out of sync, there is only one DB.
@@ -1071,7 +1109,6 @@ class DocumentDatabase():
 
                         if not 'records' in r:
                             r['records'] = []
-                        logging.info(i)
                         r['records'].append([i[0], sig, i[2]])
 
                         sessionObject.lastResyncFlushTime = max(
@@ -1087,7 +1124,6 @@ class DocumentDatabase():
 
         needUpdatePeerTimestamp = False
         if "records" in d and d['records']:
-            logging.info("Has records")
             # If we ARE the same database as the remote node, we already have the record they are telling us about, we just need to do the notification
             if not remoteNodeID == self.localNodeVK:
                 with self:
@@ -1179,7 +1215,6 @@ class DocumentDatabase():
                 for i in cur:
                     # Don't loop records
                     if not i[3] == session.b64RemoteNodeID:
-                        logging.info("Pushing Update Record!")
                         if not 'records' in r:
                             r['records'] = []
                         r['records'].append([i[0], i[1], i[2]])
@@ -1528,8 +1563,6 @@ class DocumentDatabase():
         else:
             docObj = doc
 
-        logging.info("Setting record, recieved from: "+receivedFrom +
-                     " and local ID is "+base64.b64encode(self.localNodeVK).decode())
 
         self.dbConnect()
         oldVersionData = {}
