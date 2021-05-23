@@ -46,6 +46,28 @@ databaseBySyncKeyHash = weakref.WeakValueDictionary()
 keystore = {}
 
 
+import gzip
+
+def decompress(d):
+    if isinstance(d,str):
+        return d
+
+    if d[0]==1:
+        if d[1]==1:
+            d= gzip.decompress(d[2:])
+            
+        else:
+            raise RuntimeError("Unsupported compression")
+    return d.decode()
+
+
+def compressGzip(d):
+    if isinstance(d,str):
+        d=d.encode()
+    return bytes([1,1])+gzip.compress(d)
+
+
+
 def addCryptoKey(self, name, pubKey, privKey=None):
     "Add a key to open an address to the global keystore"
     crypto_keys_namespace = 'c81a0643-4557-4373-ba39-9997a91262a3'
@@ -926,8 +948,11 @@ class DocumentDatabase():
             # Lets make our own crappy fake copy of JSON1, so we can use it on
             # Sqlite versions without that extension loaded.
 
+            #Also, our versios can operate directly on compressed data
+
             def json_valid(x):
                 try:
+                    x=decompress(x)
                     json.loads(x)
                     return 1
                 except:
@@ -938,7 +963,7 @@ class DocumentDatabase():
 
             def json_extract(x, path):
                 try:
-                    j = json.loads(x)
+                    j = json.loads(decompress(x))
 
                     # Remove the $., this is just a limited version that only supports top level index getting
                     path = path[2:]
@@ -953,6 +978,7 @@ class DocumentDatabase():
 
             self.threadLocal.conn.create_function(
                 "json_extract", 2, json_extract, deterministic=True)
+
 
     def _checkIfNeedsResign(self, i):
         "Check if we need to redo the sig on a record,sig pair because the key has changed.  Return sig, old sig if no correction needed"
@@ -1031,6 +1057,9 @@ class DocumentDatabase():
 
         # Get the data
         d = a[8:]
+
+        #Decompress the data if need be
+        d = decompress(d)
 
         if sessionObject:
             sessionObject.remoteNodeID = remoteNodeID
@@ -1280,7 +1309,7 @@ class DocumentDatabase():
 
         return self.encodeMessage(d, True)
 
-    def encodeMessage(self, d, needWritePassword=False):
+    def encodeMessage(self, d, needWritePassword=False,useCompression=True):
         "Given a JSON message, encode it so as to be suitable to send to another node"
         if needWritePassword and not self.writePassword:
             raise RuntimeError("You don't have a write password")
@@ -1291,6 +1320,10 @@ class DocumentDatabase():
         keyHint = libnacl.crypto_generichash(symKey)[:16]
 
         r = jsonEncode(d).encode('utf8')
+
+        if useCompression:
+            r=compressGzip(r)
+
 
         timeAsBytes = struct.pack("<Q", int(time.time()*1000000))
 
@@ -1548,12 +1581,12 @@ class DocumentDatabase():
             else:
                 return time.time()*10**6
 
-    def setDocument(self, doc, signature=None, receivedFrom='', remoteArrivalTime=0, parentIsNull=False):
+    def setDocument(self, doc, signature=None, receivedFrom='', remoteArrivalTime=0, parentIsNull=False,useCompression=False):
         with self.lock:
             self._setDocument(doc, signature, receivedFrom,
-                              remoteArrivalTime, parentIsNull)
+                              remoteArrivalTime, parentIsNull,useCompression)
 
-    def _setDocument(self, doc, signature=None, receivedFrom='', remoteArrivalTime=0, parentIsNull=False):
+    def _setDocument(self, doc, signature=None, receivedFrom='', remoteArrivalTime=0, parentIsNull=False,useCompression=False):
         """Two modes: Locally generate a signature, or use the existing sig data.
             When the record is remotely recieved, you must specify what arrival time the remote node thinks it came in at.        
         """
@@ -1762,6 +1795,10 @@ class DocumentDatabase():
                     except KeyError:
                         pass
 
+                #Automatically enable compression for very large records.
+                if useCompression or len(d)> 48*1024:
+                    d=compressGzip(d)
+
                 c = self.threadLocal.conn.execute(
                     "INSERT INTO document VALUES (null,?,?,?,?,?)", (d, signature, self.makeNewArrivalTimestamp(), receivedFrom, '{}'))
 
@@ -1963,7 +2000,7 @@ class DocumentDatabase():
                 x = cur.fetchone()
                 cur.close()
                 if x:
-                    x = json.loads(x[0])
+                    x = json.loads(decompress(x[0]))
                     if allowOrphans:
                         return self.decryptDocument(x)
                 self.documentCache[key] = x
@@ -2001,6 +2038,46 @@ class DocumentDatabase():
                 return self.decryptDocument(r), _ancestors
             return self.decryptDocument(r)
 
+
+
+
+    def getDocumentsBySQL(self, query, *a,allowOrphans=False, orphansOnly=False):
+
+        self.dbConnect()
+        cur = self.threadLocal.conn.cursor()
+
+        cur.execute(
+            "SELECT json from document WHERE "+query, a)
+
+        l = 0
+        for i in cur:
+            # Have to do our own limiting for the orphans scanner which could be incredible slow
+            l += 1
+            if l > limit:
+                return
+
+            try:
+                x = json.loads(decompress(i[0]))
+            except:
+                continue
+
+            if not x.get('type', '') == 'null':
+                isOrphan = False
+                # Look for orphan records that have been 'deleted'
+                if 'parent' in x:
+                    if (not allowOrphans) or orphansOnly:
+                        if not self.getDocumentByID(x['parent']):
+                            isOrphan = True
+                            if not (orphansOnly or allowOrphans):
+                                continue
+
+                if orphansOnly:
+                    if not isOrphan:
+                        continue
+                yield self.decryptDocument(x)
+        cur.close()
+
+
     def getDocumentsByType(self, key, startTime=0, endTime=10**18, limit=100, parent=None, descending=True, orphansOnly=False, allowOrphans=False, orderBy=None, extraFilters=''):
         """Return documents meeting the filter criteria. Parent should by the full path of the parent record, to limit the results to children of that record.
             You can try to just use the direct parent ID but that is not a guarantee, it returns nothing if we don't have the parent record.
@@ -2023,9 +2100,9 @@ class DocumentDatabase():
 
         self.dbConnect()
         cur = self.threadLocal.conn.cursor()
-
+        
         if extraFilters:
-            extraFilters = extraFilters + " AND"
+            extraFilters=extraFilters+" AND "
 
         if parent is None:
             cur.execute(

@@ -23,6 +23,16 @@ This is probably fine for thousands to low millions of records, and tens of node
 You can also theoretically get around this if you are only interested in recent nodes.
 
 
+
+## The json_extract function
+
+We override this with an alternative user function that we use.  Right now it only supports $.prop queries, but it can directly access records conpressed with the compression
+escape sequence(see below).
+
+This allows us to transparently index compressed records as if the compression were not there, meaning that we can support the kinds of use cases
+Zim/Kiwix traditionally handles.
+
+
 ## Record Structure
 
 Every record is a JSON obj.  Custom application defined keys and types should use com.domain.foo formats to stay unambiguous.
@@ -68,6 +78,12 @@ When it is a nonempty string, it means nodes can delete old records silently, bu
 An "autoclean channel" is defined as the combination of (parent, autoclean).
 
 This property can never be added to an existing record.  Nodes must silently ignore an incoming sync record that would do so. It cannot be changed on an existing record either.
+
+
+### Ondisk conpression
+
+
+If the "json" DB column begins with the escape sequence 0x01, 0x01,  treat the rest as GZIP compressed.  If it begins with 0x01, 0x02, treat as LZMA.
 
 
 ## Wire protocol
@@ -118,6 +134,14 @@ So, any time we commit a set of records, or hear about a set, we trigger a flush
 Records have to be sent in contiguous blocks or else recordsStartFrom makes no sense!!
 
 The exception is that we do not have to send a peer any records that originally arrived from that exact peer, for very obvious reasons.
+
+
+### Payload Compression
+
+If the payload begins with the escape sequence 0x01, 0x01,  treat the rest as GZIP compressed.  If it begins with 0x01, 0x02, treat as LZMA.
+
+Implementations should probably stick to GZIP though, because it is so much faster.  LZMA should be considered not really supported till python for
+android gets it.
 
 
 

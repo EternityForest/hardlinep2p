@@ -47,8 +47,6 @@ from kivymd.uix.stacklayout import MDStackLayout as StackLayout
 
 
 class PostsMixin():
-
-
     def gotoStreamPost(self, stream,postID,noBack=False, indexAssumption=True):
         "Editor/viewer for ONE specific post"
         self.unsavedDataCallback=None
@@ -316,10 +314,16 @@ class PostsMixin():
 
 
 
-        btn1 = Button(text='Archive')
 
-        btn1.bind(on_press=archive)
-        buttons.add_widget(btn1)
+
+        #Can't archive the archive....
+        if not document.get('specialPostType')=='archive':
+            parentDocument = daemonconfig.userDatabases[stream].getDocumentByID(document.get('parent',''))
+            #Don't allow endless archiving nested folders
+            if not(parentDocument and parentDocument.get('specialPostType')=='archive'):
+                btn1 = Button(text='Archive')
+                btn1.bind(on_press=archive)
+                buttons.add_widget(btn1)
 
         
         #This just shows you the most recent info
@@ -529,17 +533,24 @@ class PostsMixin():
         if orphansMode:
             parentPath=None
 
-        #When getting all posts regardless of where they came from, use arrival not actual time. Partly because it will be indexed better,
-        #And partly to show users things they may have missed a long time ago if they didn't have connectivity.
-        orderBy='arrival DESC' if (parent is None) else None
 
+
+        #When there is no parent record, we want to see recent changes fron the whole DB.  in that case use arrival time not real time,
+        #Assuming the user will want to see old stuff he did not have before
         if not search:
             if startTime:
-                #If we have a start time the initial search has to be ascending or we will just always get the very latest.
-                #So then we have to reverse it to give a consistent ordering
-                p = list(reversed(list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20,descending=False,orphansOnly=orphansMode,parent=parentPath)),orderBy=orderBy))
+
+                if parent is None:
+                    p=list(s.getDocumentsBySQL("json_extract(json,'$.type')='post'  AND arrival>? AND arrival<? ORDER BY arrival ASC",(startTime, endTime or 10**18),orphansOnly=orphansMode))
+                else:
+                    #If we have a start time the initial search has to be ascending or we will just always get the very latest.
+                    #So then we have to reverse it to give a consistent ordering
+                    p = list(reversed(list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20,descending=False,orphansOnly=orphansMode,parent=parentPath))))
             else:
-                p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20,orphansOnly=orphansMode,parent=parentPath,orderBy=orderBy))
+                if parent is None:
+                    p=list(s.getDocumentsBySQL("json_extract(json,'$.type')='post'  AND arrival>? AND arrival<? ORDER BY arrival DESC",(startTime, endTime or 10**18),orphansOnly=orphansMode))
+                else:
+                    p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20,orphansOnly=orphansMode,parent=parentPath))
         else:
             #Search always global
             p=list(s.searchDocuments(search,"post",startTime=startTime, endTime=endTime or 10**18, limit=20))
