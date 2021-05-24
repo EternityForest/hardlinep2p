@@ -6,7 +6,7 @@ from .. import daemonconfig, hardline
 from kivy.metrics import cm
 
 import configparser,logging,datetime
-
+from kivy.core.text.markup import MarkupLabel
 from kivy.uix.image import Image
 from kivy.uix.widget import Widget
 from kivy.uix.textinput import TextInput
@@ -46,19 +46,39 @@ pinRankFilter = "IFNULL(json_extract(json,'$.pinRank'), 0) >0 AND json_extract(j
 from kivymd.uix.stacklayout import MDStackLayout as StackLayout
 
 
+
+def getColor(document):
+    if document.get("color",''):
+        try:
+            import kivy.utils
+            from .import colornames
+            return kivy.utils.get_color_from_hex(colornames.colors.get( document.get("color",'').lower(),document.get("color",'')) )
+        except:
+            logging.exception("invalid color")
+    return None
+
+
 class PostsMixin():
     def gotoStreamPost(self, stream,postID,noBack=False, indexAssumption=True):
         "Editor/viewer for ONE specific post"
         self.unsavedDataCallback=None
 
         self.streamEditPanel.clear_widgets()
-        self.streamEditPanel.add_widget(MDToolbar(title="Post in "+stream+"(Autosave on)"))
+        heading = MDToolbar(title="Post in "+stream+"(Autosave on)")
+        self.streamEditPanel.add_widget(heading)
 
         document = daemonconfig.userDatabases[stream].getDocumentByID(postID,allowOrphans=True)
         if not document:
             document={}
 
+        themeColor = getColor(document)
+
+
         topbar = BoxLayout(size_hint=(1,None),adaptive_height=True,spacing=10)
+
+        if themeColor:
+            heading.md_bg_color=themeColor
+
         self.streamEditPanel.add_widget(topbar)
 
         def upOne(*a):
@@ -248,11 +268,11 @@ class PostsMixin():
             else:
                 f('yes')
 
+        if not document.get('specialPostType')=='archive':
+            btn1 = Button(text='Table')
 
-        btn1 = Button(text='Table')
-
-        btn1.bind(on_press=tableview)
-        buttons.add_widget(btn1)
+            btn1.bind(on_press=tableview)
+            buttons.add_widget(btn1)
 
 
 
@@ -364,7 +384,7 @@ class PostsMixin():
 
             #Avoid showing pinned twice
             if not i['id'] in pinnedIDs:
-                x=self.makePostWidget(stream,i)
+                x=self.makePostWidget(stream,i,defaultColor=themeColor)
                 self.streamEditPanel.add_widget(x)
 
         if indexAssumption and not c and len(document.get('body',''))<180:
@@ -460,6 +480,7 @@ class PostsMixin():
         self.streamEditPanel.add_widget(topbar)
 
         s = daemonconfig.userDatabases[stream]
+        themeColor = None
         if not parent:
             if orphansMode:
                 self.streamEditPanel.add_widget(MDToolbar(title="Unreachable Records in "+stream))
@@ -471,9 +492,18 @@ class PostsMixin():
         else:
             parentDoc=daemonconfig.userDatabases[stream].getDocumentByID(parent)
             #Disable index assumption so we can always actually go to the parent post instead of getting stuck.
-            x=self.makePostWidget(stream,parentDoc,indexAssumption=False)
+            x=self.makePostWidget(stream,parentDoc,indexAssumption=False,defaultColor=themeColor)
             self.streamEditPanel.add_widget(x)
-            self.streamEditPanel.add_widget(MDToolbar(title="Posts"))
+           
+
+            if parentDoc:
+                themeColor=getColor(parentDoc)
+            toolbar = MDToolbar(title="Posts")
+
+            if themeColor:
+                toolbar.md_bg_color=themeColor
+
+            self.streamEditPanel.add_widget(toolbar)
 
 
 
@@ -651,14 +681,14 @@ class PostsMixin():
                 pinnedPosts.append((i.get('pinRank',0),i['id'],i))
 
             for i in reversed(list(sorted(pinnedPosts))):
-                x=self.makePostWidget(stream,i[2])
+                x=self.makePostWidget(stream,i[2],defaultColor=themeColor)
                 self.streamEditPanel.add_widget(x)
 
         for i in p:
             #Avoid showing pinned twice
             if not i['id'] in pinnedIDs:
                 #In global changes feeds we have to give the user a bit of context.
-                x=self.makePostWidget(stream,i, includeParent=(parent is None))
+                x=self.makePostWidget(stream,i, includeParent=(parent is None),defaultColor=themeColor)
                 self.streamEditPanel.add_widget(x)
 
         
@@ -671,7 +701,7 @@ class PostsMixin():
 
         self.screenManager.current = "EditStream"
 
-    def makePostWidget(self,stream, post,indexAssumption=True,includeParent=False):
+    def makePostWidget(self,stream, post,indexAssumption=True,includeParent=False,defaultColor=None):
         "Index assumption allows treating very short posts as indexes that gfo straight to the comment page"
         def f(*a):
             def f2(d):
@@ -705,8 +735,30 @@ class PostsMixin():
         #Split on blank line
         body=body.split('\r\n\r\n')[0].split('\n#')[0]
 
-        btn=Button(text=post.get('title',"?????") + " "+time.strftime("(%a %b %d, '%y)",time.localtime((post.get('documentTime',post.get('time',0)) or post.get('time',0))/10**6)  ) , on_release=f)
-        
+        t =  post.get('title',"?????")
+        try:
+            if '[size=' in t:
+                raise RuntimeError("Size markup unsupported")
+            
+            #Embolden but don't override user formatting
+            if not '[' in t:
+                t='[b]'+t+'[/b]'
+            btn=Button(text=t + " "+time.strftime("(%a %b %d, '%y)",time.localtime((post.get('documentTime',post.get('time',0)) or post.get('time',0))/10**6)  ) , on_release=f,markup=True)
+
+        except Exception as e:
+            logging.exception("err")
+            btn=Button(text=t + " "+time.strftime("(%a %b %d, '%y)",time.localtime((post.get('documentTime',post.get('time',0)) or post.get('time',0))/10**6)  ) , on_release=f)
+
+        if post.get("color",''):
+            try:
+                import kivy.utils
+                from .import colornames
+                btn.md_bg_color = kivy.utils.get_color_from_hex(colornames.colors.get( post.get("color",'').lower(),post.get("color",'')) )
+            except:
+                logging.exception("invalid color")
+        elif defaultColor:
+            btn.md_bg_color=defaultColor
+
         if (not post.get('body','').strip()) and ((not post.get('icon','')) or not post['icon'].strip()):
             return btn
 
@@ -736,7 +788,19 @@ class PostsMixin():
 
         l.image = img
 
-        bodyText =Label(text=body.strip(),size_hint=(0.75 if useIcon else 0.9,1),valign="top")
+
+    
+        try:
+            if '[size=' in body:
+                raise RuntimeError("Size markup unsupported")
+            bodyText =Label(text=body.strip(),size_hint=(0.75 if useIcon else 0.9,1),valign="top",markup=True)
+        except Exception as e:
+            logging.exception("err")
+            bodyText =Label(text=body.strip()+str(e),size_hint=(0.75 if useIcon else 0.9,1),valign="top")
+            bodyText.texture_update()
+        l2.add_widget(bodyText)
+
+
         l.body = bodyText
         import kivy.clock
 
@@ -744,7 +808,13 @@ class PostsMixin():
         def setWidth(*a):
             w=l2.width
             bodyText.text_size=(w-(img.width+4)),None
-            bodyText.texture_update()
+            try:
+                bodyText.texture_update()
+            except Exception as e:
+                #Eliminate bbcode
+                bodyText.text= bodyText.text.replace("[",'')+str(e)
+                bodyText.texture_update()
+
             bodyText.size = (bodyText.texture_size[0],max(bodyText.texture_size[1],cm(1.5)))
             l2.height=max(bodyText.texture_size[1],cm(1.5))
             l.minimum_height=l2.height+btn.height+4
@@ -752,9 +822,7 @@ class PostsMixin():
         l2.bind(width=setWidth)
         kivy.clock.Clock.schedule_once(setWidth)
         #w = MDTextField(text=body, multiline=True,size_hint=(1,0.5),mode="rectangle",readonly=True)
-        w=bodyText
         
-        l2.add_widget(w)
         l.add_widget(l2)
 
     
@@ -970,6 +1038,24 @@ class PostsMixin():
             
         clearicon.bind(on_release=promptSet)
         self.postMetaPanel.add_widget(clearicon)
+
+
+
+
+        setcolor = Button( text="Post Color(hex or name)")
+        def promptSet(*a):
+          
+            def f(x):
+                if not x is None:
+                    s['color']=x
+                    s['time']=None
+                    self.unsavedDataCallback=autosavecallback
+                  
+            self.askQuestion("Set post theme color?",s.get('color',''),f)
+            
+        setcolor.bind(on_release=promptSet)
+        self.postMetaPanel.add_widget(setcolor)
+
 
 
         idButton = Button( text="Show Post ID")
