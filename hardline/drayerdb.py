@@ -1526,6 +1526,16 @@ class DocumentDatabase():
             import toml
             l = toml.loads(d)
 
+        #Sort by time. This is so that the feed view which is based on arrival times somewhat makes sense.
+        x = []
+        for i in l:
+            x.append((l[i].get('time',0), i, l[i]))
+
+        l={}
+        
+        for i in sorted(x):
+            l[i[1]]=i[2]
+
         for i in l:
             d = l[i]
             # Fish the info we stored in theheading back into the dict
@@ -2051,11 +2061,6 @@ class DocumentDatabase():
 
         l = 0
         for i in cur:
-            # Have to do our own limiting for the orphans scanner which could be incredible slow
-            l += 1
-            if l > limit:
-                return
-
             try:
                 x = json.loads(decompress(i[0]))
             except:

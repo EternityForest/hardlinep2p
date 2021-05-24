@@ -567,14 +567,14 @@ class PostsMixin():
             if startTime:
 
                 if parent is None:
-                    p=list(s.getDocumentsBySQL("json_extract(json,'$.type')='post'  AND arrival>? AND arrival<? ORDER BY arrival ASC",(startTime, endTime or 10**18),orphansOnly=orphansMode))
+                    p=list(s.getDocumentsBySQL("json_extract(json,'$.type')='post'  AND arrival>? AND arrival<? ORDER BY arrival ASC LIMIT 20",startTime, endTime or 10**18,orphansOnly=orphansMode))
                 else:
                     #If we have a start time the initial search has to be ascending or we will just always get the very latest.
                     #So then we have to reverse it to give a consistent ordering
                     p = list(reversed(list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20,descending=False,orphansOnly=orphansMode,parent=parentPath))))
             else:
                 if parent is None:
-                    p=list(s.getDocumentsBySQL("json_extract(json,'$.type')='post'  AND arrival>? AND arrival<? ORDER BY arrival DESC",(startTime, endTime or 10**18),orphansOnly=orphansMode))
+                    p=list(s.getDocumentsBySQL("json_extract(json,'$.type')='post'  AND arrival>? AND arrival<? ORDER BY arrival DESC LIMIT 20",startTime, endTime or 10**18,orphansOnly=orphansMode))
                 else:
                     p = list(s.getDocumentsByType("post",startTime=startTime, endTime=endTime or 10**18, limit=20,orphansOnly=orphansMode,parent=parentPath))
         else:
