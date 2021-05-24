@@ -195,15 +195,7 @@ def renderPostTemplate(db, postID,text, limit=100000000):
 cacheClearTime=[time.time()]
 
 
-def getColor(document):
-    if document.get("color",''):
-        try:
-            import kivy.utils
-            from .import colornames
-            return kivy.utils.get_color_from_hex(colornames.colors.get( document.get("color",'').lower(),document.get("color",'')) )
-        except:
-            logging.exception("invalid color")
-    return None
+from .colornames import getColor,getFGForColor
 
 
 class TablesMixin():
@@ -229,6 +221,7 @@ class TablesMixin():
 
         if themeColor:
             t.md_bg_color=themeColor
+            t.specific_text_color=getFGForColor(themeColor)
 
 
         self.streamEditPanel.add_widget(t)
@@ -309,8 +302,11 @@ class TablesMixin():
 
         if themeColor:
             t.md_bg_color=themeColor
+            t.specific_text_color=getFGForColor(themeColor)
 
-            
+
+
+
         self.streamEditPanel.add_widget(t)
         self.streamEditPanel.add_widget(searchBar)
 

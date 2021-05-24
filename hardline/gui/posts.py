@@ -47,16 +47,7 @@ from kivymd.uix.stacklayout import MDStackLayout as StackLayout
 
 
 
-def getColor(document):
-    if document.get("color",''):
-        try:
-            import kivy.utils
-            from .import colornames
-            return kivy.utils.get_color_from_hex(colornames.colors.get( document.get("color",'').lower(),document.get("color",'')) )
-        except:
-            logging.exception("invalid color")
-    return None
-
+from .colornames import getColor,getFGForColor
 
 class PostsMixin():
     def gotoStreamPost(self, stream,postID,noBack=False, indexAssumption=True):
@@ -74,10 +65,13 @@ class PostsMixin():
         themeColor = getColor(document)
 
 
+
         topbar = BoxLayout(size_hint=(1,None),adaptive_height=True,spacing=10)
 
         if themeColor:
+            fgcolor = getFGForColor(themeColor)
             heading.md_bg_color=themeColor
+            heading.specific_text_color =fgcolor
 
         self.streamEditPanel.add_widget(topbar)
 
@@ -502,6 +496,8 @@ class PostsMixin():
 
             if themeColor:
                 toolbar.md_bg_color=themeColor
+                toolbar.specific_text_color =getFGForColor(themeColor)
+                
 
             self.streamEditPanel.add_widget(toolbar)
 
@@ -749,15 +745,17 @@ class PostsMixin():
             logging.exception("err")
             btn=Button(text=t + " "+time.strftime("(%a %b %d, '%y)",time.localtime((post.get('documentTime',post.get('time',0)) or post.get('time',0))/10**6)  ) , on_release=f)
 
-        if post.get("color",''):
+        themeColor = getColor(post or {})
+
+        if themeColor:
             try:
-                import kivy.utils
-                from .import colornames
-                btn.md_bg_color = kivy.utils.get_color_from_hex(colornames.colors.get( post.get("color",'').lower(),post.get("color",'')) )
+                btn.md_bg_color = themeColor
+                btn.text_color=getFGForColor(themeColor)
             except:
                 logging.exception("invalid color")
         elif defaultColor:
             btn.md_bg_color=defaultColor
+            btn.text_color=getFGForColor(defaultColor)
 
         if (not post.get('body','').strip()) and ((not post.get('icon','')) or not post['icon'].strip()):
             return btn
