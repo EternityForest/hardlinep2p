@@ -723,13 +723,32 @@ class PostsMixin():
 
                 
 
-        #Chop to a shorter length, then rechop to even shorter, to avoid cutting off part of a long template and being real ugly.
-        body=post.get('body',"?????")[:240].strip()
-        body = tables.renderPostTemplate(daemonconfig.userDatabases[stream], post['id'], body, 4096)
-        body=body[:180].replace("\r",'').replace("\n",'_NEWLINE',2).replace("\n","").replace("_NEWLINE","\r\n")
+        def getShortText():
+            moreToCome=False
+            #Chop to a shorter length, then rechop to even shorter, to avoid cutting off part of a long template and being real ugly.
+            body=post.get('body',"?????")[:240].strip()
+            if len(post.get('body',"?????"))>240:
+                moreToCome=True
 
-        #Split on blank line
-        body=body.split('\r\n\r\n')[0].split('\n#')[0]
+
+            body = tables.renderPostTemplate(daemonconfig.userDatabases[stream], post['id'], body, 4096)
+            l=len(body)
+            body=body[:180].replace("\r",'').replace("\n",'_NEWLINE',2).replace("\n","").replace("_NEWLINE","\r\n")
+
+            #Split on blank line
+            body=body.split('\r\n\r\n')[0].split('\n#')[0]
+            if len(body)<l:
+                moreToCome=True
+            return body, moreToCome
+
+        def getLongText():
+            #Chop to a shorter length, then rechop to even shorter, to avoid cutting off part of a long template and being real ugly.
+            body=post.get('body',"?????")
+            body = tables.renderPostTemplate(daemonconfig.userDatabases[stream], post['id'], body, 8192*16)
+            return body
+
+
+        body,moreToCome = getShortText()
 
         t =  post.get('title',"?????")
         try:
@@ -745,6 +764,8 @@ class PostsMixin():
             logging.exception("err")
             btn=Button(text=t + " "+time.strftime("(%a %b %d, '%y)",time.localtime((post.get('documentTime',post.get('time',0)) or post.get('time',0))/10**6)  ) , on_release=f)
 
+      
+
         themeColor = getColor(post or {})
 
         if themeColor:
@@ -759,13 +780,14 @@ class PostsMixin():
 
         if (not post.get('body','').strip()) and ((not post.get('icon','')) or not post['icon'].strip()):
             return btn
-
+        topl = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None))
+        topl.add_widget(btn)
         l = BoxLayout(adaptive_height=True,orientation='vertical',size_hint=(1,None))
 
         
         if parentTitle:
             l.add_widget(self.saneLabel(str(parentTitle)+'>',l))
-        l.add_widget(btn)
+        l.add_widget(topl)
         l2 = BoxLayout(adaptive_height=True,orientation='horizontal',size_hint=(1,None))
         
 
@@ -787,14 +809,17 @@ class PostsMixin():
         l.image = img
 
 
-    
+        w = 0.75 if useIcon else 0.9
+
         try:
             if '[size=' in body:
                 raise RuntimeError("Size markup unsupported")
-            bodyText =Label(text=body.strip(),size_hint=(0.75 if useIcon else 0.9,1),valign="top",markup=True)
+
+
+            bodyText =Label(text=body.strip(),size_hint=(w,1),valign="top",markup=True)
         except Exception as e:
             logging.exception("err")
-            bodyText =Label(text=body.strip()+str(e),size_hint=(0.75 if useIcon else 0.9,1),valign="top")
+            bodyText =Label(text=body.strip()+str(e),size_hint=(w,1),valign="top")
             bodyText.texture_update()
         l2.add_widget(bodyText)
 
@@ -803,6 +828,7 @@ class PostsMixin():
         import kivy.clock
 
     
+
         def setWidth(*a):
             w=l2.width
             bodyText.text_size=(w-(img.width+4)),None
@@ -819,6 +845,36 @@ class PostsMixin():
 
         l2.bind(width=setWidth)
         kivy.clock.Clock.schedule_once(setWidth)
+
+        bodyText.expanded=False
+        if moreToCome:
+            eb = Button(text="+")
+            def onExpand(*a):
+                if bodyText.expanded:
+                    bodyText.expanded=False
+                    bodyText.text = getShortText()[0]
+                    eb.text='+'
+                    kivy.clock.Clock.schedule_once(setWidth)
+                else:
+                    bodyText.expanded=True
+                    eb.text = '-'
+                    bodyText.text = getLongText()
+                    kivy.clock.Clock.schedule_once(setWidth)
+
+            if themeColor:
+                try:
+                    eb.md_bg_color = themeColor
+                    eb.text_color=getFGForColor(themeColor)
+                except:
+                    logging.exception("invalid color")
+            elif defaultColor:
+                eb.md_bg_color=defaultColor
+                eb.text_color=getFGForColor(defaultColor)
+            eb.bind(on_release=onExpand)
+            topl.add_widget(eb)
+
+       
+
         #w = MDTextField(text=body, multiline=True,size_hint=(1,0.5),mode="rectangle",readonly=True)
         
         l.add_widget(l2)
