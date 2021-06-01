@@ -78,7 +78,7 @@ class PostsMixin():
                 }
                 db.setDocument(mainDocument)
 
-                for i in sections:
+                for i in reversed(sections):
                     document = {
                     'type':'post',
                     'specialPostType': "WikiImport",
@@ -400,7 +400,7 @@ class PostsMixin():
         for i in p1:
             #The index assumption, jump straight to the index when we detect a very short post
             #with at least one child
-            if indexAssumption and len(document.get('body',''))<180:
+            if indexAssumption:
                 self.gotoStreamPosts(stream,parent=postID,indexAssumptionWasUsed=True)
                 return
 
@@ -418,7 +418,7 @@ class PostsMixin():
             c=True
             #The index assumption, jump straight to the index when we detect a very short post
             #with at least one child
-            if indexAssumption and len(document.get('body',''))<180:
+            if indexAssumption:
                 self.gotoStreamPosts(stream,parent=postID,indexAssumptionWasUsed=True)
                 return
 
@@ -427,7 +427,7 @@ class PostsMixin():
                 x=self.makePostWidget(stream,i,defaultColor=themeColor)
                 self.streamEditPanel.add_widget(x)
 
-        if indexAssumption and not c and len(document.get('body',''))<180:
+        if indexAssumption and not c:
             for i in s.getDocumentsByType("row", limit=1,parent=postID):
                 self.gotoTableView(stream,postID)
                 return
