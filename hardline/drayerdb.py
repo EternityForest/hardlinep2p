@@ -580,13 +580,13 @@ class DocumentDatabase():
         Given a parent document ID and a name, create a unique ID for that parent,name combo semi-deterministically.
         If the parent exists and is encrypted, the ID generated should also be encrypted. 
         """
-        p = self.getDocumentByID(parentDoc)
+        #p = self.getDocumentByID(parentDoc)
 
         # Special UUID standin for the "Root post", which does not really exist.
         rootUUID = '1d4f7b28-0677-4245-a4e3-21a1376b0b3a'
         parentDoc = parentDoc or rootUUID
 
-        archiveID = str(uuid.uuid5(parentDoc, name))
+        archiveID = str(uuid.uuid5(uuid.UUID(parentDoc), name))
 
         return archiveID
 

@@ -50,6 +50,50 @@ from kivymd.uix.stacklayout import MDStackLayout as StackLayout
 from .colornames import getColor,getFGForColor
 
 class PostsMixin():
+
+    def importFromWikipedia(self,stream,parent,article):
+        try:
+            import wikipedia
+            try:
+                p = wikipedia.page(wikipedia.search(article,results=1)[0])
+            except wikipedia.DisambiguationError as e:
+                p = wikipedia.page(e.options[0])
+
+
+            sections =[ [i.split(" ==\n")[0].strip(), i.split(" ==\n")[1].strip()] for i in (p.content.split("\n== ")) if len(i.split(" ==\n"))>1]
+
+          
+            db = daemonconfig.userDatabases[stream]
+            #Deterministicallty generate the 
+            mainId = db.createNamespacedUUID(parent, "8c868024-ba73-460a-aec9-c102c5cb1c99:"+p.title)
+
+            with db:
+                mainDocument = {
+                    'type':'post',
+                    'specialPostType': "WikiImport",
+                    'body': p.content.split("\n== ")[0],
+                    'title': p.title,
+                    'id': mainId,
+                    'parent': parent
+                }
+                db.setDocument(mainDocument)
+
+                for i in sections:
+                    document = {
+                    'type':'post',
+                    'specialPostType': "WikiImport",
+                    'body': i[1],
+                    'title': i[0],
+                    'parent': mainId,
+                    'id':db.createNamespacedUUID(mainId, "8c868024-ba73-460a-aec9-c102c5cb1c99:"+i[0])
+                    }
+                    db.setDocument(document)
+
+            db.commit()
+
+        except:
+            logging.exception("Could not import")
+
     def gotoStreamPost(self, stream,postID,noBack=False, indexAssumption=True):
         "Editor/viewer for ONE specific post"
         self.unsavedDataCallback=None
@@ -194,6 +238,8 @@ class PostsMixin():
             self.unsavedDataCallback = post
         newtitle.bind(text=setUnsaved)
         newp.bind(text=setUnsaved)
+
+
 
 
 
@@ -1092,6 +1138,20 @@ class PostsMixin():
             
         clearicon.bind(on_release=promptSet)
         self.postMetaPanel.add_widget(clearicon)
+
+
+        importwiki = Button( text="Import Wikipedia Article")
+        def promptSet(*a):
+            from .kivymdfmfork import MDFileManager
+          
+            def f(x):
+                if x:
+                    self.importFromWikipedia(stream,docID, x)
+
+            self.askQuestion("Article search terms",'',f)
+            
+        importwiki.bind(on_release=promptSet)
+        self.postMetaPanel.add_widget(importwiki)
 
 
 
