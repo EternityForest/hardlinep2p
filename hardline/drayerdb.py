@@ -754,7 +754,7 @@ class DocumentDatabase():
             cur.execute(
                 "SELECT json,signature,arrival FROM document WHERE arrival>?", (self.lastDidOnRecordChange,))
             for i in cur:
-                r = json.loads(i[0])
+                r = json.loads(decompress(i[0]))
                 try:
                     del self.documentCache[r['id']]
                 except KeyError:
@@ -783,7 +783,7 @@ class DocumentDatabase():
 
         with self.lock:
             for i in self.threadLocal.conn.execute('SELECT json FROM document ORDER BY json_extract(json,"$.time") DESC'):
-                i = json.loads(i)
+                i = json.loads(decompress(i))
                 if 'autoclean' in i:
                     if not i:
                         if i.get('time', horizon) < horizon:
@@ -985,11 +985,12 @@ class DocumentDatabase():
         kdg = libnacl.crypto_generichash(base64.b64decode(self.syncKey))[:8]
         if not base64.b64decode(i[1])[24:].startswith(kdg):
             if self.writePassword:
-                mdg = libnacl.crypto_generichash(i[0].encode())[:24]
+                d = decompress(i[0])
+                mdg = libnacl.crypto_generichash(d.encode())[:24]
                 sig = libnacl.crypto_sign_detached(
                     mdg, base64.b64decode(self.writePassword))
                 signature = base64.b64encode(mdg+kdg+sig).decode()
-                id = json.loads(i[0])['id']
+                id = json.loads(d)['id']
                 with self.lock:
                     c2 = self.threadLocal.conn.execute(
                         'UPDATE document SET signature=? WHERE json_extract(json,"$.id")=?', (signature, id))
@@ -1200,7 +1201,7 @@ class DocumentDatabase():
                         rt = i[2]
                     else:
                         rt = min(rt, i[2])
-                    docObj = json.loads(i[0])
+                    docObj = json.loads(decompress(i[0]))
                     try:
                         del self.documentCache[docObj['id']]
                     except KeyError:
@@ -1270,7 +1271,7 @@ class DocumentDatabase():
 
             # Expect exactly one result here
             for i in cur:
-                d = json.loads(i[0])
+                d = json.loads(decompress(i[0]))
 
                 id = d['id']
                 r[id] = i
@@ -1281,7 +1282,7 @@ class DocumentDatabase():
                         'SELECT json,signature,arrival FROM document WHERE IFNULL(json_extract(json,"$.parent"),"")=?', (d['id'],))
 
                     for j in cur2:
-                        d2 = json.loads(j[0])
+                        d2 = json.loads(decompress(j[0]))
                         id = d2['id']
                         r[id] = j
 
@@ -1626,7 +1627,7 @@ class DocumentDatabase():
                 x = cur.fetchone()
                 if x:
                     oldVersionData, oldVersion = x
-                    oldVersionData = json.loads(oldVersionData)
+                    oldVersionData = json.loads(decompress(oldVersionData))
                 else:
                     oldVersion = None
                 cur.close()
@@ -1805,8 +1806,8 @@ class DocumentDatabase():
                     except KeyError:
                         pass
 
-                #Automatically enable compression for very large records.
-                if useCompression or len(d)> 48*1024:
+                #Automatically enable compression for moderately large records.
+                if useCompression or len(d)> 512:
                     d=compressGzip(d)
 
                 c = self.threadLocal.conn.execute(
@@ -1822,7 +1823,7 @@ class DocumentDatabase():
         c = self.threadLocal.conn.execute(
             "SELECT json, signature, arrival FROM document WHERE json_extract(json,'$.id')=?", (docObj['id'],)).fetchone()
         if c:
-            docObj = json.loads(c[0])
+            docObj = json.loads(decompress(c[0]))
             self.earliestUncommittedRecord = c[2]
             self._onRecordChange(docObj, c[1], c[2])
 
@@ -1906,7 +1907,7 @@ class DocumentDatabase():
                 c = self.threadLocal.conn.execute(
                     "SELECT json FROM document WHERE IFNULL(json_extract(json,'$.parent'),'')=? AND json_extract(json,'$.time')<? LIMIT 1000", (record, r['time']))
                 for i in c:
-                    x = json.loads(i[0])
+                    x = json.loads(decompress(i[0]))
                     l.append((x['id'], x['time']))
                     thisround[x['id']] = True
 
@@ -2124,7 +2125,7 @@ class DocumentDatabase():
                 return
 
             try:
-                x = json.loads(i[0])
+                x = json.loads(decompress(i[0]))
             except:
                 continue
 
@@ -2169,7 +2170,7 @@ class DocumentDatabase():
                 r.append(i[0])
 
         cur.close()
-        return list(reversed([self.decryptDocument(i) for i in [json.loads(i) for i in r]]))
+        return list(reversed([self.decryptDocument(i) for i in [json.loads(decompress(i)) for i in r]]))
 
 
 if __name__ == "__main__":

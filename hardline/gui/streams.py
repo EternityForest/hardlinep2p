@@ -302,7 +302,7 @@ class StreamsMixin():
         def promptNewKeys(*a,**k):
             def makeKeys(a):
                 if a=='yes':
-                    
+                    import base64
                     vk, sk = libnacl.crypto_sign_keypair()
                     vk= base64.b64encode(vk).decode()
                     sk= base64.b64encode(sk).decode()
