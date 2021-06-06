@@ -1848,7 +1848,7 @@ class DocumentDatabase():
         self.lastChange = time.time()
         if 'autoclean' in docObj:
             # Don't do it every time that would waste CPU
-            if random.random() < 1:
+            if random.random() < 0.01:
                 if self.autocleanDays:
                     # Clear any records sharing the same autoclean channel which are older than both this record and the horizon.
                     # Note that we have to include the type as part of the autoclean channel or else we wolud get gaps in the index and it would be slow
