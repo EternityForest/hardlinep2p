@@ -226,6 +226,12 @@ class PostsMixin():
                         del document['time']
                     except:
                         pass
+
+                    #When user interacts with something, we assume that it may contain important data and must be preserved
+                    try:
+                        del document['autoclean']
+                    except:
+                        pass
                     daemonconfig.userDatabases[stream].setDocument(document)
                     daemonconfig.userDatabases[stream].commit()
                     if goBack:
@@ -358,6 +364,10 @@ class PostsMixin():
                         document['moveTime'] = int(time.time()*10**6)
                         try:
                             del document['time']
+                        except KeyError:
+                            pass
+                        try:
+                            del document['autoclean']
                         except KeyError:
                             pass
                         daemonconfig.userDatabases[stream].setDocument(document)

@@ -52,12 +52,6 @@ logging.Logger.manager.root = Logger
 
 
 
-
-
-
-
-
-
 # Terrible Hacc, because otherwise we cannot iumport hardline on android.
 
 

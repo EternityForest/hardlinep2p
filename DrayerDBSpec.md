@@ -79,6 +79,9 @@ An "autoclean channel" is defined as the combination of (parent, autoclean).
 
 This property can never be added to an existing record.  Nodes must silently ignore an incoming sync record that would do so. It cannot be changed on an existing record either.
 
+### notify(optional)
+If this is set, this post should send a notification if the user has enabled it for that DB.  If not set, assume true.
+
 
 ### Ondisk conpression
 
