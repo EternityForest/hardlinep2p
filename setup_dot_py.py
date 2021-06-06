@@ -9,7 +9,7 @@ with open("README.md", "r") as fh:
 d = os.path.dirname(__file__)
 setuptools.setup(
     name="hardline",
-    version="0.0.18",
+    version="0.20.0",
     author="Daniel Dunn",
     author_email="dannydunn@eternityforest.com",
     description="HardlineP2P is a way to make web services securely acessible to the world, without any manual DNS or certificate setup",
@@ -27,7 +27,7 @@ setuptools.setup(
           'pynacl','requests','lxml','six','python-dateutil','kivy','kivymd','mako',
           'cryptography','netifaces','beautifulsoup4','qrcode',
           "pillow","plyer",'pint','kivy_garden.qrcode',
-          'colorzero','wikipedia','pygments'
+          'colorzero','wikipedia','pygments','wikipedia'
       ],
 
     scripts=[os.path.join(d,'bin/hardlined'), os.path.join(d,'bin/hardline-gui')]
