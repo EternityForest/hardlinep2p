@@ -325,6 +325,15 @@ Gets a random selection of one of the values from the column.  Note that the val
 ##### CONVERT(val, unit, to)
 Convert val from unit to to, as in CONVERT(1,'in','mm'). Same as traditional spreadsheets.
 
+##### NUMINPUT(val, default, unit)
+Create an input box for the viewer, return the inputted val or the default.  User can change the unit, but returned value
+is always in selected unit.
+
+Input box values are not saved anywhere and disappear when you leave the page. They are meant for making quick calculators.
+
+These input boxes show in feed view and and in table view, but currently do not show in edit view.
+
+
 ### Sync
 
 To sync, you must enable the sync server on a node by giving it a server name in the global settings panel.  This creates a standard HardlineP2P service that will show up

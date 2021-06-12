@@ -1,5 +1,6 @@
 import configparser
 import json
+from operator import mod
 from hardline import daemonconfig
 from .. import daemonconfig, hardline
 
@@ -177,7 +178,7 @@ class PostsMixin():
 
         self.currentlyViewedPostImage = img
 
-        renderedText = tables.renderPostTemplate(daemonconfig.userDatabases[stream],postID, document.get("body",''))
+        renderedText = tables.renderPostTemplate(daemonconfig.userDatabases[stream],postID, document.get("body",''))[0]
 
         sourceText= [document.get("body",'')]
         
@@ -205,7 +206,7 @@ class PostsMixin():
             else:
                 buffer.height=0
                 sourceText[0] =newp.text
-                newp.text = tables.renderPostTemplate(daemonconfig.userDatabases[stream],postID, newp.text)
+                newp.text = tables.renderPostTemplate(daemonconfig.userDatabases[stream],postID, newp.text)[0]
         newp.bind(focus=f)
 
 
@@ -509,7 +510,7 @@ class PostsMixin():
                 elif sourceText[0] and document['id'] in r.get("parent",''):
                     backup = newp.text
                     #Rerender on incoming table records 
-                    newp.text = tables.renderPostTemplate(daemonconfig.userDatabases[stream],postID, sourceText[0])
+                    newp.text = tables.renderPostTemplate(daemonconfig.userDatabases[stream],postID, sourceText[0])[0]
 
                     #We could have started editing in that millisecond window. Restore the source text so we don't overwrite it with the rendered text
                     if not sourceText[0]:
@@ -778,7 +779,7 @@ class PostsMixin():
                     parentTitle="NOT FOUND"
 
                 
-
+        fields = {}
         def getShortText():
             moreToCome=False
             #Chop to a shorter length, then rechop to even shorter, to avoid cutting off part of a long template and being real ugly.
@@ -787,7 +788,7 @@ class PostsMixin():
                 moreToCome=True
 
 
-            body = tables.renderPostTemplate(daemonconfig.userDatabases[stream], post['id'], body, 4096)
+            body,fd = tables.renderPostTemplate(daemonconfig.userDatabases[stream], post['id'], body, 4096,fieldData=fields)
             l=len(body)
             body=body[:180].replace("\r",'').replace("\n",'_NEWLINE',2).replace("\n","").replace("_NEWLINE","\r\n")
 
@@ -795,16 +796,18 @@ class PostsMixin():
             body=body.split('\r\n\r\n')[0].split('\n#')[0]
             if len(body)<l:
                 moreToCome=True
-            return body, moreToCome
+            return body, moreToCome,fd
 
         def getLongText():
             #Chop to a shorter length, then rechop to even shorter, to avoid cutting off part of a long template and being real ugly.
             body=post.get('body',"?????")
-            body = tables.renderPostTemplate(daemonconfig.userDatabases[stream], post['id'], body, 8192*16)
-            return body
+            body,fd = tables.renderPostTemplate(daemonconfig.userDatabases[stream], post['id'], body, 8192*16,fieldData=fields)
+            return body,fd
 
 
-        body,moreToCome = getShortText()
+        body,moreToCome,fd = getShortText()
+
+        fields.update(fd)
 
         t =  post.get('title',"?????")
         try:
@@ -914,7 +917,7 @@ class PostsMixin():
                 else:
                     bodyText.expanded=True
                     eb.text = '-'
-                    bodyText.text = getLongText()
+                    bodyText.text = getLongText()[0]
                     kivy.clock.Clock.schedule_once(setWidth)
 
             if themeColor:
@@ -935,7 +938,27 @@ class PostsMixin():
         
         l.add_widget(l2)
 
-    
+        for i in sorted(list(fields.keys())):
+            f = BoxLayout(size_hint=(1,0),adaptive_height=True,orientation='horizontal')
+            f.add_widget(MDTextField(text=i,mode='fill',readonly=True,size_hint=(0.25,None)))
+            v = MDTextField(text=str(fields[i][0]),size_hint=(0.5,None))
+            u=MDTextField(text=fields[i][1],mode='fill',size_hint=(0.25,None))
+
+            #TODO: Handle changes in the actual set of fields?
+            def onChange(*a, i=i,v=v,u=u):
+                fields[i]=(v.text,u.text)
+                if bodyText.expanded:
+                    bodyText.text = getLongText()[0]
+                    kivy.clock.Clock.schedule_once(setWidth)
+                else:
+                    bodyText.text = getShortText()[0]
+                    kivy.clock.Clock.schedule_once(setWidth)
+            v.bind(text=onChange)
+            u.bind(text=onChange)
+            f.add_widget(v)
+            f.add_widget(u)
+            l.add_widget(f)
+
 
         return l
 
