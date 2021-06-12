@@ -194,6 +194,9 @@ def renderPostTemplate(db, postID,text, limit=100000000,fieldData=None):
                 except:
                     return float("nan")
 
+        elif name in fieldData and not fieldData[name][0]:
+            value=0
+
         #Set the current field data for generating the actual field
         fieldData[name]=(value,unit)
 
