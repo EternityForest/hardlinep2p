@@ -195,7 +195,7 @@ class defaultDBClass(drayerdb.DocumentDatabase):
                                     n=notification
 
                                 
-                                notification.notify(title=record.get('title', os.path.basename(self.filename)[:-3])[
+                                n.notify(title=record.get('title', os.path.basename(self.filename)[:-3])[
                                                     :48], message="New post in "+os.path.basename(self.filename)+"\n "+record.get("body",'')[:64], ticker='')
                             except:
                                 logger.exception("Could not do the notification")

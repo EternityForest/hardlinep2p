@@ -249,6 +249,36 @@ class PostsMixin():
 
 
 
+        def cbr_cpy(*a):
+            try:
+                from kivy.core.clipboard import Clipboard
+                Clipboard.copy(newp.text)
+            except:
+                logging.exception("Could not copy to clipboard")
+
+        btn1 = Button(text='Copy')
+        btn1.bind(on_release=cbr_cpy)
+        topbar.add_widget(btn1)
+
+        def cbr_cork(*a):
+            try:
+                from plyer import notification
+                from kivy import platform
+                if platform=='android':
+                    import plyer.platforms.android.notification
+                    n=plyer.platforms.android.notification.instance()
+                else:
+                    n=notification
+
+                
+                n.notify(title=newtitle.text[:50], message=newp.text[:240], ticker='',timeout=0)
+            except:
+                logging.exception("Could not do the notification")
+
+
+        btn1 = Button(text='Cork')
+        btn1.bind(on_release=cbr_cork)
+        topbar.add_widget(btn1)
 
 
         self.streamEditPanel.add_widget(titleBar)
@@ -300,6 +330,8 @@ class PostsMixin():
         btn1 = Button(text='Info')
         btn1.bind(on_release=goToProperties)
         buttons.add_widget(btn1)
+
+
 
 
 
@@ -580,7 +612,7 @@ class PostsMixin():
         topbar.add_widget(self.makeBackButton(0.29))
 
 
-
+ 
         if not noBack:
             def goHere():
                 self.gotoStreamPosts( stream, startTime, endTime, parent,search)
@@ -817,11 +849,11 @@ class PostsMixin():
             #Embolden but don't override user formatting
             if not '[' in t:
                 t='[b]'+t+'[/b]'
-            btn=Button(text=t + " "+time.strftime("(%a %b %d, '%y)",time.localtime((post.get('documentTime',post.get('time',0)) or post.get('time',0))/10**6)  ) , on_release=f,markup=True)
+            btn=Button(text=t + " "+time.strftime("(%a %b %d, '%y)",time.localtime((post.get('documentTime',post.get('time',0)) or post.get('time',0))/10**6)  ) , on_release=f,markup=True,size_hint=(0.8,None))
 
         except Exception as e:
             logging.exception("err")
-            btn=Button(text=t + " "+time.strftime("(%a %b %d, '%y)",time.localtime((post.get('documentTime',post.get('time',0)) or post.get('time',0))/10**6)  ) , on_release=f)
+            btn=Button(text=t + " "+time.strftime("(%a %b %d, '%y)",time.localtime((post.get('documentTime',post.get('time',0)) or post.get('time',0))/10**6)  ) , on_release=f,size_hint=(0.8,None))
 
       
 
@@ -1009,11 +1041,32 @@ class PostsMixin():
         btn1 = Button(text='Post!')
         btn1.bind(on_release=post)
 
+
+        def paste(*a):
+            try:
+                from kivy.core.clipboard import Clipboard
+                x=Clipboard.paste()
+
+                #Don't add the exact text if it is already there
+                if not x in newp.text:
+                    if newp.text.strip():
+                        newp.text=newp.text+"\r\n"+x
+                    else:
+                        newp.text=x
+
+            except:
+                logging.exception("Could not copy to clipboard")
+
+        
+        btn2 = Button(text='Insert from Clipboard')
+        btn2.bind(on_release=paste)
+
         self.streamEditPanel.add_widget(newtitle)
 
         self.streamEditPanel.add_widget(MDToolbar(title="Post Body"))
 
         self.streamEditPanel.add_widget(newp)
+        self.streamEditPanel.add_widget(btn2)
         self.streamEditPanel.add_widget(btn1)
 
 
