@@ -164,24 +164,27 @@ if c:
     
 
 def getDHTProxies():
-    globalConfig = configparser.RawConfigParser(dict_type=CaseInsensitiveDict)
-    globalConfig.read(globalSettingsPath)
+    if os.path.exists(globalSettingsPath):
+        with open(globalSettingsPath) as f:
+            globalConfig=toml.load(f)
+    else:
+        globalConfig={}
 
     if not "DHTProxy" in globalConfig:
         globalConfig["DHTProxy"]={}
 
     l = []
 
-    p = globalConfig['DHTProxy'].get("server1",'').strip()
+    p = globalConfig['DHTProxy'].get("server1",'').strip().replace('"','')
     if p:
         l.append(p)
 
 
-    p = globalConfig['DHTProxy'].get("server2",'').strip()
+    p = globalConfig['DHTProxy'].get("server2",'').strip().replace('"','')
     if p:
         l.append(p)
 
-    p = globalConfig['DHTProxy'].get("server3",'').strip()
+    p = globalConfig['DHTProxy'].get("server3",'').strip().replace('"','')
     if p:
         l.append(p)
 
@@ -585,7 +588,7 @@ class Service():
             import requests
             try:
                 data = {"data": base64.b64encode(
-                    getWanHostsString()).decode(), "id": "id 1", "seq": 0, "type": 3}
+                    getWanHostsString().encode()).decode(), "id": "id 1", "seq": 0, "type": 3}
                 url = i+hashlib.sha1(rollingCode.hex().encode()
                                      ).digest()[:20].hex()
                 r = requests.post(url, data=data)
