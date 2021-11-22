@@ -28,7 +28,7 @@ source.exclude_dirs = bin
 #source.exclude_patterns = license,images/*/*.jpg
 
 # (str) Application versioning (method 1)
-version = 0.20
+version = 0.23
 
 # (str) Application versioning (method 2)
 # version.regex = __version__ = ['"](.*)['"]
@@ -36,7 +36,7 @@ version = 0.20
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,pyjnius,pynacl,six,lxml,dateutil,requests,urllib3,chardet,idna,certifi,kivy==2.0.0,kivymd,mako,plyer,android,cryptography,netifaces,beautifulsoup4,sqlite3,pillow,sdl2_ttf,kivy_garden.qrcode,kivy_garden.zbarcam,pint,toml,pygments,qrcode,kvdroid,packaging,importlib-metadata,importlib-resources,colorzero,wikipedia
+requirements = python3,pyjnius,pynacl,six,lxml,dateutil,requests,urllib3,chardet,idna,certifi,kivy==master,kivymd,mako,plyer,android,cryptography,netifaces,beautifulsoup4,sqlite3,pillow,sdl2_ttf,kivy_garden.qrcode,kivy_garden.zbarcam,pint,toml,pygments,qrcode,kvdroid,packaging,importlib-metadata,importlib-resources,colorzero,wikipedia
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
@@ -89,7 +89,7 @@ fullscreen = 0
 # (list) Permissions
 #Leave out the wifi multicast one for battery life, but we should really disable that in code
 #Manage external storage is used
-android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE,FOREGROUND_SERVICE,BATTERY_STATS,CHANGE_WIFI_MULTICAST_STATE,WAKE_LOCK,MANAGE_EXTERNAL_STORAGE
+android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE,FOREGROUND_SERVICE,BATTERY_STATS,CHANGE_WIFI_MULTICAST_STATE,WAKE_LOCK
 
 # (int) Target Android API, should be as high as possible.
 android.api = 30

@@ -1,4 +1,5 @@
 
+import logging
 import socket
 import traceback
 import re
@@ -150,7 +151,7 @@ class LPDPeer():
         if not addr:
             if self.lastAdvertised.get(hash, 0) > time.time()+10:
                 return
-            self.lastAdvertised[hash] = time.time()
+        self.lastAdvertised[hash] = time.time()
 
 
         alsoBroadcast = addr is None
@@ -179,12 +180,12 @@ class LPDPeer():
         fullhash = hash
         hash = hash.split("-")[-1]
 
-        h = bytes.fromhex(hash)
-        doublehash = blake2b(h, encoder=nacl.encoding.RawEncoder())[:20].hex()
+       # h = bytes.fromhex(hash)
+        #doublehash = blake2b(h, encoder=nacl.encoding.RawEncoder())[:20].hex()
 
         # Lookup by hash or rollingCode, store by fullhash.
         self.activeHashes[hash] = (port, info, fullhash)
-        self.activeHashes[doublehash] = (port, info, fullhash)
+        #self.activeHashes[doublehash] = (port, info, fullhash)
 
     def unregister(self, hash):
         hash = hash.split("-")[-1]

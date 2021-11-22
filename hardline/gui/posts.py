@@ -151,8 +151,9 @@ class PostsMixin():
 
                 #I kinda hate that the way kivymd does colors.  I have no clue how to change
         #anything. I am using the Accent color as a sane text color
-        newtitle.color_mode='accent'
         newtitle.fill_color=(.8,.8,.7,.5)
+        newtitle.text_color_normal=(0,0,0,1)
+
         newtitle.bold=True
 
         #Must set in correct order
@@ -183,13 +184,12 @@ class PostsMixin():
         sourceText= [document.get("body",'')]
         
 
-        newp = MDTextField(text=renderedText, multiline=True,size_hint=(1,None),mode='fill',color_mode='custom')        
+        newp = MDTextField(text=renderedText, multiline=True,size_hint=(1,None),mode='fill')        
         
-        #I kinda hate that the way kivymd does colors.  I have no clue how to change
-        #anything. I am using the Accent color as a sane text color
+
         newp.fill_color=(.8,.8,.7,.5)
         newp.line_color_normal=(0,0,0,1)
-        newp.color_mode='accent'
+        newp.text_color_normal=(0,0,0,1)
 
 
         #Keeps android virtual keyboard from covering us up

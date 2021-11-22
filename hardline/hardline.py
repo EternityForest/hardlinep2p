@@ -351,12 +351,12 @@ class DiscoveryCache():
 
             # Look in the cache first
             x = self.LPDcacheRecord
-            if x[1] > (time.time() - 60):
+            if x[1] > (time.time() - 90):
                 return [x[0]]
 
             self.doLookup()
             # Wait a bit for replies, waiting a little longer every time
-            time.sleep(i*0.1 + 0.05)
+            time.sleep(i*0.2 + 0.05)
 
         # Local search failed, we haven't seen a packet from them, so we are probably not on their network.
         # lets try a stored WAN address search, maybe we have a record we can use?
@@ -591,7 +591,7 @@ class Service():
                     getWanHostsString().encode()).decode(), "id": "id 1", "seq": 0, "type": 3}
                 url = i+hashlib.sha1(rollingCode.hex().encode()
                                      ).digest()[:20].hex()
-                r = requests.post(url, data=data)
+                r = requests.post(url, data=json.dumps(data))
                 r.raise_for_status()
                 break
             except Exception:

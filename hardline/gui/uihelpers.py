@@ -3,20 +3,54 @@
 import logging
 from kivy.core.clipboard import Clipboard
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.stacklayout import StackLayout
+from kivy.uix.widget import Widget
 from kivymd.uix.button import MDFlatButton
 import kivy.clock
 
-from kivymd.uix.textfield import MDTextField
+from kivymd.uix.textfield import MDTextField,MDTextFieldRect
 from kivymd.uix.label import MDLabel as Label
 from kivymd.uix.button import MDFillRoundFlatButton as Button
 from kivymd.uix.dialog import MDDialog
 from kivy.uix.checkbox import CheckBox
+from kivy.uix.screenmanager import ScreenManager, Screen
 
 from kivy.utils import platform
 from kivy.metrics import cm
 
 
-class AppHelpers():
+class AppHelpersMixin():
+
+    def makeQuestionPage(self):
+
+        # Discovery Page
+
+        screen = Screen(name='question')
+        self.discoveryScreen = screen
+
+        layout = StackLayout(orientation="tb-lr", spacing=10,size_hint=(1,None))
+        screen.add_widget(layout)
+
+        self.questionLabel = label = self.saneLabel(text='',container=layout)
+
+        self.questionTextbox = textbox =  MDTextFieldRect(text='', multiline=True,size_hint=(0.68,None))
+        layout.add_widget(self.questionLabel)
+
+        layout.add_widget(textbox)
+
+
+        def cbr_no(*a):
+            self.screenManager.current = self.preQuestionScreen
+        def cbr_yes(*a):
+            self.screenManager.current = self.preQuestionScreen
+            self.questionCallback(textbox.text)
+
+        layout.add_widget(Button(text="Cancel", text_color=self.theme_cls.primary_color, on_press=cbr_no))
+        layout.add_widget(Button(text="Accept", text_color=self.theme_cls.primary_color, on_press=cbr_yes))
+        layout.add_widget(Widget())
+
+        return screen
+        
     def showText(self, text,title="QR"):
        
         t= MDTextField(text=text, multiline=True,size_hint=(1,1),mode="rectangle")
@@ -35,7 +69,7 @@ class AppHelpers():
                 )
             ],
         )
-        #self.dialog.set_normal_height()
+        self.dialog.height=(0.8,0.8)
         self.dialog.open()
 
     def saneLabel(self,text, container):
@@ -95,44 +129,18 @@ class AppHelpers():
                 )
             ],
         )
-        #self.dialog.set_normal_height()
+        self.dialog.height=(0.8,0.8)
         self.dialog.open()
 
     def askQuestion(self, question, answer='', cb=None,multiline=False):
         "As a text box based question, with optional  default answer.  If user confirm, call cb."
 
-        t = MDTextField(text='', size_hint=(1,None),multiline=multiline,mode="rectangle")
-
-        def nonsense(a):
-            pass
-        cb = cb or nonsense
-
-        def cbr_yes(*a):
-            print("Accept Button")
-            cb(t.text)
-            self.dialog.dismiss()
-
-        def cbr_no(*a):
-            cb(None)
-            self.dialog.dismiss()
-
-        self.dialog = MDDialog(
-            type="custom",
-            title=question,
-            content_cls=t,
-            buttons=[
-                Button(
-                    text="Accept", text_color=self.theme_cls.primary_color, on_press=cbr_yes
-                ),
-                Button(
-                    text="Cancel", text_color=self.theme_cls.primary_color, on_press=cbr_no
-                ),
-            ],
-        )
-        #self.dialog.set_normal_height()
-
-        t.text = answer
-        self.dialog.open()
+        self.preQuestionScreen=self.screenManager.current
+        self.questionTextbox.text=answer
+        self.questionLabel.text =question
+        self.questionTextbox.multiline=multiline
+        self.questionCallback = cb
+        self.screenManager.current="question"
 
     def checkboxPrompt(self, question, answer=False, cb=None):
         "As a text box based question, with optional  default answer.  If user confirm, call cb."
@@ -153,14 +161,14 @@ class AppHelpers():
             content_cls=t,
             buttons=[
                 Button(
-                    text="Accept", text_color=self.theme_cls.primary_color, on_press=cbr_yes
+                    text="Accept",  on_press=cbr_yes
                 ),
                 Button(
-                    text="Cancel", text_color=self.theme_cls.primary_color, on_press=cbr_no
+                    text="Cancel", on_press=cbr_no
                 ),
             ],
         )
-        #self.dialog.set_normal_height()
+        self.dialog.height=(0.8,0.8)
         t.active = answer
         self.dialog.open()
 

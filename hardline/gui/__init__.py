@@ -65,7 +65,7 @@ oneFileMode = False
 
 
 
-class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servicesUI.ServicesMixin, discovery.DiscoveryMixin, tables.TablesMixin, posts.PostsMixin, streams.StreamsMixin):
+class ServiceApp(MDApp, uihelpers.AppHelpersMixin, tools.ToolsAndSettingsMixin, servicesUI.ServicesMixin, discovery.DiscoveryMixin, tables.TablesMixin, posts.PostsMixin, streams.StreamsMixin):
 
     def stop_service(self, foo=None):
         if self.service:
@@ -159,6 +159,8 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
         sm.add_widget(self.makeStreamEditPage())
         sm.add_widget(self.makeLogsPage())
         sm.add_widget(self.makePostMetaDataPage())
+        sm.add_widget(self.makeQuestionPage())
+
         from kivy.base import EventLoop
         EventLoop.window.bind(on_keyboard=self.hook_keyboard)
         import kivymd
@@ -169,7 +171,7 @@ class ServiceApp(MDApp, uihelpers.AppHelpers, tools.ToolsAndSettingsMixin, servi
 
         #Horid hacks for material design
         self.theme_cls.colors['Brown']['900']='050200'
-        self.theme_cls.colors['Green']['600']='83A16C'
+        self.theme_cls.colors['Green']['600']='43694e'
         self.theme_cls.colors['Light']['Background']='E3DFDA'
         self.theme_cls.primary_palette = "Green"
         self.theme_cls.theme_style = "Light"

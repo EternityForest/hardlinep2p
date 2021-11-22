@@ -70,8 +70,8 @@ class DiscoveryMixin():
         self.discoveryListbox.clear_widgets()
 
         try:
-            hardline.discoveryPeer.search('', n=5)
-            time.sleep(0.5)
+            hardline.discoveryPeer.search('', n=1)
+            time.sleep(2)
             for i in hardline.getAllDiscoveries():
                 info = i
 
